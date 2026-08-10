@@ -130,7 +130,12 @@ public final class RiftTownyDatabase implements AutoCloseable {
                 final T result = work.apply(connection);
                 connection.commit();
                 return result;
-            } catch (final SQLException | RuntimeException failure) {
+            } catch (final Throwable failure) {
+                // Throwable, not SQLException | RuntimeException. Restoring auto-commit in the
+                // finally block commits any open transaction - that is what the JDBC contract says
+                // and what both drivers do - so an Error escaping the catch would have the failure
+                // itself commit the half-written state it was supposed to abort. A
+                // NoClassDefFoundError after a /reload is exactly that shape.
                 connection.rollback();
                 throw failure;
             } finally {

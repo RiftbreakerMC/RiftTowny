@@ -145,6 +145,28 @@ class JdbcOutboxRepositoryTest extends SqliteFixture {
     }
 
     @Test
+    @DisplayName("draining the queue never re-hands events the caller already holds")
+    void repeatedClaimsInTheSameMillisecondDoNotOverlap() {
+        append("a", "1");
+        append("b", "2");
+        append("c", "3");
+        append("d", "4");
+
+        // Same server, same clock instant - a dispatcher looping to drain the queue. The claim
+        // metadata is identical for both calls, so reading the batch back by (claimed_by,
+        // claimed_at, status) would return the first two events a second time and announce them
+        // twice.
+        final List<OutboxEvent> first = outbox.claimBatch("survival-1", 2, CLAIM_TIMEOUT).join();
+        final List<OutboxEvent> second = outbox.claimBatch("survival-1", 2, CLAIM_TIMEOUT).join();
+
+        assertThat(first).hasSize(2);
+        assertThat(second).hasSize(2);
+        assertThat(second).extracting(OutboxEvent::eventId)
+                .as("the second batch must not contain anything from the first")
+                .doesNotContainAnyElementsOf(first.stream().map(OutboxEvent::eventId).toList());
+    }
+
+    @Test
     @DisplayName("a delivered event leaves the queue and releases its claim")
     void deliveryClearsTheClaim() {
         final OutboxEvent event = append("town.created", "payload");

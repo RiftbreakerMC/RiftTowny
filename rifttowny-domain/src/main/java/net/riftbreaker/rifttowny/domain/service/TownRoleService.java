@@ -191,6 +191,13 @@ public final class TownRoleService {
         return transaction(townId, actor, Permission.ASSIGN_ROLES, (transaction, context) -> {
             requireManages(context, roleId);
             requireMember(context, target);
+            // Bounded by what the actor holds, exactly as writing a permission into a role is.
+            // Handing out authority is the same escalation as authoring it: without this an officer
+            // with ASSIGN_ROLES could assign themselves a lower-ranked role that a previous mayor
+            // had loaded with DISBAND, and reach in one legal call the permission set that
+            // requireHolds exists to keep out of their hands. Unconditional rather than
+            // self-assignment only, since handing it to an accomplice is the same outcome.
+            requireHolds(context, role(context.book(), roleId).permissions());
             save(transaction, townId, context.book().assign(target, roleId));
             return roleId;
         });

@@ -68,15 +68,21 @@ final class ConnectionRoleStore implements CivicTransaction.RoleStore {
             // Replace rather than diff. The book exposes a state, not a changelog, so a diff would
             // have to be reconstructed by comparing against a re-read - which is the same number of
             // statements with an extra chance to be wrong.
+            // Grant times are read before the wipe and re-used, so an unrelated save - a rename, a
+            // permission change - does not rewrite when everybody got their role. Without it every
+            // holder's granted_at collapses to the same instant and the holder list reorders.
+            final Map<String, Long> grantedAt = loadGrantTimes(book.scope(), book.organisationId());
             deleteExisting(book.scope(), book.organisationId());
 
             for (final Role role : book.ordered()) {
                 insertRole(book, role);
                 insertPermissions(role);
             }
+            final long now = Instant.now().toEpochMilli();
             for (final Role role : book.ordered()) {
                 for (final ResidentId holder : book.holdersOf(role.id())) {
-                    insertAssignment(role.id(), holder);
+                    final String key = role.id().value() + ":" + holder.value();
+                    insertAssignment(role.id(), holder, grantedAt.getOrDefault(key, now));
                 }
             }
             return null;
@@ -211,12 +217,34 @@ final class ConnectionRoleStore implements CivicTransaction.RoleStore {
         }
     }
 
-    private void insertAssignment(final RoleId role, final ResidentId holder) throws SQLException {
+    /** Every existing (role, holder) grant time, keyed so a rewrite can preserve it. */
+    private Map<String, Long> loadGrantTimes(
+            final OrganisationScope scope, final UUID organisationId) throws SQLException {
+        final Map<String, Long> times = new LinkedHashMap<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT m.role_id, m.resident_id, m.granted_at FROM rt_role_member m "
+                        + "JOIN rt_role r ON r.role_id = m.role_id "
+                        + "WHERE r.organisation_id = ? AND r.scope = ?")) {
+            statement.setString(1, organisationId.toString());
+            statement.setString(2, scope.storageValue());
+            try (ResultSet results = statement.executeQuery()) {
+                while (results.next()) {
+                    times.put(
+                            results.getString("role_id") + ":" + results.getString("resident_id"),
+                            results.getLong("granted_at"));
+                }
+            }
+        }
+        return times;
+    }
+
+    private void insertAssignment(
+            final RoleId role, final ResidentId holder, final long grantedAt) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO rt_role_member (role_id, resident_id, granted_at) VALUES (?, ?, ?)")) {
             statement.setString(1, role.value().toString());
             statement.setString(2, holder.value().toString());
-            statement.setLong(3, Instant.now().toEpochMilli());
+            statement.setLong(3, grantedAt);
             statement.executeUpdate();
         }
     }

@@ -123,6 +123,11 @@ public final class TownCommands {
                 .describedAs("Manage town roles")
                 .usage("town role")
                 .child(CommandNode.action("list")
+                        // Repeated from the parent deliberately. The executor tests only the
+                        // resolved node, on the assumption that a child is at least as narrow as
+                        // its parent; a child with no permission under a gated parent breaks that
+                        // assumption and lets /town role list past a gate /town role refuses.
+                        .permission("rifttowny.role.view")
                         .usage("town role list")
                         .describedAs("List the town's roles")
                         .runs(this::roleList, Surface.CHAT))
@@ -232,7 +237,7 @@ public final class TownCommands {
     // --- role actions --------------------------------------------------------------------------
 
     private void roleList(final CommandActor actor, final List<String> args) {
-        withTown(actor, (who, town) -> roles.list(town.id()).thenAccept(found -> {
+        withTown(actor, (who, town) -> then(actor, roles.list(town.id()), found -> {
             messages.send(actor::send, MessageKey.ROLE_LIST_HEADER,
                     MessageService.value("town", town.name().display()));
             for (final Role role : found) {
@@ -265,7 +270,7 @@ public final class TownCommands {
             usage(actor, "town role delete <name>");
             return;
         }
-        withTown(actor, (who, town) -> roles.list(town.id()).thenAccept(found -> {
+        withTown(actor, (who, town) -> then(actor, roles.list(town.id()), found -> {
             final Optional<Role> role = byName(found, args.getFirst());
             if (role.isEmpty()) {
                 denied(actor, ChangeDenial.ROLE_NOT_FOUND);
@@ -308,13 +313,13 @@ public final class TownCommands {
 
     /** Loads the actor's town, or says they have none. */
     private void withTown(final CommandActor actor, final BiConsumer<ResidentId, Town> work) {
-        player(actor).ifPresent(who -> residents.find(who).thenAccept(resident -> {
+        player(actor).ifPresent(who -> then(actor, residents.find(who), resident -> {
             final Optional<TownId> townId = resident.flatMap(Resident::town);
             if (townId.isEmpty()) {
                 messages.send(actor::send, MessageKey.TOWN_NOT_IN_A_TOWN);
                 return;
             }
-            townRepository.find(townId.get()).thenAccept(town ->
+            then(actor, townRepository.find(townId.get()), town ->
                     town.ifPresentOrElse(
                             found -> work.accept(who, found),
                             () -> denied(actor, ChangeDenial.TOWN_NOT_FOUND)));
@@ -331,7 +336,7 @@ public final class TownCommands {
             usage(actor, usage);
             return;
         }
-        withTown(actor, (who, town) -> residents.findByName(args.getFirst()).thenAccept(target ->
+        withTown(actor, (who, town) -> then(actor, residents.findByName(args.getFirst()), target ->
                 target.ifPresentOrElse(
                         found -> work.accept(who, town, found.id()),
                         () -> denied(actor, ChangeDenial.RESIDENT_NOT_FOUND))));
@@ -348,10 +353,42 @@ public final class TownCommands {
             return;
         }
         withTownAndTarget(actor, args, usage, (who, town, target) ->
-                roles.list(town.id()).thenAccept(found -> byName(found, args.get(1))
+                then(actor, roles.list(town.id()), found -> byName(found, args.get(1))
                         .ifPresentOrElse(
                                 role -> work.accept(who, town, target, role),
                                 () -> denied(actor, ChangeDenial.ROLE_NOT_FOUND))));
+    }
+
+    /**
+     * Consumes a lookup future, reporting a failure instead of losing it.
+     *
+     * <p>A bare {@code thenAccept} discards the future it returns, so a storage failure completes
+     * that future exceptionally and nothing ever looks at it: the player sees no reply at all and
+     * the console logs nothing. Every lookup in this class goes through here, and so does every
+     * exception thrown inside the consumer body, which would otherwise vanish the same way.</p>
+     */
+    private <T> void then(
+            final CommandActor actor,
+            final CompletableFuture<T> pending,
+            final Consumer<T> onValue
+    ) {
+        pending.whenComplete((value, failure) -> {
+            if (failure != null) {
+                fail(actor, failure);
+                return;
+            }
+            try {
+                onValue.accept(value);
+            } catch (final RuntimeException thrown) {
+                fail(actor, thrown);
+            }
+        });
+    }
+
+    private void fail(final CommandActor actor, final Throwable failure) {
+        net.riftbreaker.rifttowny.paper.RiftTownyPlugin.getInstance().getLogger()
+                .log(java.util.logging.Level.WARNING, "Command failed for " + actor.name(), failure);
+        messages.send(actor::send, MessageKey.COMMAND_FAILED);
     }
 
     /**
@@ -367,13 +404,9 @@ public final class TownCommands {
     ) {
         pending.whenComplete((result, failure) -> {
             if (failure != null) {
-                // Logged with the cause, and reported to the player as a failure rather than as a
-                // refusal: "you may not do that" would be a lie, and silence would look like the
-                // command did nothing.
-                net.riftbreaker.rifttowny.paper.RiftTownyPlugin.getInstance().getLogger()
-                        .log(java.util.logging.Level.WARNING,
-                                "Command failed for " + actor.name(), failure);
-                messages.send(actor::send, MessageKey.COMMAND_FAILED);
+                // Reported as a failure rather than a refusal: "you may not do that" would be a lie
+                // when the database is down, and silence would look like the command did nothing.
+                fail(actor, failure);
                 return;
             }
             switch (result) {

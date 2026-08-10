@@ -63,7 +63,9 @@ public final class JdbcCivicStore implements CivicStore {
                 // Unwrapped so the caller sees the SQLException that actually happened rather than
                 // a plumbing type they would have to know about to interpret.
                 future.completeExceptionally(wrapped.getCause());
-            } catch (final SQLException | RuntimeException failure) {
+            } catch (final Throwable failure) {
+                // Throwable so the future is always completed, even for an Error. Otherwise the
+                // player's command never gets a reply and anything joining on it blocks forever.
                 future.completeExceptionally(failure);
             }
         });

@@ -49,8 +49,11 @@ public final class TreeCommandExecutor implements CommandExecutor, TabCompleter 
         }
 
         if (resolution.hitUnknownSubcommand()) {
+            // The hint names the tree they are actually in. Hard-coding one would send a player
+            // without the admin permission off to /rifttowny, which then refuses them.
             messages.send(actor::send, MessageKey.COMMAND_UNKNOWN_SUBCOMMAND,
-                    MessageService.value("input", resolution.arguments().getFirst()));
+                    MessageService.value("input", resolution.arguments().getFirst()),
+                    MessageService.value("command", resolution.label()));
             sendHelp(actor, messages, resolution);
             return true;
         }
@@ -83,7 +86,8 @@ public final class TreeCommandExecutor implements CommandExecutor, TabCompleter 
             final MessageService messages,
             final CommandRouter.Resolution resolution
     ) {
-        messages.send(actor::send, MessageKey.COMMAND_HELP_HEADER);
+        messages.send(actor::send, MessageKey.COMMAND_HELP_HEADER,
+                MessageService.value("command", resolution.label()));
         for (final CommandNode child : resolution.node().children()) {
             if (!child.visibleTo(actor)) {
                 continue;

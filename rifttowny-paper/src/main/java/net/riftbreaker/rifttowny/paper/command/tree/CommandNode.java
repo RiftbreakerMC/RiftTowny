@@ -39,6 +39,21 @@ public final class CommandNode {
                 ? Set.of()
                 : java.util.Collections.unmodifiableSet(EnumSet.copyOf(builder.surfaces));
         this.completer = builder.completer;
+
+        // The router tests only the node the arguments resolved to, on the assumption that a child
+        // is at least as narrow as its parent. A child with no permission under a gated parent
+        // breaks that assumption silently - the parent refuses, and typing one word more walks
+        // straight past it. Checked here so a tree that violates it cannot be constructed at all.
+        if (permission != null) {
+            for (final CommandNode child : children) {
+                if (child.permission().isEmpty()) {
+                    throw new IllegalStateException(
+                            "Command node '" + name + "' requires " + permission
+                                    + " but its child '" + child.name() + "' requires nothing, so "
+                                    + "the child would bypass the parent's permission");
+                }
+            }
+        }
     }
 
     /** A node that only holds children. Running it prints its children as help. */

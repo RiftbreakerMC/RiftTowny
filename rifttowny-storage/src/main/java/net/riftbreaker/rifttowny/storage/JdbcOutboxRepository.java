@@ -125,12 +125,24 @@ public final class JdbcOutboxRepository implements OutboxRepository {
                 statement.executeUpdate();
             }
 
+            // Read back by the candidate ids, not by (claimed_by, claimed_at, status). Claim
+            // metadata is not unique to a call: a dispatcher draining the queue calls this twice
+            // inside the same millisecond, both writes stamp the same claimed_at, and a metadata
+            // query would return the earlier batch as well - handing the caller more rows than the
+            // limit and re-dispatching events it already holds. Discord would see the same town
+            // founding announced twice, and markDelivered on an already-delivered event is a no-op,
+            // so nothing downstream corrects it.
             final String select = "SELECT " + COLUMNS + " FROM rt_outbox "
-                    + "WHERE claimed_by = ? AND claimed_at = ? AND status = ? ORDER BY available_at";
+                    + "WHERE id IN (" + placeholders(candidates.size()) + ") "
+                    + "AND claimed_by = ? AND claimed_at = ? AND status = ? ORDER BY available_at, id";
             try (PreparedStatement statement = connection.prepareStatement(select)) {
-                statement.setString(1, serverId);
-                statement.setLong(2, now);
-                statement.setString(3, OutboxStatus.CLAIMED.name());
+                int index = 1;
+                for (final Long id : candidates) {
+                    statement.setLong(index++, id);
+                }
+                statement.setString(index++, serverId);
+                statement.setLong(index++, now);
+                statement.setString(index, OutboxStatus.CLAIMED.name());
                 return readAll(statement);
             }
         }));

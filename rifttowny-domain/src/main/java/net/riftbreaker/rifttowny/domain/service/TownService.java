@@ -13,6 +13,7 @@ import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.role.Permission;
 import net.riftbreaker.rifttowny.domain.role.RoleBook;
+// RoleBook is used both for the authority lookup and for stripping a departed resident's roles.
 import net.riftbreaker.rifttowny.domain.role.SystemRole;
 import net.riftbreaker.rifttowny.domain.store.ChangeRefusedException;
 import net.riftbreaker.rifttowny.domain.store.CivicStore;
@@ -278,6 +279,19 @@ public final class TownService {
             transaction.residents().save(departed);
             transaction.towns().save(updated);
             transaction.publishAll(released.events(), correlation("leave", townId));
+
+            // Roles do not expire with residency: nothing ties rt_role_member to rt_resident, so
+            // without this a departed or kicked player keeps their officer permissions and their
+            // officer rank, and every guard that consults the book keeps saying yes to somebody who
+            // may since have joined a rival town.
+            //
+            // Optional rather than required: a town whose book is missing has no assignments to
+            // revoke, and refusing a departure over it would trap the resident.
+            transaction.roles().find(OrganisationScope.TOWN, townId.value()).ifPresent(book -> {
+                final Outcome<RoleBook> stripped = book.unassignAll(who);
+                stripped.value().ifPresent(transaction.roles()::save);
+                transaction.publishAll(stripped.events(), correlation("leave", townId));
+            });
             return updated;
         });
     }

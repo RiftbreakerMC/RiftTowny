@@ -16,9 +16,11 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -207,6 +209,23 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
      * carry, since it exposes a state rather than a changelog.</p>
      */
     private void replaceTrust(final Town town) throws SQLException {
+        // Existing timestamps are read first and re-used. Stamping every row with now would rewrite
+        // the whole grant history on an unrelated save - a rename would move both entries to the
+        // same instant, and since trustedBy sorts by granted_at, the list would silently reorder
+        // into UUID order. Only genuinely new entries get the current time.
+        final Map<ResidentId, Long> existing = new LinkedHashMap<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT resident_id, granted_at FROM rt_town_trust WHERE town_id = ?")) {
+            statement.setString(1, town.id().value().toString());
+            try (ResultSet results = statement.executeQuery()) {
+                while (results.next()) {
+                    existing.put(
+                            ResidentId.parse(results.getString("resident_id")),
+                            results.getLong("granted_at"));
+                }
+            }
+        }
+
         try (PreparedStatement statement =
                      connection.prepareStatement("DELETE FROM rt_town_trust WHERE town_id = ?")) {
             statement.setString(1, town.id().value().toString());
@@ -221,7 +240,7 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
             for (final ResidentId trusted : town.trustedOutsiders()) {
                 statement.setString(1, town.id().value().toString());
                 statement.setString(2, trusted.value().toString());
-                statement.setLong(3, now);
+                statement.setLong(3, existing.getOrDefault(trusted, now));
                 statement.addBatch();
             }
             statement.executeBatch();

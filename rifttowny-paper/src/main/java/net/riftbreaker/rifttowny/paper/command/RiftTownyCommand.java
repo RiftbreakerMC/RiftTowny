@@ -58,7 +58,8 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
             }
             case "help" -> sendHelp(sender);
             default -> messages.send(sender, MessageKey.COMMAND_UNKNOWN_SUBCOMMAND,
-                    MessageService.value("input", args[0]));
+                    MessageService.value("input", args[0]),
+                    MessageService.value("command", "/rifttowny help"));
         }
         return true;
     }
@@ -85,7 +86,8 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
 
     private void sendHelp(final CommandSender sender) {
         final MessageService messages = plugin().messages();
-        messages.send(sender, MessageKey.COMMAND_HELP_HEADER);
+        messages.send(sender, MessageKey.COMMAND_HELP_HEADER,
+                MessageService.value("command", "RiftTowny administration:"));
         messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
                 MessageService.value("usage", "/rifttowny status"),
                 MessageService.value("description", "platform, storage, outbox and integration state"));

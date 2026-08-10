@@ -35,9 +35,14 @@ class CommandRouterTest {
                         .runs((actor, args) -> ran.add("rename " + args), Surface.GUI))
                 .child(CommandNode.group("role")
                         .permission("rifttowny.role.manage")
+                        // Children repeat the parent's permission. A gated group with an open child
+                        // is refused at construction, because the router only tests the node the
+                        // arguments resolved to.
                         .child(CommandNode.action("add")
+                                .permission("rifttowny.role.manage")
                                 .runs((actor, args) -> ran.add("role add " + args), Surface.GUI))
                         .child(CommandNode.action("remove")
+                                .permission("rifttowny.role.manage")
                                 .runs((actor, args) -> ran.add("role remove"), Surface.GUI))
                         .build())
                 .build();
@@ -217,6 +222,48 @@ class CommandRouterTest {
             final var actor = actorWith("rifttowny.town.new");
 
             assertThat(CommandRouter.complete(tree(), List.of("nonsense", ""), actor)).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("permission narrowing")
+    class Narrowing {
+
+        @Test
+        @DisplayName("a child with no permission under a gated parent cannot be built")
+        void childMayNotBeBroaderThanItsParent() {
+            final CommandNode.Builder group = CommandNode.group("role")
+                    .permission("rifttowny.role.view")
+                    .child(CommandNode.action("list").runs((actor, args) -> { }));
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(group::build)
+                    .as("the router tests only the resolved node, so an open child walks straight "
+                            + "past the gate its parent carries")
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("bypass");
+        }
+
+        @Test
+        @DisplayName("a child with its own permission is fine, narrower or not")
+        void gatedChildIsAccepted() {
+            assertThat(CommandNode.group("role")
+                    .permission("rifttowny.role.view")
+                    .child(CommandNode.action("list")
+                            .permission("rifttowny.role.view")
+                            .runs((actor, args) -> { }))
+                    .build()
+                    .children()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("an open parent may hold gated children, which is the useful direction")
+        void openParentMayHoldGatedChildren() {
+            assertThat(CommandNode.group("town")
+                    .child(CommandNode.action("delete")
+                            .permission("rifttowny.town.delete")
+                            .runs((actor, args) -> { }))
+                    .build()
+                    .children()).hasSize(1);
         }
     }
 

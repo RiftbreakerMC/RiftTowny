@@ -273,6 +273,35 @@ public final class RoleBook {
                 changed(found.get(), DomainEvent.RoleAction.UNASSIGNED, who.value().toString()));
     }
 
+    /**
+     * Revokes every role a resident holds.
+     *
+     * <p>Used when somebody stops being a resident. Assignments do not expire on their own — nothing
+     * in the schema ties {@code rt_role_member} to residency — so without this a player who left or
+     * was kicked keeps their officer permissions and their officer rank, and every guard that
+     * consults this book keeps saying yes to them.</p>
+     *
+     * <p>Holding no roles is applied rather than denied: the caller is unwinding a departure and
+     * should not have to check first.</p>
+     */
+    public Outcome<RoleBook> unassignAll(final ResidentId who) {
+        Objects.requireNonNull(who, "who");
+        final Set<RoleId> held = rolesOf(who);
+        if (held.isEmpty()) {
+            return Outcome.applied(this);
+        }
+
+        final Map<ResidentId, Set<RoleId>> updated = new LinkedHashMap<>(assignments);
+        updated.remove(who);
+
+        final List<DomainEvent> events = new ArrayList<>(held.size());
+        for (final RoleId roleId : held) {
+            find(roleId).ifPresent(role -> events.add(
+                    changed(role, DomainEvent.RoleAction.UNASSIGNED, who.value().toString())));
+        }
+        return new Outcome.Applied<>(new RoleBook(scope, organisationId, roles, updated), events);
+    }
+
     // --- resolution ------------------------------------------------------------------------
 
     /**

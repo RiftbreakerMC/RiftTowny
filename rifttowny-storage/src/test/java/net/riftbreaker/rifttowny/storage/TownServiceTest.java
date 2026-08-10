@@ -318,6 +318,40 @@ class TownServiceTest extends SqliteFixture {
         }
 
         @Test
+        @DisplayName("leaving strips every role, so a departed officer stops governing the town")
+        void leavingRevokesRoles() {
+            final Town town = foundRiftholm();
+            seeAsNewcomer(OFFICER, "Officer");
+            service.join(MAYOR, OFFICER, town.id()).join();
+            giveRole(town.id(), OFFICER, 500, Permission.KICK_RESIDENT, Permission.DISBAND);
+            assertThat(service.permissionsOf(OFFICER, town.id()).join())
+                    .contains(Permission.DISBAND);
+
+            service.leave(OFFICER, town.id()).join();
+
+            assertThat(service.permissionsOf(OFFICER, town.id()).join())
+                    .as("role assignments do not expire with residency unless something revokes them")
+                    .doesNotContain(Permission.DISBAND, Permission.KICK_RESIDENT);
+            assertThat(service.disband(OFFICER, town.id()).join().denial())
+                    .as("an ex-resident must not still be able to destroy the town")
+                    .contains(ChangeDenial.MISSING_PERMISSION);
+        }
+
+        @Test
+        @DisplayName("a kick strips the victim's roles too, so removal actually removes authority")
+        void kickRevokesRoles() {
+            final Town town = foundRiftholm();
+            seeAsNewcomer(OFFICER, "Officer");
+            service.join(MAYOR, OFFICER, town.id()).join();
+            giveRole(town.id(), OFFICER, 500, Permission.DISBAND);
+
+            service.kick(MAYOR, OFFICER, town.id()).join();
+
+            assertThat(service.permissionsOf(OFFICER, town.id()).join())
+                    .doesNotContain(Permission.DISBAND);
+        }
+
+        @Test
         @DisplayName("nobody may kick the mayor, however senior their role")
         void nobodyKicksTheMayor() {
             final Town town = foundRiftholm();

@@ -250,6 +250,38 @@ class TownRoleServiceTest extends SqliteFixture {
         }
 
         @Test
+        @DisplayName("an officer may not assign a role carrying permissions they do not hold")
+        void cannotAssignWhatYouDoNotHold() {
+            addMember(OFFICER, "Officer");
+            roleFor(OFFICER, "Officer", 500, Permission.MANAGE_ROLES, Permission.ASSIGN_ROLES);
+            // A role a previous mayor loaded with something the current officer lacks. The javadoc
+            // on revoke calls this state normal, so it is not a contrived setup.
+            final RoleId junior = roles.create(
+                            MAYOR, riftholm.id(), "Junior", 200, Set.of(Permission.DISBAND))
+                    .join().value().orElseThrow().id();
+
+            assertThat(roles.assign(OFFICER, riftholm.id(), OFFICER, junior).join().denial())
+                    .as("handing out authority is the same escalation as authoring it")
+                    .contains(ChangeDenial.CANNOT_GRANT_UNHELD_PERMISSION);
+            assertThat(towns.permissionsOf(OFFICER, riftholm.id()).join())
+                    .doesNotContain(Permission.DISBAND);
+        }
+
+        @Test
+        @DisplayName("the bound covers handing it to somebody else, not only to yourself")
+        void cannotAssignUnheldToAnAccomplice() {
+            addMember(OFFICER, "Officer");
+            addMember(CITIZEN, "Citizen");
+            roleFor(OFFICER, "Officer", 500, Permission.MANAGE_ROLES, Permission.ASSIGN_ROLES);
+            final RoleId junior = roles.create(
+                            MAYOR, riftholm.id(), "Junior", 200, Set.of(Permission.DISBAND))
+                    .join().value().orElseThrow().id();
+
+            assertThat(roles.assign(OFFICER, riftholm.id(), CITIZEN, junior).join().denial())
+                    .contains(ChangeDenial.CANNOT_GRANT_UNHELD_PERMISSION);
+        }
+
+        @Test
         @DisplayName("the mayor is exempt from every bound, because they already hold everything")
         void mayorIsExempt() {
             assertThat(roles.create(MAYOR, riftholm.id(), "Steward", 900,

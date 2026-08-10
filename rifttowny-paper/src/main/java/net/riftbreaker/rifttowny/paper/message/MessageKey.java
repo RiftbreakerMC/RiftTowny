@@ -27,11 +27,12 @@ public enum MessageKey {
     COMMAND_NO_PERMISSION("command.no-permission",
             "<red>You do not have permission to do that.</red>"),
 
+    /** {@code <command>} is the tree the player was actually in, not a hard-coded one. */
     COMMAND_UNKNOWN_SUBCOMMAND("command.unknown-subcommand",
-            "<red>Unknown subcommand <white><input></white>. Try <white>/rifttowny help</white>.</red>"),
+            "<red>Unknown subcommand <white><input></white>. Try <white><command></white>.</red>"),
 
     COMMAND_HELP_HEADER("command.help-header",
-            "<gray>RiftTowny administration:</gray>"),
+            "<gray><command></gray>"),
 
     COMMAND_HELP_LINE("command.help-line",
             "  <aqua><usage></aqua> <dark_gray>-</dark_gray> <gray><description></gray>"),
