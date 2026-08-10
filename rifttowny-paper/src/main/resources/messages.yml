@@ -1,0 +1,32 @@
+# RiftTowny messages. MiniMessage format: https://docs.advntr.dev/minimessage/format.html
+#
+# Every key here has a built-in default. Deleting a key falls back to that default rather than
+# printing a blank line, and a template that fails to parse is reported once at startup and then
+# falls back too - an operator's typo should cost them their customisation, not the message.
+#
+# Placeholders are written <like_this> and are inserted literally: a town name containing
+# MiniMessage tags cannot inject formatting.
+
+prefix: '<gradient:#4ea8de:#80ffdb><bold>RiftTowny</bold></gradient> <dark_gray>|</dark_gray> '
+
+startup:
+  towny-conflict: '<red>RiftTowny cannot run alongside Towny: the command tree and the <white>%townyadvanced_*%</white> placeholder namespace both collide. Remove one of the two plugins.</red>'
+  storage-problem: '<red><setting></red> <gray><problem></gray> <yellow>-></yellow> <white><remedy></white>'
+  storage-abort: '<red>RiftTowny did not start: the storage configuration is unsafe. Fix the problems above and restart.</red>'
+
+command:
+  no-permission: '<red>You do not have permission to do that.</red>'
+  unknown-subcommand: '<red>Unknown subcommand <white><input></white>. Try <white>/rifttowny help</white>.</red>'
+  help-header: '<gray>RiftTowny administration:</gray>'
+  help-line: '  <aqua><usage></aqua> <dark_gray>-</dark_gray> <gray><description></gray>'
+
+status:
+  header: '<gray>RiftTowny <white><version></white></gray>'
+  platform: '  <gray>Platform</gray> <white><platform></white> <dark_gray>|</dark_gray> <gray>API</gray> <white><api></white>'
+  storage: '  <gray>Storage</gray> <white><backend></white> <dark_gray>|</dark_gray> <gray>schema</gray> <white><schema></white> <dark_gray>|</dark_gray> <gray>topology</gray> <white><topology></white>'
+  outbox: '  <gray>Outbox</gray> <white><pending></white> pending, <white><claimed></white> claimed, <white><failed></white> failed'
+  outbox-unavailable: '  <gray>Outbox</gray> <red>unavailable: <reason></red>'
+  integrations-header: '  <gray>Integrations</gray>'
+  integration-active: '    <green><capability></green> <dark_gray>-</dark_gray> <gray><detail></gray>'
+  integration-problem: '    <red><capability></red> <white><state></white> <dark_gray>-</dark_gray> <gray><detail></gray>'
+  integration-absent: '    <dark_gray><capability> - not installed</dark_gray>'

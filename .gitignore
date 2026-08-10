@@ -1,0 +1,12 @@
+target/
+build/
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.jenkins-settings.xml
+.deploy.log
+*.log
+run/

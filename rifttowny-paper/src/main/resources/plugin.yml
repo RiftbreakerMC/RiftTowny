@@ -1,0 +1,50 @@
+name: RiftTowny
+version: '${project.version}'
+main: net.riftbreaker.rifttowny.paper.RiftTownyPlugin
+api-version: '26.2'
+folia-supported: true
+description: Town, nation, territory, economy, governance and war platform.
+authors: [RiftbreakerMC]
+website: https://github.com/RiftbreakerMC/RiftTowny
+
+# Every integration is optional. One missing plugin disables only what depends on it.
+# Towny is deliberately NOT listed: RiftTowny refuses to start when it is present, because the
+# command tree and the %townyadvanced_*% placeholder namespace both collide.
+softdepend:
+  - RiftCore
+  - RiftEco
+  - RiftLogger
+  - RiftPvP
+  - RiftBoosters
+  - RiftChat
+  - RiftShop
+  - RiftSpawners
+  - RiftEvents
+  - RiftEssentials
+  - VelocitySrv
+  - PlaceholderAPI
+  - LuckPerms
+  - CoreProtect
+  - floodgate
+  - Geyser-Spigot
+  - BlueMap
+  - dynmap
+  - squaremap
+  - mcMMO
+  - VaultUnlocked
+
+commands:
+  rifttowny:
+    description: RiftTowny administration and diagnostics.
+    usage: /rifttowny <status|help>
+    permission: rifttowny.admin
+
+permissions:
+  rifttowny.admin:
+    description: RiftTowny administration.
+    default: op
+    children:
+      rifttowny.admin.status: true
+  rifttowny.admin.status:
+    description: View platform, storage, outbox and integration state.
+    default: op

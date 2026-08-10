@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>net.riftbreaker</groupId>
+    <artifactId>rifttowny-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>rifttowny-paper</artifactId>
+  <name>RiftTowny Paper Plugin</name>
+  <description>
+    The shippable plugin: bootstrap, Paper and Folia scheduler implementations, configuration and
+    MiniMessage messages, commands, listeners, GUIs and Bedrock forms.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>net.riftbreaker</groupId>
+      <artifactId>rifttowny-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>net.riftbreaker</groupId>
+      <artifactId>rifttowny-domain</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>net.riftbreaker</groupId>
+      <artifactId>rifttowny-storage</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>net.riftbreaker</groupId>
+      <artifactId>rifttowny-integrations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.papermc.paper</groupId>
+      <artifactId>paper-api</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- Jar is named for the plugin only, org-wide convention, so a download needs no renaming.
+         The version is not lost: plugin.yml is resource-filtered and carries ${project.version}. -->
+    <finalName>RiftTowny</finalName>
+
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>plugin.yml</include>
+          <include>paper-plugin.yml</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes>
+          <exclude>plugin.yml</exclude>
+          <exclude>paper-plugin.yml</exclude>
+        </excludes>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <relocations>
+                <!-- Relocated so this jar cannot collide with a different HikariCP shaded into
+                     another plugin on the same server. -->
+                <relocation>
+                  <pattern>com.zaxxer.hikari</pattern>
+                  <shadedPattern>net.riftbreaker.rifttowny.libs.hikari</shadedPattern>
+                </relocation>
+
+                <!-- org.sqlite is deliberately NOT relocated. sqlite-jdbc is JNI: its bundled
+                     native binary exports symbols named for the Java package
+                     (Java_org_sqlite_core_NativeDB__1open_1utf8), so a shaded rename leaves the
+                     class calling a symbol that is not in the binary. That surfaces as
+                     UnsatisfiedLinkError on Linux and NoClassDefFoundError on Windows, and only
+                     on the SQLite backend - a MySQL-backed test run never reveals it. -->
+              </relocations>
+              <transformers>
+                <!-- JDBC drivers are found through META-INF/services; without this they vanish. -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

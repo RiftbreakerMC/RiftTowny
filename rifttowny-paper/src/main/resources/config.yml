@@ -1,0 +1,43 @@
+# RiftTowny configuration.
+#
+# Every user-facing string lives in messages.yml, not here.
+
+storage:
+  # sqlite  - development and single-server installs only.
+  # mariadb - production, and required for any network where several backend servers share data.
+  #
+  # RiftTowny refuses to start on sqlite when network.shared is true. Two servers writing one
+  # SQLite file do not fail loudly; they lose writes, and the symptom appears days later as a town
+  # that lost its claims.
+  backend: sqlite
+
+  # Below 4 a SQLite pool can deadlock: a repository may open a second connection while still
+  # holding the first, and the borrow then blocks until the timeout. A value under 4 is raised
+  # automatically and warned about.
+  pool-size: 4
+  connection-timeout-millis: 5000
+
+  sqlite:
+    # Relative to the RiftTowny plugin folder.
+    file: rifttowny.db
+
+  mariadb:
+    host: 127.0.0.1
+    port: 3306
+    database: rifttowny
+    username: rifttowny
+    password: ''
+
+network:
+  # Unique and stable per backend server. Outbox ownership, advisory leases and audit rows are all
+  # keyed on it, so two servers sharing an id will fight over the same work.
+  server-id: standalone
+
+  # True when more than one backend server shares this database. Requires mariadb.
+  shared: false
+
+permissions:
+  # Accept towny.* alongside the canonical rifttowny.* nodes. Off by default: silently honouring
+  # another plugin's permission nodes is a surprise, and it is only useful while migrating an
+  # existing permission set.
+  towny-aliases: false

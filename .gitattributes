@@ -1,0 +1,15 @@
+# Text sources are pinned to LF so a Windows checkout behaves the same as CI.
+# Tests in this organisation read production sources and match against literals
+# containing \n, and Flyway checksums its migration files; a CRLF working tree
+# breaks both in ways that do not reproduce on Linux.
+*.java text eol=lf
+*.xml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sql text eol=lf
+*.properties text eol=lf
+*.md text eol=lf
+Jenkinsfile text eol=lf
+
+# Leave archives untouched.
+*.jar binary
