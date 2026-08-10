@@ -214,6 +214,36 @@ Enumerated in `docs/placeholders.md` as each subsystem lands. Status ⬜.
 
 ---
 
+## 3.12 `%riftwars_*%` and the SiegeWar alias question
+
+Owned by RiftWars, not RiftTowny. Native `%riftwars_*%` placeholders ship with
+**RiftWars: Frontier**: siege state, participants, current score, session window, next
+session, shield status and remaining immunity.
+
+**SiegeWar-compatible aliases are a separate, opt-in, per-alias decision.** They are:
+
+- disabled by default;
+- documented in their own manifest, not mixed into the native namespace;
+- registered only after a golden test proves the alias's output matches the documented
+  behaviour it claims to replace.
+
+Registering an alias blindly would be worse than not offering it: a scoreboard that shows a
+plausible but wrong value is harder to debug than one that shows nothing. No compatibility
+claim is made for an alias without a passing test.
+
+## 3.13 Plugin-level compatibility
+
+| Plugin | Runs beside | Status |
+|---|---|---|
+| RiftTowny | Towny | ❌ impossible — namespace collision, startup aborts |
+| RiftTowny | Lands, HuskTowns | ❌ untested, unsupported — overlapping protection is ambiguous |
+| RiftWars | SiegeWar | ❌ not supported — SiegeWar requires Towny, which RiftTowny excludes |
+| RiftWars | RiftTowny | ✅ required dependency |
+| RiftWars | RiftSeasons | ⬜ optional; absence disables seasonal scoring only |
+| RiftWars | RiftInfrastructure, RiftCivics | ⬜ optional; absence falls back to documented defaults per MODULE_GRAPH §2.2 |
+| RiftSeasons | RiftTowny | ✅ required dependency |
+| RiftInfrastructure / RiftCivics | RiftTowny | ✅ required dependency |
+
 ## 4. Deliberate non-goals
 
 | Not supported | Why |

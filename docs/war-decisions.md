@@ -1,25 +1,26 @@
 # RiftTowny — War Decisions
 
-> **STATUS: AWAITING APPROVAL.**
-> Phase 4's war implementation is blocked on this document. Nothing in it is built.
+> **STATUS: APPROVED 2026-08-09.** Every decision was accepted as recommended.
+> Phase 4 war implementation is unblocked. It remains scheduled after Phases 2 and 3 —
+> approval removes the blocker, it does not move the work forward in the queue.
 >
-> "How Towny works" is not a specification: Towny ships several mutually incompatible war
-> add-ons (flag war, event war, siege-style), each with different declaration rules,
-> different capture mechanics and different consequences for losing. Picking one silently
-> would bake a design decision into the schema that is expensive to reverse. Every
-> decision below therefore has a **recommendation** and the alternatives that were
-> weighed, and needs an explicit yes.
+> "How Towny works" was not a usable specification: Towny ships several mutually
+> incompatible war add-ons (flag war, event war, siege-style), each with different
+> declaration rules, different capture mechanics and different consequences for losing.
+> Picking one silently would have baked a design decision into the schema that is
+> expensive to reverse. Each decision below therefore records the choice, the reasoning,
+> and the alternative that was weighed against it.
 
-**How to approve:** reply with the decision IDs you accept as recommended, and state the
-changes you want on the rest. Partial approval is fine — the state machine, shields and
-scoring can each be approved independently, and I will implement only the approved parts.
+**Changing an approved decision after Phase 4 ships means a migration against live war
+state**, and in the case of D-06 against land that has already changed hands. If any of
+these read wrong once they are in front of players, raise it before Phase 4 rather than
+after.
 
 ---
 
-## 0. What is already safe to build
+## 0. Framework
 
-These carry no design risk and are **not** blocked on approval. They are scheduled for
-Phase 4 regardless of the answers below:
+These carry no design risk and were never blocked on approval:
 
 - The `WarState` persistence tables and the state-machine *framework* (transitions as
   data, so the rules below become configuration rather than code).
@@ -27,8 +28,8 @@ Phase 4 regardless of the answers below:
 - The `WarStateChanged` typed event and outbox rows.
 - Flight revocation on entering a war zone (RiftPvP contract, already agreed).
 
-What is blocked is the **rule content**: who may declare, what is protected, what changes
-hands, and how it ends.
+The **rule content** — who may declare, what is protected, what changes hands, how it ends —
+is what needed sign-off, and now has it.
 
 ---
 
@@ -225,19 +226,34 @@ simultaneous wars against different opponents, and permanent town deletion by co
 
 ---
 
-## Decision summary
+## Decision summary — all approved 2026-08-09
 
-| ID | Subject | Recommendation | Approved? |
-|---|---|---|---|
-| D-01 | State machine shape | Linear, with `TERMS` before effects | ☐ |
-| D-02 | Declaration rules | Unilateral, gated by size/cost/cooldown | ☐ |
-| Q-02a | Optional admin approval flag | Yes, default off | ☐ |
-| D-03 | Preparation | 24 h default, protection intact | ☐ |
-| D-04 | Combat windows and protection | Scheduled windows, objectives not griefing | ☐ |
-| Q-04a | `objectives \| raiding` profile switch | Yes, `objectives` default | ☐ |
-| D-05 | Capture and scoring | Capture flags, RiftPvP-validated kills | ☐ |
-| Q-05a | Defender re-capture | Yes, reduced value | ☐ |
-| D-06 | Settlement | 25% cap, homeblock never transfers | ☐ |
-| D-07 | Occupation and recovery | Optional, 7 days, bank untouched | ☐ |
-| D-08 | Shields | As tabled | ☐ |
-| D-09 | Cross-server | MariaDB authoritative, advisory-locked | ☐ |
+| ID | Subject | Approved position |
+|---|---|---|
+| D-01 | State machine shape | Linear, with `TERMS` before effects ✅ |
+| D-02 | Declaration rules | Unilateral, gated by size/cost/cooldown ✅ |
+| Q-02a | Optional admin approval flag | `war.declaration.requires-admin-approval`, default `false` ✅ |
+| D-03 | Preparation | 24 h default, protection intact ✅ |
+| D-04 | Combat windows and protection | Scheduled windows, objectives not griefing ✅ |
+| Q-04a | `objectives \| raiding` profile switch | Present, `objectives` default ✅ |
+| D-05 | Capture and scoring | Capture flags, RiftPvP-validated kills ✅ |
+| Q-05a | Defender re-capture | Permitted, reduced value ✅ |
+| D-06 | Settlement | 25% cap, homeblock never transfers ✅ |
+| D-07 | Occupation and recovery | Optional, 7 days, bank untouched ✅ |
+| D-08 | Shields | As tabled ✅ |
+| D-09 | Cross-server | MariaDB authoritative, advisory-locked ✅ |
+
+### What approval commits Phase 4 to
+
+Four of these are load-bearing for the schema, and are the ones to revisit first if
+anything reads wrong in play:
+
+- **D-01** puts every effect at `TERMS`, so land transfer and tribute are one atomic,
+  idempotent settlement rather than a trickle of mutations during combat.
+- **D-05** makes a captured claim *contested*, not transferred, which means the claim table
+  needs a contested marker rather than a second ownership column.
+- **D-06** caps transfer at 25% and makes the homeblock untransferable, so a town always has
+  something to come back to. This is the decision most likely to feel wrong to an
+  aggressive playerbase, and the easiest to raise as a config ceiling later.
+- **D-07** keeps the civic bank, residents and roles untouched by occupation, which keeps
+  occupation out of the economy schema entirely.

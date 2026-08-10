@@ -12,6 +12,27 @@ Last updated: 2026-08-09. Current state: **Phase 1 foundation complete and verif
 
 ---
 
+## Ecosystem split (2026-08-10)
+
+The project is now five plugins, not one. Release order is fixed:
+
+`RiftTowny → RiftSeasons → RiftWars → RiftInfrastructure → RiftCivics`
+
+- [MODULE_GRAPH.md](MODULE_GRAPH.md) — plugins, acyclic dependency direction, the nine
+  capability interfaces, RiftTowny's internal module register
+- [RELEASE_ERAS.md](RELEASE_ERAS.md) — release order vs server eras, and where the original
+  six phases went
+- [FEATURE_CATALOG.md](FEATURE_CATALOG.md) — every feature with a stable ID and a status
+- [RIFTWARS_SPECIFICATION.md](RIFTWARS_SPECIFICATION.md) — profile engine and the Siege
+  profile, including how the approved war decisions map onto it
+- [RIFTWARS_SEASONS.md](RIFTWARS_SEASONS.md) — season lifecycle
+- [SECURITY_AND_PRIVACY.md](SECURITY_AND_PRIVACY.md) — espionage vs SocialSpy, exclusions
+
+**What this changes for the work in progress: nothing.** Phase 2 is RiftTowny core, which
+is release 1 in the new order. War moves out of RiftTowny into RiftWars, released third —
+old Phase 4's war content is now RiftWars: Frontier, and old Phase 4's flight, Soft
+Landing, bounty and supply-drop content stays in RiftTowny.
+
 ## Decisions taken (2026-08-09)
 
 | Decision | Choice | Why |
@@ -94,8 +115,12 @@ but real public API, and fails loudly instead of silently when something is wron
 
 ---
 
-## Phase 2 — Core town replacement
+## Phase 2 — Core town replacement  ·  release **RiftTowny: Founding**
 
+Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
+
+- [~] `RT-CORE-RESIDENT` / `RT-CORE-TOWN` — **active**: name normalisation and the
+  membership invariants are implemented and tested; repositories and services follow
 - [ ] Resident, town, nation entities and lifecycle services
 - [ ] Chunk claim model, claim/unclaim, outposts, homeblock rules
 - [ ] Central flag resolver and the protection listeners that consult it
@@ -120,7 +145,7 @@ but real public API, and fails loudly instead of silently when something is wron
 
 ## Phase 4 — Combat and events
 
-- [!] War state machine — **blocked on approval of [docs/war-decisions.md](docs/war-decisions.md)**
+- [ ] War state machine — **unblocked**: [docs/war-decisions.md](docs/war-decisions.md) approved 2026-08-09, all twelve decisions as recommended
 - [ ] War shields
 - [ ] RiftPvP integration (combat tag → flight removal, bounce-back)
 - [ ] RiftBoosters flight, community booster, Soft Landing

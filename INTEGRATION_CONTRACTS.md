@@ -350,6 +350,87 @@ resolved. `/rifttowny status` prints the registry's real state.
 
 ---
 
+## 3A. New sibling plugins and capability interfaces (2026-08-10)
+
+The ecosystem gains four plugins alongside RiftTowny: RiftSeasons, RiftWars,
+RiftInfrastructure and RiftCivics. See [MODULE_GRAPH.md](MODULE_GRAPH.md) for the graph.
+
+**None of their repositories exist yet.** They are `RiftbreakerMC/RiftSeasons`,
+`/RiftWars`, `/RiftInfrastructure`, `/RiftCivics` when created. Nothing is written against
+them today.
+
+### 3A.1 Capability interfaces — the contract that prevents a cycle
+
+Published from `rifttowny-api`, package
+`net.riftbreaker.rifttowny.api.capability.provider`. RiftWars consumes them; RiftCivics and
+RiftInfrastructure provide them. **Neither side compiles against the other.**
+
+| Interface | Provider | Documented default when absent |
+|---|---|---|
+| `DiplomacyCapability` | RiftTowny basic, RiftCivics advanced | Ally / enemy / neutral only |
+| `GovernmentApprovalCapability` | RiftCivics | Nation leader is the sole authority |
+| `FederationCapability` | RiftCivics | Nation-vs-town wars only |
+| `SanctionCapability` | RiftCivics | Tribute and occupation only |
+| `PeaceConferenceCapability` | RiftCivics | Two-party surrender or timeout |
+| `InfrastructureCapability` | RiftInfrastructure | No facility objectives |
+| `LogisticsCapability` | RiftInfrastructure | Flat reinforcement ticket count |
+| `AssetCapability` | RiftInfrastructure | Treasury-only plunder |
+| `ReconstructionCapability` | RiftInfrastructure | Shield plus timer |
+
+**The rule that makes late installation safe:** a capability is consulted at *decision
+time* and its answer is written into the frozen rule snapshot. Installing a provider
+mid-season therefore changes future wars, never a war already running, and never requires
+migrating an existing record.
+
+Each is registered through the existing `DefaultCapabilityRegistry`, so a provider that
+fails to bind degrades exactly like any other integration.
+
+## 3B. Authoritative repository inventory
+
+The addendum names fifteen existing repositories. Reconciled against the actual
+`RiftbreakerMC` organisation on 2026-08-10:
+
+| Named in addendum | Actual repo | Notes |
+|---|---|---|
+| ExperienceManager | **`ExperienceManager2`** (default branch `master`) | Name mismatch. Two older repos also exist — `RiftbreakerXP` and `Riftbreaker-Experience-Manager`. **Which one is authoritative is unconfirmed** |
+| RiftBoosters | `RiftBoosters` | verified |
+| RiftbreakerRifts | **`Riftbreakerrifts`** | Ships `art.arcane:wormholes`. **Licensing must be checked before any code contact** — it depends on VolmLib and is not RiftbreakerMC-authored |
+| RiftChat | `RiftChat` | verified |
+| RiftCore | `RiftCore` | verified |
+| RiftCosmetics | `RiftCosmetics` | verified |
+| RiftEco | `RiftEco` | verified |
+| RiftEssentials | `RiftEssentials` | verified |
+| RiftEvents | `RiftEvents` — package is `com.riftbreakermc.riftoutposts` | package lags the repo name |
+| Riftlogger | `Riftlogger` | verified |
+| RiftPunishments | `RiftPunishments` | verified |
+| RiftPVP | `RiftPVP` | verified |
+| RiftShop | `RiftShop` | verified |
+| Riftspawners | `Riftspawners` — ships **SmartSpawner** (`github.nighter`), default branch `master` | third-party; licence check before any upstream contribution |
+| VelocitySrv | `VelocitySrv` | verified |
+
+**In the organisation but absent from the inventory** — ownership unstated, so no adapter
+is planned: `RiftPlots` (default branch `master`), `RiftGuide`, `EconomyCore`,
+`EarthManager`, `Riftbreaker-Elytra-Manager`, `Project-RiftBreaker-Discord-Bot`.
+
+`RiftPlots` is the one worth a decision: a plots plugin overlaps `RT-CORE-AREA` and
+`RT-MOD-PROPERTY` directly.
+
+## 3C. Missing or unresolved API paths
+
+Nothing below is written against. Each is either documented-and-blocked or awaiting a
+decision.
+
+| # | Missing | Effect | Needed to proceed |
+|---|---|---|---|
+| 1 | VelocitySrv Discord channel provisioning | `RT-MOD-DISCORD-CHAN` **BLOCKED**; RiftWars per-organisation feeds limited to the global channel | Implement §2.6's contract in VelocitySrv |
+| 2 | RiftSeasons / RiftWars / RiftInfrastructure / RiftCivics repos | Those releases cannot start | Create the repositories |
+| 3 | ExperienceManager identity | No progression adapter planned | Confirm which of three repos is current |
+| 4 | RiftPlots ownership | `RT-CORE-AREA` scope ambiguous | Decide: absorb, integrate, or retire |
+| 5 | RiftbreakerRifts licence | No dimensional-war integration | Licence review |
+| 6 | Riftspawners (SmartSpawner) licence | Adapter uses the public API only; no upstream PR | Licence review before contributing |
+| 7 | Anti-cheat provider | Flight exemption unverified beyond `RiftAntiCheatBridge` | Name the anti-cheat in use |
+| 8 | NPC provider | `RT-MOD-NPC` has no backend | Name the NPC plugin |
+
 ## 4. Workspace note (2026-08-09)
 
 Two reference clones hold **uncommitted local work** and were deliberately not
