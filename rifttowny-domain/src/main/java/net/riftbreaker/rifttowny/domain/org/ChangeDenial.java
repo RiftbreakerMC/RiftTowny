@@ -99,6 +99,76 @@ public enum ChangeDenial {
      */
     NAME_TAKEN,
 
+    // --- roles -------------------------------------------------------------------------------
+
+    /** No such role in this organisation. */
+    ROLE_NOT_FOUND,
+
+    /** Another role in this organisation already has that name. */
+    ROLE_NAME_TAKEN,
+
+    /**
+     * A system role cannot be deleted.
+     *
+     * <p>Leader, member and visitor are the roles every other definition is expressed in terms of.
+     * A town that deleted its leader role would have no way to grant itself another.</p>
+     */
+    SYSTEM_ROLE_CANNOT_BE_DELETED,
+
+    /** A system role's priority is fixed, so configurable roles can be placed relative to it. */
+    SYSTEM_ROLE_PRIORITY_IS_FIXED,
+
+    /**
+     * The leader role holds every permission and cannot be edited.
+     *
+     * <p>A leader stripped of the permission to assign roles could not undo the change, turning a
+     * misconfiguration into a permanently broken organisation.</p>
+     */
+    LEADER_PERMISSIONS_ARE_FIXED,
+
+    /**
+     * The leader role is granted by transferring leadership, not by assigning a role.
+     *
+     * <p>Two paths to the same authority would let a town acquire a second leader without the
+     * atomic bank and capital updates a real transfer performs.</p>
+     */
+    LEADER_ROLE_IS_NOT_ASSIGNABLE,
+
+    /** Membership itself grants the member role; it is never assigned by hand. */
+    BASELINE_ROLE_IS_NOT_ASSIGNABLE,
+
+    /** Another role already sits at that priority. */
+    PRIORITY_ALREADY_USED,
+
+    /** Nothing may sit at or above the leader's priority. */
+    PRIORITY_RESERVED_FOR_LEADER,
+
+    /**
+     * The actor's highest role does not outrank the role they are trying to manage.
+     *
+     * <p>Strictly outrank: equal priority is refused, or two officers of the same rank could
+     * demote each other in a loop.</p>
+     */
+    INSUFFICIENT_ROLE_PRIORITY,
+
+    /** The actor lacks the permission this operation needs. */
+    MISSING_PERMISSION,
+
+    /** That permission is locked by the server administrator and no configurable role may hold it. */
+    PERMISSION_LOCKED_BY_ADMIN,
+
+    /** The resident already holds that role. */
+    ALREADY_HAS_ROLE,
+
+    /** The resident does not hold that role. */
+    DOES_NOT_HAVE_ROLE,
+
+    /** The role already grants that permission. */
+    PERMISSION_ALREADY_GRANTED,
+
+    /** The role does not grant that permission. */
+    PERMISSION_NOT_GRANTED,
+
     // --- lookup ------------------------------------------------------------------------------
 
     /** No such town. */

@@ -164,6 +164,50 @@ public sealed interface DomainEvent {
         }
     }
 
+    /**
+     * A role change.
+     *
+     * <p>One record covering create, delete, rename, permission change and assignment, rather than
+     * six near-identical ones. Role edits are frequent and structurally uniform, and a consumer
+     * routing them to Discord or an audit log wants one shape with a discriminator, not a switch
+     * over six types that all carry the same three fields.</p>
+     *
+     * @param organisationScope town or nation
+     * @param organisationId the town or nation UUID
+     * @param roleId the role that changed
+     * @param roleName its name at the time, so an audit entry survives the role being deleted
+     * @param action what happened
+     * @param detail the permission, the old name, or the resident — whatever the action needs
+     */
+    record RoleChanged(
+            net.riftbreaker.rifttowny.domain.org.OrganisationScope organisationScope,
+            java.util.UUID organisationId,
+            java.util.UUID roleId,
+            String roleName,
+            RoleAction action,
+            String detail
+    ) implements DomainEvent {
+        public RoleChanged {
+            Objects.requireNonNull(organisationScope, "organisationScope");
+            Objects.requireNonNull(organisationId, "organisationId");
+            Objects.requireNonNull(roleId, "roleId");
+            Objects.requireNonNull(roleName, "roleName");
+            Objects.requireNonNull(action, "action");
+            detail = detail == null ? "" : detail;
+        }
+
+        @Override
+        public String type() {
+            return "role." + action.name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    /** What happened to a role. */
+    enum RoleAction {
+        CREATED, DELETED, RENAMED, REPRIORITISED, PERMISSION_GRANTED, PERMISSION_REVOKED,
+        ASSIGNED, UNASSIGNED
+    }
+
     record OutsiderTrusted(TownId town, ResidentId outsider) implements DomainEvent {
         public OutsiderTrusted {
             Objects.requireNonNull(town, "town");
