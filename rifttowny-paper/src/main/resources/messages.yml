@@ -1,8 +1,13 @@
 # RiftTowny messages. MiniMessage format: https://docs.advntr.dev/minimessage/format.html
 #
-# Every key here has a built-in default. Deleting a key falls back to that default rather than
-# printing a blank line, and a template that fails to parse is reported once at startup and then
-# falls back too - an operator's typo should cost them their customisation, not the message.
+# Every key under the sections that MessageKey names has a built-in default. Deleting a key falls
+# back to that default rather than printing a blank line, and a template that fails to parse is
+# reported once at startup and then falls back too - an operator's typo should cost them their
+# customisation, not the message.
+#
+# The denial and name-problem sections are different: they are keyed by enum constant rather than by
+# a named MessageKey, and a test asserts every constant has an entry here. Adding a refusal in code
+# without a sentence here fails the build.
 #
 # Placeholders are written <like_this> and are inserted literally: a town name containing
 # MiniMessage tags cannot inject formatting.
@@ -19,6 +24,31 @@ command:
   unknown-subcommand: '<red>Unknown subcommand <white><input></white>. Try <white>/rifttowny help</white>.</red>'
   help-header: '<gray>RiftTowny administration:</gray>'
   help-line: '  <aqua><usage></aqua> <dark_gray>-</dark_gray> <gray><description></gray>'
+  player-only: '<red>Only a player can do that.</red>'
+  usage: '<red>Usage: <white><usage></white></red>'
+  denied: '<red><reason></red>'
+  name-rejected: '<red>That name will not work: <white><problems></white></red>'
+  failed: '<red>That did not work. The problem has been logged for an administrator.</red>'
+
+town:
+  founded: '<green>Founded <white><town></white>. You are its mayor.</green>'
+  joined: '<green><white><resident></white> joined <white><town></white>.</green>'
+  left: '<yellow>You left <white><town></white>.</yellow>'
+  kicked: '<yellow><white><resident></white> was removed from <white><town></white>.</yellow>'
+  renamed: '<green>Renamed to <white><town></white>.</green>'
+  mayor-transferred: '<green><white><resident></white> is now the mayor of <white><town></white>.</green>'
+  disbanded: '<yellow>Disbanded <white><town></white>.</yellow>'
+  not-in-a-town: '<red>You are not in a town.</red>'
+  info-header: '<gray>Town <white><town></white></gray>'
+  info-line: '  <gray><label></gray> <white><value></white>'
+
+role:
+  created: '<green>Created the role <white><role></white>.</green>'
+  deleted: '<yellow>Deleted the role <white><role></white>.</yellow>'
+  assigned: '<green><white><resident></white> now holds <white><role></white>.</green>'
+  unassigned: '<yellow><white><resident></white> no longer holds <white><role></white>.</yellow>'
+  list-header: '<gray>Roles in <white><town></white>, highest first:</gray>'
+  list-line: '  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> <dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>'
 
 status:
   header: '<gray>RiftTowny <white><version></white></gray>'
@@ -30,3 +60,56 @@ status:
   integration-active: '    <green><capability></green> <dark_gray>-</dark_gray> <gray><detail></gray>'
   integration-problem: '    <red><capability></red> <white><state></white> <dark_gray>-</dark_gray> <gray><detail></gray>'
   integration-absent: '    <dark_gray><capability> - not installed</dark_gray>'
+
+# One sentence per ChangeDenial constant. Plain text, not MiniMessage: they are inserted into
+# command.denied as a literal value so a translator cannot accidentally inject formatting.
+denial:
+  already-in-another-town: 'You are already in another town.'
+  already-in-this-town: 'Already a resident of that town.'
+  not-a-resident-of-this-town: 'That player is not a resident of this town.'
+  last-resident-must-disband-instead: 'You are the last resident. Disband the town instead of leaving it.'
+  mayor-must-transfer-first: 'The mayor must hand over the mayoralty before leaving.'
+  leader-must-be-a-member: 'A leader must already belong to the organisation.'
+  already-the-leader: 'They already lead it.'
+  town-already-in-another-nation: 'That town already belongs to another nation.'
+  town-already-in-this-nation: 'That town is already in this nation.'
+  town-not-in-this-nation: 'That town is not in this nation.'
+  capital-must-be-a-member-town: 'A capital must be one of the nation''s own towns.'
+  capital-must-move-first: 'Move the capital before the capital town leaves.'
+  already-the-capital: 'That town is already the capital.'
+  cannot-trust-a-resident: 'Residents already have member rights; trust is for outsiders.'
+  already-trusted: 'Already trusted.'
+  not-trusted: 'Not trusted.'
+  role-not-found: 'No such role.'
+  role-name-taken: 'Another role already has that name.'
+  system-role-cannot-be-deleted: 'The leader, member and visitor roles cannot be deleted.'
+  system-role-priority-is-fixed: 'A built-in role cannot be moved in the ranking.'
+  leader-permissions-are-fixed: 'The leader role always holds every permission.'
+  leader-role-is-not-assignable: 'Leadership is handed over, not assigned as a role.'
+  baseline-role-is-not-assignable: 'The member role comes from being a resident.'
+  priority-already-used: 'Another role already sits at that rank.'
+  priority-reserved-for-leader: 'Nothing may rank at or above the leader.'
+  insufficient-role-priority: 'You do not outrank that.'
+  missing-permission: 'You do not have permission to do that.'
+  cannot-grant-unheld-permission: 'You cannot give a role a permission you do not have yourself.'
+  cannot-create-role-above-self: 'You cannot create a role at or above your own rank.'
+  permission-locked-by-admin: 'That permission is locked by the server administrator.'
+  already-has-role: 'They already hold that role.'
+  does-not-have-role: 'They do not hold that role.'
+  permission-already-granted: 'That role already has it.'
+  permission-not-granted: 'That role does not have it.'
+  name-unchanged: 'That is already the name.'
+  name-taken: 'That name is already taken.'
+  town-not-found: 'No such town.'
+  nation-not-found: 'No such nation.'
+  resident-not-found: 'RiftTowny has never seen that player.'
+
+# One sentence per NameProblem constant.
+name-problem:
+  empty: 'it is empty'
+  too-short: 'it is too short'
+  too-long: 'it is too long'
+  illegal-character: 'it uses a character that is not a letter, digit, hyphen or underscore'
+  contains-whitespace: 'it contains a space'
+  must-start-with-letter: 'it must start with a letter'
+  reserved-word: 'that word is reserved'

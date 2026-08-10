@@ -36,6 +36,14 @@ network:
   # True when more than one backend server shares this database. Requires mariadb.
   shared: false
 
+roles:
+  # Permissions no configurable role may ever hold, whatever a mayor tries to grant. The leader
+  # role is unaffected - it always holds everything - so this bounds delegation, not the mayor.
+  #
+  # An unknown name here is warned about at startup rather than ignored, because a typo would
+  # silently leave a dangerous permission unlocked.
+  locked-permissions: []
+
 permissions:
   # Accept towny.* alongside the canonical rifttowny.* nodes. Off by default: silently honouring
   # another plugin's permission nodes is a surprise, and it is only useful while migrating an

@@ -36,6 +36,72 @@ public enum MessageKey {
     COMMAND_HELP_LINE("command.help-line",
             "  <aqua><usage></aqua> <dark_gray>-</dark_gray> <gray><description></gray>"),
 
+    COMMAND_PLAYER_ONLY("command.player-only",
+            "<red>Only a player can do that.</red>"),
+
+    COMMAND_USAGE("command.usage",
+            "<red>Usage: <white><usage></white></red>"),
+
+    /** A refusal. {@code <reason>} is filled from the {@code denial.*} section. */
+    COMMAND_DENIED("command.denied",
+            "<red><reason></red>"),
+
+    COMMAND_NAME_REJECTED("command.name-rejected",
+            "<red>That name will not work: <white><problems></white></red>"),
+
+    /** Something broke rather than being refused. The cause goes to the server log, not to chat. */
+    COMMAND_FAILED("command.failed",
+            "<red>That did not work. The problem has been logged for an administrator.</red>"),
+
+    TOWN_FOUNDED("town.founded",
+            "<green>Founded <white><town></white>. You are its mayor.</green>"),
+
+    TOWN_JOINED("town.joined",
+            "<green><white><resident></white> joined <white><town></white>.</green>"),
+
+    TOWN_LEFT("town.left",
+            "<yellow>You left <white><town></white>.</yellow>"),
+
+    TOWN_KICKED("town.kicked",
+            "<yellow><white><resident></white> was removed from <white><town></white>.</yellow>"),
+
+    TOWN_RENAMED("town.renamed",
+            "<green>Renamed to <white><town></white>.</green>"),
+
+    TOWN_MAYOR_TRANSFERRED("town.mayor-transferred",
+            "<green><white><resident></white> is now the mayor of <white><town></white>.</green>"),
+
+    TOWN_DISBANDED("town.disbanded",
+            "<yellow>Disbanded <white><town></white>.</yellow>"),
+
+    TOWN_NOT_IN_A_TOWN("town.not-in-a-town",
+            "<red>You are not in a town.</red>"),
+
+    TOWN_INFO_HEADER("town.info-header",
+            "<gray>Town <white><town></white></gray>"),
+
+    TOWN_INFO_LINE("town.info-line",
+            "  <gray><label></gray> <white><value></white>"),
+
+    ROLE_CREATED("role.created",
+            "<green>Created the role <white><role></white>.</green>"),
+
+    ROLE_DELETED("role.deleted",
+            "<yellow>Deleted the role <white><role></white>.</yellow>"),
+
+    ROLE_ASSIGNED("role.assigned",
+            "<green><white><resident></white> now holds <white><role></white>.</green>"),
+
+    ROLE_UNASSIGNED("role.unassigned",
+            "<yellow><white><resident></white> no longer holds <white><role></white>.</yellow>"),
+
+    ROLE_LIST_HEADER("role.list-header",
+            "<gray>Roles in <white><town></white>, highest first:</gray>"),
+
+    ROLE_LIST_LINE("role.list-line",
+            "  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> "
+                    + "<dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>"),
+
     STATUS_HEADER("status.header",
             "<gray>RiftTowny <white><version></white></gray>"),
 

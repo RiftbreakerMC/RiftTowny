@@ -68,6 +68,24 @@ public final class MessageService {
     }
 
     /**
+     * Sends a prefixed message to anything that accepts a component.
+     *
+     * <p>Exists for {@code CommandActor}, which is deliberately not an {@link Audience}: making it
+     * one would drag the whole Adventure sender surface into an interface that exists to be
+     * implementable in a test with four lines.</p>
+     */
+    public void send(
+            final Consumer<Component> sink, final MessageKey key, final TagResolver... resolvers) {
+        Objects.requireNonNull(sink, "sink").accept(prefixed(key, resolvers));
+    }
+
+    /** Sends an unprefixed message to anything that accepts a component. */
+    public void sendRaw(
+            final Consumer<Component> sink, final MessageKey key, final TagResolver... resolvers) {
+        Objects.requireNonNull(sink, "sink").accept(render(key, resolvers));
+    }
+
+    /**
      * Shorthand for a literal placeholder.
      *
      * <p>{@link Placeholder#unparsed} rather than {@code parsed}: a town name or a player-supplied

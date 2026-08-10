@@ -43,6 +43,39 @@ class MessageBundleTest {
     }
 
     @Test
+    @DisplayName("every refusal has a sentence, so none reaches a player as an enum name")
+    void everyDenialHasText() throws IOException {
+        final String bundle = Files.readString(BUNDLE, StandardCharsets.UTF_8);
+
+        final List<String> missing = new ArrayList<>();
+        for (final net.riftbreaker.rifttowny.domain.org.ChangeDenial denial
+                : net.riftbreaker.rifttowny.domain.org.ChangeDenial.values()) {
+            if (!bundle.contains("  " + DenialText.path(denial.name()) + ":")) {
+                missing.add(denial.name());
+            }
+        }
+        for (final net.riftbreaker.rifttowny.domain.naming.NameProblem problem
+                : net.riftbreaker.rifttowny.domain.naming.NameProblem.values()) {
+            if (!bundle.contains("  " + DenialText.path(problem.name()) + ":")) {
+                missing.add(problem.name());
+            }
+        }
+
+        assertThat(missing)
+                .as("a refusal with no sentence reaches a player as INSUFFICIENT_ROLE_PRIORITY")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("an unmapped refusal still renders as something readable")
+    void unmappedDenialsFallBack() {
+        final DenialText text = new DenialText(path -> null);
+
+        assertThat(text.of(net.riftbreaker.rifttowny.domain.org.ChangeDenial.MISSING_PERMISSION))
+                .isEqualTo("Missing permission.");
+    }
+
+    @Test
     @DisplayName("every built-in default is valid MiniMessage")
     void everyFallbackParses() {
         final MiniMessage miniMessage = MiniMessage.miniMessage();

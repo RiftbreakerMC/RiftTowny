@@ -38,6 +38,10 @@ commands:
     description: RiftTowny administration and diagnostics.
     usage: /rifttowny <status|help>
     permission: rifttowny.admin
+  town:
+    aliases: [t]
+    description: Found and manage a town.
+    usage: /town <new|info|add|kick|leave|rename|mayor|delete|role>
 
 permissions:
   rifttowny.admin:
@@ -48,3 +52,55 @@ permissions:
   rifttowny.admin.status:
     description: View platform, storage, outbox and integration state.
     default: op
+
+  # Granted to everyone: these are the commands a town is played through, and the services
+  # themselves check who may actually do what. A permission node here only decides whether the
+  # subcommand is offered at all.
+  rifttowny.town:
+    description: Use the town commands.
+    default: true
+    children:
+      rifttowny.town.new: true
+      rifttowny.town.info: true
+      rifttowny.town.add: true
+      rifttowny.town.kick: true
+      rifttowny.town.leave: true
+      rifttowny.town.rename: true
+      rifttowny.town.mayor: true
+      rifttowny.town.delete: true
+      rifttowny.role.view: true
+      rifttowny.role.manage: true
+      rifttowny.role.assign: true
+  rifttowny.town.new:
+    description: Found a town.
+    default: true
+  rifttowny.town.info:
+    description: View a town.
+    default: true
+  rifttowny.town.add:
+    description: Add a resident to your town.
+    default: true
+  rifttowny.town.kick:
+    description: Remove a resident from your town.
+    default: true
+  rifttowny.town.leave:
+    description: Leave your town.
+    default: true
+  rifttowny.town.rename:
+    description: Rename your town.
+    default: true
+  rifttowny.town.mayor:
+    description: Hand over the mayoralty.
+    default: true
+  rifttowny.town.delete:
+    description: Disband your town.
+    default: true
+  rifttowny.role.view:
+    description: View your town's roles.
+    default: true
+  rifttowny.role.manage:
+    description: Create, edit and delete your town's roles.
+    default: true
+  rifttowny.role.assign:
+    description: Give and take your town's roles.
+    default: true

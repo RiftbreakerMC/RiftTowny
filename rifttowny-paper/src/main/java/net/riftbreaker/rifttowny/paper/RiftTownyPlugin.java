@@ -49,6 +49,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private JdbcOutboxRepository outbox;
     private JdbcIdempotencyStore idempotencyKeys;
     private DefaultCapabilityRegistry capabilities;
+    private net.riftbreaker.rifttowny.storage.JdbcResidentRepository residentRepository;
+    private net.riftbreaker.rifttowny.storage.JdbcTownRepository townRepository;
+    private net.riftbreaker.rifttowny.storage.JdbcCivicStore civicStore;
+    private net.riftbreaker.rifttowny.domain.service.TownService townService;
+    private net.riftbreaker.rifttowny.domain.service.TownRoleService townRoleService;
+    private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
     /**
      * Published here rather than in the constructor.
@@ -95,9 +101,11 @@ public final class RiftTownyPlugin extends JavaPlugin {
         saveDefaultConfig();
         saveResourceIfAbsent("messages.yml");
 
-        this.messages = new MessageService(
-                YamlConfiguration.loadConfiguration(new File(getDataFolder(), "messages.yml")),
-                getLogger()::warning);
+        final YamlConfiguration messageFile =
+                YamlConfiguration.loadConfiguration(new File(getDataFolder(), "messages.yml"));
+        this.messages = new MessageService(messageFile, getLogger()::warning);
+        this.denialText =
+                new net.riftbreaker.rifttowny.paper.message.DenialText(messageFile::getString);
         this.settings = RiftTownySettings.from(getConfig(), getDataFolder().toPath());
 
         final List<StartupProblem> problems =
@@ -141,6 +149,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
             command.setTabCompleter(executor);
         }
 
+        registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
+                townService, townRoleService, residentRepository, townRepository,
+                messages, denialText).tree());
+
         getLogger().info("RiftTowny enabled on " + platformName() + ". " + schema.describe() + '.');
         getLogger().info("Storage: " + settings.storage().describeForLog()
                 + ", topology: " + settings.describeTopology() + '.');
@@ -177,6 +189,20 @@ public final class RiftTownyPlugin extends JavaPlugin {
             final Executor storageExecutor = task -> scheduler.async(task);
             this.outbox = new JdbcOutboxRepository(database, storageExecutor);
             this.idempotencyKeys = new JdbcIdempotencyStore(database, storageExecutor);
+            this.residentRepository =
+                    new net.riftbreaker.rifttowny.storage.JdbcResidentRepository(database, storageExecutor);
+            this.townRepository =
+                    new net.riftbreaker.rifttowny.storage.JdbcTownRepository(database, storageExecutor);
+            this.civicStore =
+                    new net.riftbreaker.rifttowny.storage.JdbcCivicStore(database, storageExecutor);
+
+            final java.time.Clock clock = java.time.Clock.systemUTC();
+            this.townService = new net.riftbreaker.rifttowny.domain.service.TownService(
+                    civicStore,
+                    net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
+                    clock);
+            this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
+                    civicStore, clock, lockedPermissions());
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "
@@ -189,10 +215,44 @@ public final class RiftTownyPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * Permissions an administrator has forbidden to configurable roles.
+     *
+     * <p>An unknown name is reported rather than ignored: a typo here silently leaves a dangerous
+     * permission unlocked, which is the opposite of what the operator was trying to do.</p>
+     */
+    private java.util.Set<net.riftbreaker.rifttowny.domain.role.Permission> lockedPermissions() {
+        final java.util.Set<net.riftbreaker.rifttowny.domain.role.Permission> locked =
+                java.util.EnumSet.noneOf(net.riftbreaker.rifttowny.domain.role.Permission.class);
+        for (final String raw : getConfig().getStringList("roles.locked-permissions")) {
+            net.riftbreaker.rifttowny.domain.role.Permission.parse(raw).ifPresentOrElse(
+                    locked::add,
+                    () -> getLogger().warning("Unknown permission in roles.locked-permissions: "
+                            + raw + ". It locks nothing."));
+        }
+        return locked;
+    }
+
     private void saveResourceIfAbsent(final String name) {
         if (!new File(getDataFolder(), name).exists()) {
             saveResource(name, false);
         }
+    }
+
+    /** Binds a command tree to a {@code plugin.yml} command. */
+    private void registerTree(
+            final String name,
+            final net.riftbreaker.rifttowny.paper.command.tree.CommandNode root) {
+        final PluginCommand command = getCommand(name);
+        if (command == null) {
+            getLogger().severe("The '" + name + "' command is missing from plugin.yml; "
+                    + "it will not work.");
+            return;
+        }
+        final var executor =
+                new net.riftbreaker.rifttowny.paper.command.TreeCommandExecutor(root);
+        command.setExecutor(executor);
+        command.setTabCompleter(executor);
     }
 
     /** "Folia" or "Paper", as detected rather than as configured. */
