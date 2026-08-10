@@ -137,6 +137,11 @@ public final class RiftTownyPlugin extends JavaPlugin {
         // plugin is simply missing. See INTEGRATION_CONTRACTS.md section 2.6.
         capabilities.markBlocked(Capability.DISCORD_CHANNEL_PROVISIONING,
                 "VelocitySrv has no channel-provisioning API; see INTEGRATION_CONTRACTS.md 2.6");
+        // Same shape: RiftLogger records events, not block changes, and has no rollback. Reported
+        // blocked so an operator is told there is no rollback tool rather than assuming there is.
+        capabilities.markBlocked(Capability.AUDIT_BLOCK_HISTORY,
+                "RiftLogger has no block-change record or rollback; "
+                        + "see INTEGRATION_CONTRACTS.md 2.2.1");
 
         RiftTownyProvider.register(new RiftTownyApiImpl(capabilities, scheduler));
 

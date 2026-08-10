@@ -250,13 +250,15 @@ War shields are specified alongside it in the same document.
 - Work is rate-limited and, on Folia, dispatched to the region owning each chunk.
 - Every restore is auditable through **RiftLogger**, which is the only audit integration.
 
-> **CoreProtect is not used.** RiftLogger owns permanent audit records, so pointing block
-> history at a second system would give operators two places to look and two retention
-> policies to keep in step. The cost is real and worth stating: RiftLogger records *events*,
-> not per-block change history, so there is no third-party inspect-and-rollback tool behind
-> regeneration. The restore data itself never depended on one — it comes from RiftTowny's own
-> `rt_regen_snapshot` — but if per-block forensics is ever wanted, the answer is a block
-> record type in RiftLogger, not a second plugin.
+> **CoreProtect is not used; RiftLogger carries block history instead.** One audit system
+> means one place to look and one retention policy.
+>
+> **This is `BLOCKED` today.** RiftLogger records *events*, not per-block changes, and has no
+> rollback — verified against its source. The contract it needs is specified in
+> [INTEGRATION_CONTRACTS.md](INTEGRATION_CONTRACTS.md) §2.2.1, and until it ships there is no
+> rollback tool. Regeneration still works, because the restore data comes from RiftTowny's own
+> `rt_regen_snapshot` and never depended on an audit plugin; what is missing is the forensic
+> trail and the ability to undo.
 - Operators get preview, pause, resume, status and repair tools.
 
 ---

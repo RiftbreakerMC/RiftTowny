@@ -20,6 +20,15 @@ public enum Capability {
      * there is one place an operator looks and one place a retention policy applies.</p>
      */
     AUDIT_RIFTLOGGER("RiftLogger"),
+    /**
+     * Per-block change history and rollback.
+     *
+     * <p>Reported {@link CapabilityState#BLOCKED}: RiftLogger records events, not block changes,
+     * and has no rollback. The contract it needs is written down in
+     * {@code INTEGRATION_CONTRACTS.md} section 2.2.1. Until it exists there is no rollback tool,
+     * and land regeneration relies on its own snapshot table alone.</p>
+     */
+    AUDIT_BLOCK_HISTORY("RiftLogger"),
     /** Combat tags, bounce-back and valid-kill determination. */
     COMBAT_RIFTPVP("RiftPvP"),
     /** Community flight boosters and their authoritative timers. */
