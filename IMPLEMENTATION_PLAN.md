@@ -133,12 +133,16 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 - [x] `TownRoleService` — create, clone, rename, reprioritise, grant, revoke, assign, unassign, with the three escalation guards (outrank the role, hold what you grant, never create above yourself)
 - [x] `RiftTownyPlugin.getInstance()` — the plugin is reached through the main class rather than threaded through constructors
 
+- [x] **`RT-CORE-CMD`** — command tree, router and completion from one structure; `Surface` declared per action so "no feature is GUI-only" is checkable; `/town` and `/town role` wired to the services. **Not runtime-verified: no Paper server here**
+- [x] Refusal text keyed by enum constant, with a test asserting every `ChangeDenial` and `NameProblem` has a sentence
+- [x] **`RT-CORE-CLAIM` domain** — claim kinds, homeblock, outposts, orthogonal contiguity by breadth-first sweep from anchors, severing refused, preview/dry-run sharing the real rules
+
 ### Next
 
+- [ ] `RT-CORE-CLAIM` storage and service — `rt_claim` repository, claim/unclaim through the unit of work, `/town claim|unclaim` commands
+- [ ] `RT-CORE-PROTECT` — the flag resolver and its listeners, plus the chunk→town cache a per-block lookup needs
+- [ ] `RT-CORE-UI` — Java GUI framework and Floodgate Bedrock forms. **Nothing declares `Surface.GUI` yet**, which is why the parity test passes; it becomes a real constraint with the first menu
 - [ ] `NationService` and nation roles — a nation's standing depends on residency in a member town, which is a different lookup than a town's
-- [ ] `RT-CORE-CMD` / `RT-CORE-UI` — command framework, tab completion, clickable chat, GUI and Bedrock form foundation. **The services are now gated correctly, so this is unblocked**
-- [ ] `RT-CORE-CLAIM` — chunk claims, homeblock, outposts, contiguity
-- [ ] `RT-CORE-PROTECT` — the flag resolver and its listeners
 - [ ] Chunk claim model, claim/unclaim, outposts, homeblock rules
 - [ ] Central flag resolver and the protection listeners that consult it
 - [ ] 3D areas with non-overlap enforcement, plots, districts
