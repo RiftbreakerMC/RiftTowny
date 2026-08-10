@@ -154,6 +154,23 @@ public enum ChangeDenial {
     /** The actor lacks the permission this operation needs. */
     MISSING_PERMISSION,
 
+    /**
+     * The actor tried to put a permission into a role that they do not hold themselves.
+     *
+     * <p>Without this an officer with only {@code MANAGE_ROLES} could write {@code DISBAND} into a
+     * role and assign it to themselves. Role editing has to be bounded by what the editor already
+     * has, or it is a way of granting yourself anything.</p>
+     */
+    CANNOT_GRANT_UNHELD_PERMISSION,
+
+    /**
+     * The actor tried to create or move a role to a rank at or above their own.
+     *
+     * <p>Same escalation in the other direction: a role above the actor is one they could not
+     * subsequently manage, and one they could assign to themselves to outrank their superiors.</p>
+     */
+    CANNOT_CREATE_ROLE_ABOVE_SELF,
+
     /** That permission is locked by the server administrator and no configurable role may hold it. */
     PERMISSION_LOCKED_BY_ADMIN,
 
