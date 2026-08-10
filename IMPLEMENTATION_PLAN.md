@@ -127,14 +127,18 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 - [x] Membership invariants — one town per resident, one nation per town, trust grants nothing, last-resident and mayor-ordering rules, capital rules
 - [x] `ResidentRepository`, `TownRepository`, `NationRepository` + JDBC implementations, tested on real SQLite; `V2` adds `rt_town_trust`
 - [x] **Unit of work** — `CivicStore.inTransaction` gives a service synchronous resident/town/nation stores plus `publish()`. State change and outbox rows commit together or not at all, tested in both directions. SQL lives in connection-scoped stores that both the async repositories and a transaction run, so there is one copy
-- [x] `TownService` — found, join, leave, transfer mayoralty, rename, disband. Name uniqueness checked inside the transaction; refusals travel as `ChangeRefusedException` and come back as a `ServiceResult`
+- [x] `TownService` — found, join, leave, kick, transfer mayoralty, rename, disband. Name uniqueness checked inside the transaction; refusals travel as `ChangeRefusedException` and come back as a `ServiceResult`
+- [x] **`RT-CORE-ROLE` domain and storage** — `Permission` catalogue split action/management with admin-lockable sensitive entries; `Role` and `RoleBook` aggregates; three undeletable system roles; priority-based management; union-for-permissions, maximum-for-rank resolution; `V3` adds `system_type`
+- [x] **Authority at the service boundary** — `TownService` resolves the actor against the town's role book before touching anything, because the public API reaches the same methods
+- [x] `TownRoleService` — create, clone, rename, reprioritise, grant, revoke, assign, unassign, with the three escalation guards (outrank the role, hold what you grant, never create above yourself)
 - [x] `RiftTownyPlugin.getInstance()` — the plugin is reached through the main class rather than threaded through constructors
 
 ### Next
 
-- [ ] `RT-CORE-ROLE` — roles and the permission model. **This is the gate for commands**: `TownService` currently enforces membership invariants but not authority, so nothing is wired to a command yet
-- [ ] `NationService`, once role authority exists to gate it
-- [ ] `RT-CORE-CMD` / `RT-CORE-UI` — command framework, tab completion, clickable chat, GUI and Bedrock form foundation
+- [ ] `NationService` and nation roles — a nation's standing depends on residency in a member town, which is a different lookup than a town's
+- [ ] `RT-CORE-CMD` / `RT-CORE-UI` — command framework, tab completion, clickable chat, GUI and Bedrock form foundation. **The services are now gated correctly, so this is unblocked**
+- [ ] `RT-CORE-CLAIM` — chunk claims, homeblock, outposts, contiguity
+- [ ] `RT-CORE-PROTECT` — the flag resolver and its listeners
 - [ ] Chunk claim model, claim/unclaim, outposts, homeblock rules
 - [ ] Central flag resolver and the protection listeners that consult it
 - [ ] 3D areas with non-overlap enforcement, plots, districts
