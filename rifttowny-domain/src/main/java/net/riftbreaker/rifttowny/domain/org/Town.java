@@ -230,6 +230,22 @@ public final class Town {
     }
 
     /**
+     * How this person stands in the town: its leader, one of its members, or an outsider.
+     *
+     * <p>Lives here because the town is the only thing that knows who leads it and who belongs to
+     * it. The role book takes this as an argument rather than working it out, which keeps the two
+     * aggregates independent and makes the dependency visible at the call site.</p>
+     */
+    public net.riftbreaker.rifttowny.domain.role.SystemRole standingOf(final ResidentId who) {
+        if (mayor.equals(who)) {
+            return net.riftbreaker.rifttowny.domain.role.SystemRole.LEADER;
+        }
+        return residents.contains(who)
+                ? net.riftbreaker.rifttowny.domain.role.SystemRole.MEMBER
+                : net.riftbreaker.rifttowny.domain.role.SystemRole.VISITOR;
+    }
+
+    /**
      * What someone is entitled to here.
      *
      * <p>Residency is checked first and trust grants nothing, so no combination can produce

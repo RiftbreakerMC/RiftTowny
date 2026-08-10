@@ -5,11 +5,15 @@ import net.riftbreaker.rifttowny.domain.naming.NameCheck;
 import net.riftbreaker.rifttowny.domain.naming.NamePolicy;
 import net.riftbreaker.rifttowny.domain.naming.OrganisationName;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
+import net.riftbreaker.rifttowny.domain.org.OrganisationScope;
 import net.riftbreaker.rifttowny.domain.org.Outcome;
 import net.riftbreaker.rifttowny.domain.org.Resident;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
+import net.riftbreaker.rifttowny.domain.role.Permission;
+import net.riftbreaker.rifttowny.domain.role.RoleBook;
+import net.riftbreaker.rifttowny.domain.role.SystemRole;
 import net.riftbreaker.rifttowny.domain.store.ChangeRefusedException;
 import net.riftbreaker.rifttowny.domain.store.CivicStore;
 import net.riftbreaker.rifttowny.domain.store.CivicTransaction;
@@ -28,15 +32,15 @@ import java.util.concurrent.CompletionException;
  * same transaction. Nothing here half-happens: a founding that fails leaves no resident pointing at
  * a town that does not exist, and no announcement describing one.</p>
  *
+ * <p><strong>Authority is checked here, not in the command layer.</strong> The public API reaches
+ * these same methods, so a check that lived only in a command would be a check anybody could walk
+ * around. Every method that needs a permission takes the actor and resolves it against the town's
+ * role book before touching anything.</p>
+ *
  * <p>Uniqueness is checked <em>inside</em> the transaction rather than before it. Checking first
  * would leave a window in which two founders both saw the name free; the unique constraint on
  * {@code name_normalised} is the real guard, and the check here is how it becomes a message instead
  * of a stack trace.</p>
- *
- * <p><strong>Not yet enforced here: authority.</strong> These methods check membership invariants
- * only. Who is <em>allowed</em> to kick, rename or disband is a role question, and roles are
- * {@code RT-CORE-ROLE}, still to be built. Until then the caller is the only gate, which is why no
- * command is wired to these yet.</p>
  */
 public final class TownService {
 
@@ -53,9 +57,9 @@ public final class TownService {
     /**
      * Founds a town.
      *
-     * <p>The founder becomes its sole resident and mayor. The civic account id is generated here and
-     * never changes again, which is what lets the town be renamed and hand over its mayoralty
-     * without orphaning its treasury.</p>
+     * <p>Needs no permission: anyone may found a town. It creates the town's role book in the same
+     * transaction, because a town without one cannot answer a single permission question — and a
+     * later repair would have to invent which roles it should have had.</p>
      *
      * @param founderName the founder's current Minecraft name, recorded if they are new to RiftTowny
      */
@@ -88,20 +92,31 @@ public final class TownService {
             final Town town = Town.found(id, name, founder, UUID.randomUUID(), clock.instant());
             transaction.residents().save(joined);
             transaction.towns().save(town);
+            transaction.roles().save(
+                    RoleBook.defaultsFor(OrganisationScope.TOWN, id.value(), clock.instant()));
             transaction.publish(new DomainEvent.TownFounded(id, name, founder), correlation("found", id));
             return town;
         });
     }
 
-    /** Adds a resident to a town. */
-    public CompletableFuture<ServiceResult<Town>> join(final ResidentId who, final TownId townId) {
+    /**
+     * Adds a resident to a town.
+     *
+     * <p>Requires {@link Permission#INVITE_RESIDENT}. Self-service joining through an invitation the
+     * player accepts is a separate flow and does not exist yet; until it does, somebody with the
+     * permission has to do the adding.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> join(
+            final ResidentId actor, final ResidentId who, final TownId townId) {
+        Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(who, "who");
         Objects.requireNonNull(townId, "townId");
 
         return transaction(transaction -> {
             final Town town = town(transaction, townId);
-            final Resident resident = resident(transaction, who);
+            requirePermission(transaction, town, actor, Permission.INVITE_RESIDENT);
 
+            final Resident resident = resident(transaction, who);
             final Resident joined = require(resident.joinTown(townId));
             final Outcome<Town> admitted = town.admit(who);
             final Town updated = require(admitted);
@@ -113,35 +128,53 @@ public final class TownService {
         });
     }
 
-    /** Removes a resident, whether they left or were removed. */
+    /**
+     * A resident leaving of their own accord.
+     *
+     * <p>Needs no permission. A town that could stop someone leaving would be a prison, and the
+     * invariants that do apply — the last resident, the mayor — are the town's, not an actor's.</p>
+     */
     public CompletableFuture<ServiceResult<Town>> leave(
-            final ResidentId who, final TownId townId, final boolean voluntary) {
+            final ResidentId who, final TownId townId) {
         Objects.requireNonNull(who, "who");
         Objects.requireNonNull(townId, "townId");
-
-        return transaction(transaction -> {
-            final Town town = town(transaction, townId);
-            final Resident resident = resident(transaction, who);
-
-            final Outcome<Town> released = town.release(who, voluntary);
-            final Town updated = require(released);
-            final Resident departed = require(resident.leaveTown());
-
-            transaction.residents().save(departed);
-            transaction.towns().save(updated);
-            transaction.publishAll(released.events(), correlation("leave", townId));
-            return updated;
-        });
+        return release(who, townId, true, null);
     }
 
-    /** Hands the mayoralty to another resident. */
+    /**
+     * Removing somebody else.
+     *
+     * <p>Requires {@link Permission#KICK_RESIDENT} <em>and</em> that the actor outranks the target.
+     * Without the rank check any officer could remove any other, including one the leader had
+     * placed above them.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> kick(
+            final ResidentId actor, final ResidentId target, final TownId townId) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(townId, "townId");
+        return release(target, townId, false, actor);
+    }
+
+    /**
+     * Hands the mayoralty to another resident.
+     *
+     * <p>Only the sitting mayor may do this. It is deliberately not a permission a role can hold:
+     * a role that could hand over the mayoralty could hand it to its own holder, which is a coup
+     * with extra steps.</p>
+     */
     public CompletableFuture<ServiceResult<Town>> transferMayoralty(
-            final TownId townId, final ResidentId candidate) {
+            final ResidentId actor, final TownId townId, final ResidentId candidate) {
+        Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(townId, "townId");
         Objects.requireNonNull(candidate, "candidate");
 
         return transaction(transaction -> {
-            final Outcome<Town> transferred = town(transaction, townId).transferLeadership(candidate);
+            final Town town = town(transaction, townId);
+            if (town.standingOf(actor) != SystemRole.LEADER) {
+                throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
+            }
+            final Outcome<Town> transferred = town.transferLeadership(candidate);
             final Town updated = require(transferred);
             transaction.towns().save(updated);
             transaction.publishAll(transferred.events(), correlation("leadership", townId));
@@ -149,8 +182,10 @@ public final class TownService {
         });
     }
 
-    /** Renames a town, keeping its id and civic account. */
-    public CompletableFuture<ServiceResult<Town>> rename(final TownId townId, final String rawName) {
+    /** Renames a town, keeping its id and civic account. Requires {@link Permission#RENAME_ORGANISATION}. */
+    public CompletableFuture<ServiceResult<Town>> rename(
+            final ResidentId actor, final TownId townId, final String rawName) {
+        Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(townId, "townId");
 
         final NameCheck check = namePolicy.check(rawName);
@@ -161,6 +196,7 @@ public final class TownService {
 
         return transaction(transaction -> {
             final Town town = town(transaction, townId);
+            requirePermission(transaction, town, actor, Permission.RENAME_ORGANISATION);
 
             // A town may keep its own normalised name across a recapitalisation, so a match on a
             // different id is the only real conflict.
@@ -178,28 +214,110 @@ public final class TownService {
     }
 
     /**
-     * Disbands a town.
+     * Disbands a town. Requires {@link Permission#DISBAND}.
      *
-     * <p>Residents are released, not deleted. Claims, areas and trust rows cascade with the town.
-     * Settling the civic account is {@code RT-MOD-BANK}'s job and is not done here, so a server with
-     * banking enabled must not call this directly until that module lands.</p>
+     * <p>Residents are released, not deleted. Claims, areas and trust rows cascade with the town,
+     * and the role book is removed explicitly since it is keyed on the organisation rather than
+     * owned by the town row.</p>
+     *
+     * <p>Settling the civic account is {@code RT-MOD-BANK}'s job and is not done here, so a server
+     * with banking enabled must not call this directly until that module lands.</p>
      */
-    public CompletableFuture<ServiceResult<TownId>> disband(final TownId townId) {
+    public CompletableFuture<ServiceResult<TownId>> disband(
+            final ResidentId actor, final TownId townId) {
+        Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(townId, "townId");
 
         return transaction(transaction -> {
             final Town town = town(transaction, townId);
+            requirePermission(transaction, town, actor, Permission.DISBAND);
+
             int released = 0;
             for (final Resident resident : transaction.residents().findByTown(townId)) {
                 transaction.residents().save(require(resident.leaveTown()));
                 released++;
             }
+            transaction.roles().delete(OrganisationScope.TOWN, townId.value());
             transaction.towns().delete(townId);
             transaction.publish(
                     new DomainEvent.TownDisbanded(townId, town.name(), released),
                     correlation("disband", townId));
             return townId;
         });
+    }
+
+    /** What a resident may do in a town, for a GUI or a public API query. */
+    public CompletableFuture<java.util.Set<Permission>> permissionsOf(
+            final ResidentId who, final TownId townId) {
+        Objects.requireNonNull(who, "who");
+        Objects.requireNonNull(townId, "townId");
+        return store.inTransaction(transaction -> {
+            final Town town = town(transaction, townId);
+            return roleBook(transaction, townId).effectivePermissions(who, town.standingOf(who));
+        });
+    }
+
+    private CompletableFuture<ServiceResult<Town>> release(
+            final ResidentId who,
+            final TownId townId,
+            final boolean voluntary,
+            final ResidentId actor
+    ) {
+        return transaction(transaction -> {
+            final Town town = town(transaction, townId);
+            if (actor != null) {
+                requirePermission(transaction, town, actor, Permission.KICK_RESIDENT);
+                requireOutranks(transaction, town, actor, who);
+            }
+
+            final Resident resident = resident(transaction, who);
+            final Outcome<Town> released = town.release(who, voluntary);
+            final Town updated = require(released);
+            final Resident departed = require(resident.leaveTown());
+
+            transaction.residents().save(departed);
+            transaction.towns().save(updated);
+            transaction.publishAll(released.events(), correlation("leave", townId));
+            return updated;
+        });
+    }
+
+    private static void requirePermission(
+            final CivicTransaction transaction,
+            final Town town,
+            final ResidentId actor,
+            final Permission permission
+    ) {
+        final RoleBook book = roleBook(transaction, town.id());
+        if (!book.allows(actor, permission, town.standingOf(actor))) {
+            throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
+        }
+    }
+
+    private static void requireOutranks(
+            final CivicTransaction transaction,
+            final Town town,
+            final ResidentId actor,
+            final ResidentId target
+    ) {
+        final RoleBook book = roleBook(transaction, town.id());
+        final int actorRank = book.rankOf(actor, town.standingOf(actor));
+        final int targetRank = book.rankOf(target, town.standingOf(target));
+        if (actorRank <= targetRank) {
+            throw new ChangeRefusedException(ChangeDenial.INSUFFICIENT_ROLE_PRIORITY);
+        }
+    }
+
+    /**
+     * The town's roles.
+     *
+     * <p>A town founded by this service always has a book. One without is a repair case, not a
+     * permission question, so it refuses rather than silently defaulting to "allowed" or to a fresh
+     * book that would hand the actor a leader role they never had.</p>
+     */
+    private static RoleBook roleBook(final CivicTransaction transaction, final TownId townId) {
+        return transaction.roles().find(OrganisationScope.TOWN, townId.value())
+                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.ROLE_NOT_FOUND));
     }
 
     private static Town town(final CivicTransaction transaction, final TownId id) {
