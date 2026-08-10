@@ -15,7 +15,6 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
 /**
  * {@code /rifttowny} — RiftTowny-specific administration.
@@ -28,10 +27,15 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
 
     private static final String PERMISSION_STATUS = "rifttowny.admin.status";
 
-    private final RiftTownyPlugin plugin;
-
-    public RiftTownyCommand(final RiftTownyPlugin plugin) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
+    /**
+     * The plugin, resolved per call rather than captured.
+     *
+     * <p>A command object outlives a {@code /reload}: the server keeps the registered executor
+     * while the plugin instance behind it is replaced. Holding a reference would leave this command
+     * talking to a disabled plugin whose database is already closed.</p>
+     */
+    private static RiftTownyPlugin plugin() {
+        return RiftTownyPlugin.getInstance();
     }
 
     @Override
@@ -41,7 +45,7 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
             @NotNull final String label,
             final String @NotNull [] args
     ) {
-        final MessageService messages = plugin.messages();
+        final MessageService messages = plugin().messages();
         final String subcommand = args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT);
 
         switch (subcommand) {
@@ -80,7 +84,7 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendHelp(final CommandSender sender) {
-        final MessageService messages = plugin.messages();
+        final MessageService messages = plugin().messages();
         messages.send(sender, MessageKey.COMMAND_HELP_HEADER);
         messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
                 MessageService.value("usage", "/rifttowny status"),
@@ -88,22 +92,22 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendStatus(final CommandSender sender) {
-        final MessageService messages = plugin.messages();
+        final MessageService messages = plugin().messages();
 
         messages.send(sender, MessageKey.STATUS_HEADER,
-                MessageService.value("version", plugin.getPluginMeta().getVersion()));
+                MessageService.value("version", plugin().getPluginMeta().getVersion()));
         messages.sendRaw(sender, MessageKey.STATUS_PLATFORM,
-                MessageService.value("platform", plugin.platformName()),
+                MessageService.value("platform", plugin().platformName()),
                 MessageService.value("api", ApiVersion.CURRENT));
         messages.sendRaw(sender, MessageKey.STATUS_STORAGE,
-                MessageService.value("backend", plugin.settings().storage().backend()),
-                MessageService.value("schema", plugin.schema().currentVersion()),
-                MessageService.value("topology", plugin.settings().describeTopology()));
+                MessageService.value("backend", plugin().settings().storage().backend()),
+                MessageService.value("schema", plugin().schema().currentVersion()),
+                MessageService.value("topology", plugin().settings().describeTopology()));
 
         // The outbox depth is a database read, so it is fetched asynchronously and printed when it
         // arrives. A status command that blocked the server thread to render a diagnostic would be
         // its own outage.
-        plugin.outbox().counts().whenComplete((counts, failure) -> {
+        plugin().outbox().counts().whenComplete((counts, failure) -> {
             if (failure != null) {
                 messages.sendRaw(sender, MessageKey.STATUS_OUTBOX_UNAVAILABLE,
                         MessageService.value("reason", failure.getMessage()));
@@ -116,7 +120,7 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
         });
 
         messages.sendRaw(sender, MessageKey.STATUS_INTEGRATIONS_HEADER);
-        for (final CapabilityStatus status : plugin.capabilities().statuses()) {
+        for (final CapabilityStatus status : plugin().capabilities().statuses()) {
             final MessageKey key = switch (status.state()) {
                 case ACTIVE -> MessageKey.STATUS_INTEGRATION_ACTIVE;
                 case FAILED, BLOCKED, PRESENT_UNVERIFIED -> MessageKey.STATUS_INTEGRATION_PROBLEM;
@@ -139,7 +143,7 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
         }
         // Optional alias for servers migrating an existing permission set. Off by default, because
         // silently honouring another plugin's permission nodes would be a surprise.
-        return plugin.settings().townyPermissionAliases()
+        return plugin().settings().townyPermissionAliases()
                 && sender.hasPermission(permission.replaceFirst("^rifttowny\\.", "towny."));
     }
 }

@@ -32,6 +32,15 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
     private static final String TOWNY_PLUGIN_NAME = "Towny";
 
+    /**
+     * The running plugin.
+     *
+     * <p>Volatile because it is written on the enabling thread and read from command handlers,
+     * listeners and — on Folia — region threads that never synchronised with that write. Without it
+     * a reader could observe a stale null well after enable finished.</p>
+     */
+    private static volatile RiftTownyPlugin instance;
+
     private RiftTownySettings settings;
     private MessageService messages;
     private RiftScheduler scheduler;
@@ -40,6 +49,37 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private JdbcOutboxRepository outbox;
     private JdbcIdempotencyStore idempotencyKeys;
     private DefaultCapabilityRegistry capabilities;
+
+    /**
+     * Published here rather than in the constructor.
+     *
+     * <p>{@code onLoad} runs before any other plugin can enable, so nothing can obtain the instance
+     * earlier; and assigning {@code this} from a constructor is a {@code this-escape}, which this
+     * build treats as an error.</p>
+     */
+    @Override
+    public void onLoad() {
+        instance = this;
+    }
+
+    /**
+     * The running plugin.
+     *
+     * <p>The standard way anything in this jar reaches plugin services — the logger, the scheduler,
+     * the message service — rather than threading a reference through every constructor.</p>
+     *
+     * @throws IllegalStateException if RiftTowny is not loaded, naming the likely cause instead of
+     *         letting a null travel into unrelated code
+     */
+    public static RiftTownyPlugin getInstance() {
+        final RiftTownyPlugin current = instance;
+        if (current == null) {
+            throw new IllegalStateException(
+                    "RiftTowny is not loaded. Declare it as a depend or softdepend, and do not "
+                            + "reach for the instance before your own onEnable.");
+        }
+        return current;
+    }
 
     @Override
     public void onEnable() {
@@ -96,7 +136,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
             getLogger().severe("The 'rifttowny' command is missing from plugin.yml; "
                     + "administration commands will not work.");
         } else {
-            final RiftTownyCommand executor = new RiftTownyCommand(this);
+            final RiftTownyCommand executor = new RiftTownyCommand();
             command.setExecutor(executor);
             command.setTabCompleter(executor);
         }
@@ -115,6 +155,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
         if (database != null) {
             database.close();
         }
+        // Cleared last, and unconditionally: a half-enabled plugin still published itself in
+        // onLoad, and leaving a disabled instance reachable is how a reload ends up serving
+        // commands from a plugin whose database is already closed.
+        instance = null;
     }
 
     /** Opens the pool and applies migrations. */
