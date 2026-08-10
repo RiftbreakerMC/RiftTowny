@@ -84,6 +84,26 @@ public enum MessageKey {
     TOWN_INFO_LINE("town.info-line",
             "  <gray><label></gray> <white><value></white>"),
 
+    TOWN_CLAIMED("town.claimed",
+            "<green>Claimed <white><chunk></white> as <white><kind></white>. "
+                    + "Your town now holds <white><total></white> chunk(s).</green>"),
+
+    TOWN_UNCLAIMED("town.unclaimed",
+            "<yellow>Released <white><chunk></white>.</yellow>"),
+
+    TOWN_HOMEBLOCK_MOVED("town.homeblock-moved",
+            "<green>Your home chunk is now <white><chunk></white>.</green>"),
+
+    TOWN_CLAIM_PREVIEW_OK("town.claim-preview-ok",
+            "<gray>Claiming <white><chunk></white> would take you from "
+                    + "<white><before></white> to <white><after></white> chunk(s).</gray>"),
+
+    TOWN_CLAIM_PREVIEW_REFUSED("town.claim-preview-refused",
+            "<red>Claiming <white><chunk></white> would fail: <white><reason></white></red>"),
+
+    TOWN_CONSOLE_HAS_NO_CHUNK("town.console-has-no-chunk",
+            "<red>The console is not standing anywhere.</red>"),
+
     ROLE_CREATED("role.created",
             "<green>Created the role <white><role></white>.</green>"),
 

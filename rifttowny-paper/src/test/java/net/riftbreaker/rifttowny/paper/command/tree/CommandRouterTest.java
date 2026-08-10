@@ -62,6 +62,12 @@ class CommandRouterTest {
             }
 
             @Override
+            public Optional<net.riftbreaker.rifttowny.api.ChunkKey> chunk() {
+                return Optional.of(
+                        new net.riftbreaker.rifttowny.api.ChunkKey(UUID.randomUUID(), 0, 0));
+            }
+
+            @Override
             public boolean hasPermission(final String permission) {
                 return held.contains(permission);
             }

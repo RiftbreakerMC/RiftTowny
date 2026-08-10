@@ -1,6 +1,8 @@
 package net.riftbreaker.rifttowny.paper.command;
 
+import net.riftbreaker.rifttowny.api.ChunkKey;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
+import net.riftbreaker.rifttowny.domain.territory.ClaimKind;
 import net.riftbreaker.rifttowny.domain.org.Resident;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
@@ -42,6 +44,7 @@ public final class TownCommands {
 
     private final TownService towns;
     private final TownRoleService roles;
+    private final net.riftbreaker.rifttowny.domain.service.TerritoryService territory;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
     private final MessageService messages;
@@ -50,6 +53,7 @@ public final class TownCommands {
     public TownCommands(
             final TownService towns,
             final TownRoleService roles,
+            final net.riftbreaker.rifttowny.domain.service.TerritoryService territory,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
             final MessageService messages,
@@ -57,6 +61,7 @@ public final class TownCommands {
     ) {
         this.towns = Objects.requireNonNull(towns, "towns");
         this.roles = Objects.requireNonNull(roles, "roles");
+        this.territory = Objects.requireNonNull(territory, "territory");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -113,6 +118,28 @@ public final class TownCommands {
                         .usage("town delete")
                         .describedAs("Disband your town")
                         .runs(this::disband, Surface.CHAT))
+                .child(CommandNode.action("claim")
+                        .permission("rifttowny.town.claim")
+                        .usage("town claim [outpost]")
+                        .describedAs("Claim the chunk you are standing in")
+                        .completer((actor, args) -> List.of("outpost"))
+                        .runs(this::claim, Surface.CHAT))
+                .child(CommandNode.action("unclaim")
+                        .permission("rifttowny.town.unclaim")
+                        .usage("town unclaim")
+                        .describedAs("Release the chunk you are standing in")
+                        .runs(this::unclaim, Surface.CHAT))
+                .child(CommandNode.action("preview")
+                        .permission("rifttowny.town.claim")
+                        .usage("town preview [outpost]")
+                        .describedAs("See what claiming here would do")
+                        .completer((actor, args) -> List.of("outpost"))
+                        .runs(this::previewClaim, Surface.CHAT))
+                .child(CommandNode.action("homeblock")
+                        .permission("rifttowny.town.homeblock")
+                        .usage("town homeblock")
+                        .describedAs("Move your home chunk here")
+                        .runs(this::homeblock, Surface.CHAT))
                 .child(roleTree())
                 .build();
     }
@@ -232,6 +259,77 @@ public final class TownCommands {
                 reply(actor, towns.disband(who, town.id()), ignored ->
                         messages.send(actor::send, MessageKey.TOWN_DISBANDED,
                                 MessageService.value("town", town.name().display()))));
+    }
+
+    // --- territory actions ---------------------------------------------------------------------
+
+    private void claim(final CommandActor actor, final List<String> args) {
+        whereTheyStand(actor, chunk -> withTown(actor, (who, town) -> {
+            final ClaimKind kind = kindFrom(args, town);
+            reply(actor, territory.claim(who, town.id(), chunk, kind), created ->
+                    then(actor, territory.territoryOf(town.id()), all ->
+                            messages.send(actor::send, MessageKey.TOWN_CLAIMED,
+                                    MessageService.value("chunk", describe(chunk)),
+                                    MessageService.value("kind", created.kind()),
+                                    MessageService.value("total", all.size()))));
+        }));
+    }
+
+    private void unclaim(final CommandActor actor, final List<String> args) {
+        whereTheyStand(actor, chunk -> withTown(actor, (who, town) ->
+                reply(actor, territory.unclaim(who, town.id(), chunk), released ->
+                        messages.send(actor::send, MessageKey.TOWN_UNCLAIMED,
+                                MessageService.value("chunk", describe(released))))));
+    }
+
+    private void homeblock(final CommandActor actor, final List<String> args) {
+        whereTheyStand(actor, chunk -> withTown(actor, (who, town) ->
+                reply(actor, territory.moveHomeblock(who, town.id(), chunk), moved ->
+                        messages.send(actor::send, MessageKey.TOWN_HOMEBLOCK_MOVED,
+                                MessageService.value("chunk", describe(moved))))));
+    }
+
+    private void previewClaim(final CommandActor actor, final List<String> args) {
+        whereTheyStand(actor, chunk -> withTown(actor, (who, town) ->
+                then(actor, territory.previewClaim(town.id(), chunk, kindFrom(args, town)),
+                        preview -> {
+                            if (preview.permitted()) {
+                                messages.send(actor::send, MessageKey.TOWN_CLAIM_PREVIEW_OK,
+                                        MessageService.value("chunk", describe(chunk)),
+                                        MessageService.value("before", preview.claimsBefore()),
+                                        MessageService.value("after", preview.claimsAfter()));
+                            } else {
+                                messages.send(actor::send, MessageKey.TOWN_CLAIM_PREVIEW_REFUSED,
+                                        MessageService.value("chunk", describe(chunk)),
+                                        MessageService.value("reason",
+                                                denials.of(preview.refusal().orElseThrow())));
+                            }
+                        })));
+    }
+
+    /**
+     * Which kind the player meant.
+     *
+     * <p>A town with no land at all is founding its homeblock, so the word is ignored there:
+     * {@code TownClaims} refuses anything else as the first claim, and offering a choice that will
+     * always be refused is worse than making it for them.</p>
+     */
+    private ClaimKind kindFrom(final List<String> args, final Town town) {
+        if (!args.isEmpty() && args.getFirst().equalsIgnoreCase("outpost")) {
+            return ClaimKind.OUTPOST;
+        }
+        return ClaimKind.ORDINARY;
+    }
+
+    /** Runs work with the chunk the actor is standing in, or says the console is nowhere. */
+    private void whereTheyStand(final CommandActor actor, final Consumer<ChunkKey> work) {
+        actor.chunk().ifPresentOrElse(
+                work,
+                () -> messages.send(actor::send, MessageKey.TOWN_CONSOLE_HAS_NO_CHUNK));
+    }
+
+    private static String describe(final ChunkKey chunk) {
+        return chunk.chunkX() + ", " + chunk.chunkZ();
     }
 
     // --- role actions --------------------------------------------------------------------------

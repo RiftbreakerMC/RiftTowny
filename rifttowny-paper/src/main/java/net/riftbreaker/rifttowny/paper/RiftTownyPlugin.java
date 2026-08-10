@@ -54,6 +54,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.storage.JdbcCivicStore civicStore;
     private net.riftbreaker.rifttowny.domain.service.TownService townService;
     private net.riftbreaker.rifttowny.domain.service.TownRoleService townRoleService;
+    private net.riftbreaker.rifttowny.domain.service.TerritoryService territoryService;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
     /**
@@ -150,7 +151,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
         }
 
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
-                townService, townRoleService, residentRepository, townRepository,
+                townService, townRoleService, territoryService, residentRepository, townRepository,
                 messages, denialText).tree());
 
         getLogger().info("RiftTowny enabled on " + platformName() + ". " + schema.describe() + '.');
@@ -203,6 +204,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     clock);
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions());
+            this.territoryService =
+                    new net.riftbreaker.rifttowny.domain.service.TerritoryService(civicStore, clock);
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "

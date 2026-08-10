@@ -41,6 +41,12 @@ town:
   not-in-a-town: '<red>You are not in a town.</red>'
   info-header: '<gray>Town <white><town></white></gray>'
   info-line: '  <gray><label></gray> <white><value></white>'
+  claimed: '<green>Claimed <white><chunk></white> as <white><kind></white>. Your town now holds <white><total></white> chunk(s).</green>'
+  unclaimed: '<yellow>Released <white><chunk></white>.</yellow>'
+  homeblock-moved: '<green>Your home chunk is now <white><chunk></white>.</green>'
+  claim-preview-ok: '<gray>Claiming <white><chunk></white> would take you from <white><before></white> to <white><after></white> chunk(s).</gray>'
+  claim-preview-refused: '<red>Claiming <white><chunk></white> would fail: <white><reason></white></red>'
+  console-has-no-chunk: '<red>The console is not standing anywhere.</red>'
 
 role:
   created: '<green>Created the role <white><role></white>.</green>'

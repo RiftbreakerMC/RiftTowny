@@ -41,6 +41,18 @@ public final class BukkitCommandActor implements CommandActor {
     }
 
     @Override
+    public Optional<net.riftbreaker.rifttowny.api.ChunkKey> chunk() {
+        if (!(sender instanceof Player player)) {
+            return Optional.empty();
+        }
+        final var location = player.getLocation();
+        return Optional.of(new net.riftbreaker.rifttowny.api.ChunkKey(
+                location.getWorld().getUID(),
+                location.getBlockX() >> 4,
+                location.getBlockZ() >> 4));
+    }
+
+    @Override
     public boolean hasPermission(final String permission) {
         return sender.hasPermission(permission);
     }

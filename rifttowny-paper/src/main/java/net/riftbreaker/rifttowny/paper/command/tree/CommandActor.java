@@ -25,6 +25,15 @@ public interface CommandActor {
      */
     Optional<ResidentId> resident();
 
+    /**
+     * The chunk the actor is standing in, or empty for the console.
+     *
+     * <p>Captured at dispatch, which is the only safe moment: a command runs on the thread that
+     * owns the player — the main thread on Paper, their region thread on Folia — so reading their
+     * position here is legal, and reading it later from a database callback would not be.</p>
+     */
+    Optional<net.riftbreaker.rifttowny.api.ChunkKey> chunk();
+
     boolean hasPermission(String permission);
 
     void send(Component message);

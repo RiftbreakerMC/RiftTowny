@@ -41,7 +41,7 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|add|kick|leave|rename|mayor|delete|role>
+    usage: /town <new|info|add|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|delete|role>
 
 permissions:
   rifttowny.admin:
@@ -68,6 +68,9 @@ permissions:
       rifttowny.town.rename: true
       rifttowny.town.mayor: true
       rifttowny.town.delete: true
+      rifttowny.town.claim: true
+      rifttowny.town.unclaim: true
+      rifttowny.town.homeblock: true
       rifttowny.role.view: true
       rifttowny.role.manage: true
       rifttowny.role.assign: true
@@ -94,6 +97,15 @@ permissions:
     default: true
   rifttowny.town.delete:
     description: Disband your town.
+    default: true
+  rifttowny.town.claim:
+    description: Claim land for your town.
+    default: true
+  rifttowny.town.unclaim:
+    description: Release your town's land.
+    default: true
+  rifttowny.town.homeblock:
+    description: Move your town's home chunk.
     default: true
   rifttowny.role.view:
     description: View your town's roles.
