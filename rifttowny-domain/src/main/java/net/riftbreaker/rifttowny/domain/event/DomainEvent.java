@@ -208,6 +208,47 @@ public sealed interface DomainEvent {
         ASSIGNED, UNASSIGNED
     }
 
+    /**
+     * @param chunk rendered rather than structured, because an outbox payload is read by Discord
+     *        templates and map links, and both want it as text
+     */
+    record ChunkClaimed(TownId town, String chunk, String kind) implements DomainEvent {
+        public ChunkClaimed {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(chunk, "chunk");
+            Objects.requireNonNull(kind, "kind");
+        }
+
+        @Override
+        public String type() {
+            return "town.chunk.claimed";
+        }
+    }
+
+    record ChunkUnclaimed(TownId town, String chunk) implements DomainEvent {
+        public ChunkUnclaimed {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(chunk, "chunk");
+        }
+
+        @Override
+        public String type() {
+            return "town.chunk.unclaimed";
+        }
+    }
+
+    record HomeblockMoved(TownId town, String chunk) implements DomainEvent {
+        public HomeblockMoved {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(chunk, "chunk");
+        }
+
+        @Override
+        public String type() {
+            return "town.homeblock.moved";
+        }
+    }
+
     record OutsiderTrusted(TownId town, ResidentId outsider) implements DomainEvent {
         public OutsiderTrusted {
             Objects.requireNonNull(town, "town");

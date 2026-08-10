@@ -186,6 +186,47 @@ public enum ChangeDenial {
     /** The role does not grant that permission. */
     PERMISSION_NOT_GRANTED,
 
+    // --- territory ---------------------------------------------------------------------------
+
+    /** This town already owns that chunk. */
+    CHUNK_ALREADY_CLAIMED,
+
+    /** That chunk is not one of this town's claims. */
+    CHUNK_NOT_CLAIMED,
+
+    /**
+     * An ordinary claim must touch the town's existing territory.
+     *
+     * <p>Without it a town is a scatter of disconnected squares, which makes borders meaningless
+     * and lets a player fence off distant land for the price of one chunk.</p>
+     */
+    CLAIM_MUST_TOUCH_TOWN,
+
+    /**
+     * An outpost must not touch the town.
+     *
+     * <p>An outpost adjacent to the town is an ordinary claim wearing a costume, and would let a
+     * player pay outpost prices for normal expansion.</p>
+     */
+    OUTPOST_MUST_NOT_TOUCH_TOWN,
+
+    /**
+     * Unclaiming that chunk would strand others.
+     *
+     * <p>Refused rather than silently converting the stranded part into outposts: which half of a
+     * severed town is the "real" one is a decision only the mayor can make.</p>
+     */
+    UNCLAIM_WOULD_DISCONNECT,
+
+    /** The homeblock is the last chunk that may be unclaimed. */
+    HOMEBLOCK_MUST_BE_UNCLAIMED_LAST,
+
+    /** The first chunk a town claims becomes its homeblock; it cannot be anything else. */
+    FIRST_CLAIM_MUST_BE_THE_HOMEBLOCK,
+
+    /** That chunk is already the homeblock. */
+    ALREADY_THE_HOMEBLOCK,
+
     // --- lookup ------------------------------------------------------------------------------
 
     /** No such town. */
