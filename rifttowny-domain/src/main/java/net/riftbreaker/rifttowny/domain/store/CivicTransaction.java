@@ -38,6 +38,8 @@ public interface CivicTransaction {
 
     RoleStore roles();
 
+    ClaimStore claims();
+
     /**
      * Queues an event for delivery.
      *
@@ -94,6 +96,35 @@ public interface CivicTransaction {
         boolean delete(
                 net.riftbreaker.rifttowny.domain.org.OrganisationScope scope,
                 java.util.UUID organisationId);
+    }
+
+    /**
+     * Claims, inside the transaction.
+     *
+     * <p>Written one chunk at a time rather than as a whole {@code TownClaims}, unlike roles. A
+     * role book has a handful of entries; a town's territory can be thousands of chunks, and
+     * rewriting all of them to claim one would turn an ordinary command into a table scan.</p>
+     */
+    interface ClaimStore {
+
+        /** Whoever owns this chunk, if anybody. Not scoped to one town. */
+        Optional<net.riftbreaker.rifttowny.domain.territory.Claim> at(
+                net.riftbreaker.rifttowny.api.ChunkKey chunk);
+
+        /** Every claim of one town, oldest first. */
+        List<net.riftbreaker.rifttowny.domain.territory.Claim> of(
+                net.riftbreaker.rifttowny.domain.org.TownId town);
+
+        void insert(net.riftbreaker.rifttowny.domain.territory.Claim claim);
+
+        boolean delete(net.riftbreaker.rifttowny.api.ChunkKey chunk);
+
+        void updateKind(
+                net.riftbreaker.rifttowny.api.ChunkKey chunk,
+                net.riftbreaker.rifttowny.domain.territory.ClaimKind kind);
+
+        /** Releases a whole town's territory. Returns how many chunks went. */
+        int deleteAllOf(net.riftbreaker.rifttowny.domain.org.TownId town);
     }
 
     /** Nations, inside the transaction. */

@@ -238,8 +238,17 @@ public final class TownService {
                 transaction.residents().save(require(resident.leaveTown()));
                 released++;
             }
+            // Territory is released explicitly: rt_claim cascades from rt_town, but relying on the
+            // cascade would make the claim count in the announcement below unknowable, and it would
+            // hide the release from anything watching claims rather than towns.
+            final int releasedChunks = transaction.claims().deleteAllOf(townId);
             transaction.roles().delete(OrganisationScope.TOWN, townId.value());
             transaction.towns().delete(townId);
+            if (releasedChunks > 0) {
+                transaction.publish(
+                        new DomainEvent.ChunkUnclaimed(townId, releasedChunks + " chunk(s)"),
+                        correlation("disband", townId));
+            }
             transaction.publish(
                     new DomainEvent.TownDisbanded(townId, town.name(), released),
                     correlation("disband", townId));

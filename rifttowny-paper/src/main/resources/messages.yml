@@ -99,6 +99,7 @@ denial:
   permission-already-granted: 'That role already has it.'
   permission-not-granted: 'That role does not have it.'
   chunk-already-claimed: 'Your town already owns that chunk.'
+  chunk-owned-by-another-town: 'Another town already owns that chunk.'
   chunk-not-claimed: 'Your town does not own that chunk.'
   claim-must-touch-town: 'A claim must border your town. Claim it as an outpost if you meant to settle away from home.'
   outpost-must-not-touch-town: 'That chunk borders your town, so claim it normally rather than as an outpost.'

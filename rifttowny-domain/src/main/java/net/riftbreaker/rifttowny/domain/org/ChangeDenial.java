@@ -191,6 +191,15 @@ public enum ChangeDenial {
     /** This town already owns that chunk. */
     CHUNK_ALREADY_CLAIMED,
 
+    /**
+     * Another town owns that chunk.
+     *
+     * <p>Checked inside the transaction, not before it. The unique constraint on
+     * {@code (world_id, chunk_x, chunk_z)} is the real guard against two towns claiming the same
+     * chunk at once; this denial is how that guard becomes a sentence.</p>
+     */
+    CHUNK_OWNED_BY_ANOTHER_TOWN,
+
     /** That chunk is not one of this town's claims. */
     CHUNK_NOT_CLAIMED,
 
