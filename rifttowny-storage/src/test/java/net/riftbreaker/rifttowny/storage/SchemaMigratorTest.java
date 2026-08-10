@@ -36,22 +36,34 @@ class SchemaMigratorTest {
                 "", "", StorageSettings.MINIMUM_SQLITE_POOL_SIZE, 5_000L));
     }
 
+    /**
+     * The version the migration set is currently at.
+     *
+     * <p>Asserted rather than hard-coded at each call site so adding a migration is a one-line
+     * change here, and a migration added to only one of the two dialect directories still shows up
+     * as a failure rather than passing quietly.</p>
+     */
+    private static final String CURRENT_SCHEMA_VERSION = "2";
+
+    private static final int MIGRATION_COUNT = 2;
+
     @Test
-    @DisplayName("the baseline migration applies and creates every table the plan names")
-    void baselineCreatesEveryTable() throws Exception {
+    @DisplayName("the migrations apply and create every table the plan names")
+    void migrationsCreateEveryTable() throws Exception {
         database = open("apply.db");
 
         final SchemaMigrator.MigrationSummary summary =
                 new SchemaMigrator(database, getClass().getClassLoader()).migrate();
 
-        assertThat(summary.applied()).isEqualTo(1);
-        assertThat(summary.currentVersion()).isEqualTo("1");
+        assertThat(summary.applied()).isEqualTo(MIGRATION_COUNT);
+        assertThat(summary.currentVersion()).isEqualTo(CURRENT_SCHEMA_VERSION);
         assertThat(summary.backend()).isEqualTo(StorageBackend.SQLITE);
 
         assertThat(tableNames()).contains(
                 "rt_resident", "rt_town", "rt_nation", "rt_claim", "rt_area",
                 "rt_role", "rt_role_permission", "rt_role_member",
-                "rt_organisation_currency", "rt_outbox", "rt_idempotency", "rt_audit");
+                "rt_organisation_currency", "rt_outbox", "rt_idempotency", "rt_audit",
+                "rt_town_trust");
     }
 
     @Test
@@ -60,11 +72,27 @@ class SchemaMigratorTest {
         database = open("twice.db");
         final ClassLoader loader = getClass().getClassLoader();
 
-        assertThat(new SchemaMigrator(database, loader).migrate().applied()).isEqualTo(1);
+        assertThat(new SchemaMigrator(database, loader).migrate().applied())
+                .isEqualTo(MIGRATION_COUNT);
         final SchemaMigrator.MigrationSummary second = new SchemaMigrator(database, loader).migrate();
 
         assertThat(second.applied()).isZero();
-        assertThat(second.currentVersion()).isEqualTo("1");
+        assertThat(second.currentVersion()).isEqualTo(CURRENT_SCHEMA_VERSION);
+    }
+
+    @Test
+    @DisplayName("both dialects carry the same number of migrations, so they cannot drift")
+    void bothDialectsHaveTheSameMigrationCount() throws Exception {
+        for (final StorageBackend backend : StorageBackend.values()) {
+            final String location = SchemaMigrator.locationFor(backend)
+                    .replace("classpath:", "");
+            final java.net.URL directory = getClass().getClassLoader().getResource(location);
+            assertThat(directory).as("migration directory for %s", backend).isNotNull();
+
+            final java.io.File[] files =
+                    new java.io.File(directory.toURI()).listFiles((dir, fileName) -> fileName.endsWith(".sql"));
+            assertThat(files).as("migrations for %s", backend).hasSize(MIGRATION_COUNT);
+        }
     }
 
     @Test
