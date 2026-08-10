@@ -36,6 +36,8 @@ public interface CivicTransaction {
 
     NationStore nations();
 
+    RoleStore roles();
+
     /**
      * Queues an event for delivery.
      *
@@ -73,6 +75,25 @@ public interface CivicTransaction {
 
         /** Deletes the town and releases its residents. Claims, areas and trust cascade. */
         boolean delete(TownId id);
+    }
+
+    /**
+     * Roles, inside the transaction.
+     *
+     * <p>Loaded and saved as a whole {@link net.riftbreaker.rifttowny.domain.role.RoleBook}: its
+     * rules are about the set — unique priorities, who outranks whom, which assignments survive a
+     * deletion — so a partial write is not a smaller change, it is an inconsistent one.</p>
+     */
+    interface RoleStore {
+        Optional<net.riftbreaker.rifttowny.domain.role.RoleBook> find(
+                net.riftbreaker.rifttowny.domain.org.OrganisationScope scope,
+                java.util.UUID organisationId);
+
+        void save(net.riftbreaker.rifttowny.domain.role.RoleBook book);
+
+        boolean delete(
+                net.riftbreaker.rifttowny.domain.org.OrganisationScope scope,
+                java.util.UUID organisationId);
     }
 
     /** Nations, inside the transaction. */

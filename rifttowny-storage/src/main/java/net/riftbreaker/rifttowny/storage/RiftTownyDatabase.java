@@ -37,7 +37,7 @@ public final class RiftTownyDatabase implements AutoCloseable {
 
         final HikariConfig config = new HikariConfig();
         config.setPoolName("RiftTowny-" + settings.backend().name().toLowerCase(java.util.Locale.ROOT));
-        config.setJdbcUrl(settings.jdbcUrl());
+        config.setJdbcUrl(withSqlitePragmas(settings));
         config.setMaximumPoolSize(settings.effectivePoolSize());
         config.setConnectionTimeout(settings.connectionTimeoutMillis());
         config.setAutoCommit(true);
@@ -48,17 +48,32 @@ public final class RiftTownyDatabase implements AutoCloseable {
             config.addDataSourceProperty("cachePrepStmts", "true");
             config.addDataSourceProperty("prepStmtCacheSize", "250");
             config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-        } else {
-            // Applied per connection because SQLite settings are connection-scoped, not
-            // database-scoped: a pooled connection that skipped these would silently run without
-            // foreign keys, which is exactly the kind of divergence that only shows up in
-            // production data.
-            config.setConnectionInitSql(
-                    "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; "
-                            + "PRAGMA synchronous=NORMAL");
         }
 
         return new RiftTownyDatabase(settings.backend(), new HikariDataSource(config));
+    }
+
+    /**
+     * Appends SQLite's pragmas to the JDBC URL.
+     *
+     * <p>They cannot go in Hikari's {@code connectionInitSql}: that runs a <em>single</em>
+     * statement, so a semicolon-separated list silently applies only the first one. The pool came up
+     * clean, WAL was on, and foreign keys were off — which is invisible until the day a cascade is
+     * relied on and the orphan rows are already there.</p>
+     *
+     * <p>sqlite-jdbc reads pragma names straight from the URL query string, and applies them to
+     * every connection the pool opens, which is what these need: SQLite pragmas are
+     * connection-scoped, not database-scoped.</p>
+     */
+    private static String withSqlitePragmas(final StorageSettings settings) {
+        if (settings.backend() != StorageBackend.SQLITE || settings.jdbcUrl().indexOf('?') >= 0) {
+            return settings.jdbcUrl();
+        }
+        return settings.jdbcUrl()
+                + "?foreign_keys=true"
+                + "&journal_mode=WAL"
+                + "&busy_timeout=" + settings.connectionTimeoutMillis()
+                + "&synchronous=NORMAL";
     }
 
     public StorageBackend backend() {
