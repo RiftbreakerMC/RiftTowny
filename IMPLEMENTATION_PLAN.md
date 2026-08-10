@@ -135,12 +135,12 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 
 - [x] **`RT-CORE-CMD`** — command tree, router and completion from one structure; `Surface` declared per action so "no feature is GUI-only" is checkable; `/town` and `/town role` wired to the services. **Not runtime-verified: no Paper server here**
 - [x] Refusal text keyed by enum constant, with a test asserting every `ChangeDenial` and `NameProblem` has a sentence
-- [x] **`RT-CORE-CLAIM` domain** — claim kinds, homeblock, outposts, orthogonal contiguity by breadth-first sweep from anchors, severing refused, preview/dry-run sharing the real rules
+- [x] **`RT-CORE-CLAIM`** — claim kinds, homeblock, outposts, orthogonal contiguity by breadth-first sweep from anchors, severing refused, preview sharing the real rules; `rt_claim` storage written one chunk at a time; `TerritoryService` with cross-town ownership checked inside the transaction; `/town claim|unclaim|preview|homeblock`
+- [x] **Nine review defects fixed**, two of them authority escalations: a departed resident kept their roles, and `assign` was the one permission path not bounded by what the actor holds
+- [x] **CoreProtect dropped** (2026-08-10) — RiftLogger is the only audit integration
 
 ### Next
-
-- [ ] `RT-CORE-CLAIM` storage and service — `rt_claim` repository, claim/unclaim through the unit of work, `/town claim|unclaim` commands
-- [ ] `RT-CORE-PROTECT` — the flag resolver and its listeners, plus the chunk→town cache a per-block lookup needs
+- [ ] `RT-CORE-FLAGS` — the flag resolver and its listeners, plus the chunk→town cache a per-block lookup needs. **Renamed from `RT-CORE-PROTECT`**, which read as the CoreProtect plugin
 - [ ] `RT-CORE-UI` — Java GUI framework and Floodgate Bedrock forms. **Nothing declares `Surface.GUI` yet**, which is why the parity test passes; it becomes a real constraint with the first menu
 - [ ] `NationService` and nation roles — a nation's standing depends on residency in a member town, which is a different lookup than a town's
 - [ ] Chunk claim model, claim/unclaim, outposts, homeblock rules

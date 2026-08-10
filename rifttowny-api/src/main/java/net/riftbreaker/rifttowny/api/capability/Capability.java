@@ -13,10 +13,13 @@ public enum Capability {
     ECONOMY_RIFTECO("RiftEco"),
     /** Single-currency economy fallback used only when RiftEco is absent. */
     ECONOMY_VAULT("VaultUnlocked"),
-    /** Central civic audit log. */
+    /**
+     * The audit log, for civic events and for land regeneration alike.
+     *
+     * <p>RiftLogger is the only audit integration. CoreProtect was dropped in favour of it, so
+     * there is one place an operator looks and one place a retention policy applies.</p>
+     */
     AUDIT_RIFTLOGGER("RiftLogger"),
-    /** Block-level audit for protection and land regeneration. */
-    AUDIT_COREPROTECT("CoreProtect"),
     /** Combat tags, bounce-back and valid-kill determination. */
     COMBAT_RIFTPVP("RiftPvP"),
     /** Community flight boosters and their authoritative timers. */

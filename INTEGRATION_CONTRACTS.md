@@ -125,6 +125,13 @@ previousValue, newValue, source, metadata)` — RiftTowny sets `source = "RiftTo
 RiftTowny uses `logTownyIdempotent` with its outbox event ID for anything replayable, so a
 retried outbox delivery cannot duplicate an audit row.
 
+**RiftLogger is the only audit integration.** CoreProtect was dropped on 2026-08-10, so block
+history for land regeneration goes here too. The cost, stated plainly: RiftLogger records
+*events*, not per-block change history, so there is no inspect-and-rollback tool behind
+regeneration. The restore data never depended on one — it comes from RiftTowny's own
+`rt_regen_snapshot` table — but per-block forensics would need a new record type here rather
+than a second plugin.
+
 **Gap:** `TownyEntityType` and `TownyAction` are fixed enums upstream. RiftTowny adds
 concepts Towny never had (areas, elections, shields, occupation). Actions with no upstream
 enum constant are logged under the nearest existing constant with the precise action in
@@ -327,7 +334,7 @@ PR targets.
 |---|---|---|
 | PlaceholderAPI | `%townyadvanced_*%`, `%townychat_*%`, `%rifttowny_*%` | Resolves from immutable snapshot caches only; never blocks on storage |
 | LuckPerms | Contexts for town, nation, role, relationship, war state | Contexts must be computed from cache |
-| CoreProtect | Regeneration and protection audit | Best-effort; absence disables audit only |
+| ~~CoreProtect~~ | — | **Dropped 2026-08-10.** RiftLogger owns permanent audit records, and two audit systems means two places to look and two retention policies. See §2.2 for what that costs |
 | Floodgate / Geyser (Cumulus) | Bedrock forms | Absence disables forms, never a Java feature |
 | BlueMap / Dynmap / squaremap | One map abstraction, three back ends | Each independent; one missing does not disable the others |
 | mcMMO | Territory XP and ability modifiers | mcMMO stays the skill authority; RiftTowny only supplies multipliers within admin-defined limits |

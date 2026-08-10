@@ -101,7 +101,7 @@ One jar. Optional modules are configuration, not separate downloads.
 | `RT-CORE-TOWN` | Towns | Phase 2 |
 | `RT-CORE-NATION` | Nations | Phase 2 |
 | `RT-CORE-CLAIM` | Chunk claims and areas | Phase 2 |
-| `RT-CORE-PROTECT` | Flag resolver and protection listeners | Phase 2 |
+| `RT-CORE-FLAGS` | Flag resolver and protection listeners (renamed from `RT-CORE-PROTECT`, which read as the CoreProtect plugin) | Phase 2 |
 | `RT-CORE-ROLE` | Roles and permissions | Phase 2 |
 | `RT-CORE-CMD` | Command framework and tab completion | Phase 2 |
 | `RT-CORE-UI` | GUI framework, clickable chat, Bedrock form foundation | Phase 2 |

@@ -24,7 +24,6 @@ softdepend:
   - VelocitySrv
   - PlaceholderAPI
   - LuckPerms
-  - CoreProtect
   - floodgate
   - Geyser-Spigot
   - BlueMap

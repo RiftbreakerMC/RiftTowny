@@ -248,7 +248,15 @@ War shields are specified alongside it in the same document.
   entities. Anything owned by RiftShop or RiftSpawners is handed to those plugins, not
   re-placed from a snapshot.
 - Work is rate-limited and, on Folia, dispatched to the region owning each chunk.
-- Every restored block is auditable through CoreProtect and RiftLogger.
+- Every restore is auditable through **RiftLogger**, which is the only audit integration.
+
+> **CoreProtect is not used.** RiftLogger owns permanent audit records, so pointing block
+> history at a second system would give operators two places to look and two retention
+> policies to keep in step. The cost is real and worth stating: RiftLogger records *events*,
+> not per-block change history, so there is no third-party inspect-and-rollback tool behind
+> regeneration. The restore data itself never depended on one — it comes from RiftTowny's own
+> `rt_regen_snapshot` — but if per-block forensics is ever wanted, the answer is a block
+> record type in RiftLogger, not a second plugin.
 - Operators get preview, pause, resume, status and repair tools.
 
 ---

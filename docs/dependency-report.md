@@ -39,7 +39,7 @@ to start.
 | RiftShop, RiftSpawners, RiftEvents, RiftEssentials, VelocitySrv | `provided` artifact | Corresponding subsystem disabled |
 | PlaceholderAPI | `provided` | Placeholders not registered |
 | LuckPerms | `provided` | Contexts not registered |
-| CoreProtect | reflective | Regeneration audit disabled |
+| ~~CoreProtect~~ | — | **Dropped 2026-08-10.** RiftLogger is the sole audit integration |
 | Floodgate / Geyser | `provided` | Bedrock forms unavailable; Java GUIs unaffected |
 | BlueMap, Dynmap, squaremap | reflective per back end | That map back end only |
 | mcMMO | `provided`, all transitives excluded | Skill modifiers disabled |
