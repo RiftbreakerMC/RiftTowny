@@ -125,15 +125,16 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 - [x] Typed identity — `ResidentId`, `TownId`, `NationId`, sealed `OrganisationId`
 - [x] Name validation — display, normalised uniqueness key and lookalike skeleton from one pass; the `i`/`l`/`1` class folds together
 - [x] Membership invariants — one town per resident, one nation per town, trust grants nothing, last-resident and mayor-ordering rules, capital rules
-- [x] `ResidentRepository` + JDBC implementation, tested on real SQLite
-- [x] `TownRepository` + JDBC implementation, tested on real SQLite; `V2` adds `rt_town_trust`
+- [x] `ResidentRepository`, `TownRepository`, `NationRepository` + JDBC implementations, tested on real SQLite; `V2` adds `rt_town_trust`
+- [x] **Unit of work** — `CivicStore.inTransaction` gives a service synchronous resident/town/nation stores plus `publish()`. State change and outbox rows commit together or not at all, tested in both directions. SQL lives in connection-scoped stores that both the async repositories and a transaction run, so there is one copy
+- [x] `TownService` — found, join, leave, transfer mayoralty, rename, disband. Name uniqueness checked inside the transaction; refusals travel as `ChangeRefusedException` and come back as a `ServiceResult`
 - [x] `RiftTownyPlugin.getInstance()` — the plugin is reached through the main class rather than threaded through constructors
 
 ### Next
 
-- [ ] `NationRepository` + JDBC implementation
-- [ ] Lifecycle services composing the aggregates inside one transaction, writing the outbox in the same transaction
-- [ ] Resident, town, nation lifecycle commands
+- [ ] `RT-CORE-ROLE` — roles and the permission model. **This is the gate for commands**: `TownService` currently enforces membership invariants but not authority, so nothing is wired to a command yet
+- [ ] `NationService`, once role authority exists to gate it
+- [ ] `RT-CORE-CMD` / `RT-CORE-UI` — command framework, tab completion, clickable chat, GUI and Bedrock form foundation
 - [ ] Chunk claim model, claim/unclaim, outposts, homeblock rules
 - [ ] Central flag resolver and the protection listeners that consult it
 - [ ] 3D areas with non-overlap enforcement, plots, districts
