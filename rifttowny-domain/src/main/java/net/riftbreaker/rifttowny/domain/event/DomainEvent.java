@@ -71,6 +71,36 @@ public sealed interface DomainEvent {
         }
     }
 
+    record TownFounded(TownId town, OrganisationName name, ResidentId founder) implements DomainEvent {
+        public TownFounded {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(founder, "founder");
+        }
+
+        @Override
+        public String type() {
+            return "town.founded";
+        }
+    }
+
+    /**
+     * @param residentsReleased how many players became townless, so an announcement can say how many
+     *        people this affected without a second query against a town that no longer exists
+     */
+    record TownDisbanded(TownId town, OrganisationName name, int residentsReleased)
+            implements DomainEvent {
+        public TownDisbanded {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(name, "name");
+        }
+
+        @Override
+        public String type() {
+            return "town.disbanded";
+        }
+    }
+
     record TownJoinedNation(TownId town, NationId nation) implements DomainEvent {
         public TownJoinedNation {
             Objects.requireNonNull(town, "town");

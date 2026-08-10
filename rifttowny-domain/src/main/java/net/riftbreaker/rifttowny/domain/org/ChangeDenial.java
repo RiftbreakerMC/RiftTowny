@@ -88,5 +88,25 @@ public enum ChangeDenial {
     // --- naming ------------------------------------------------------------------------------
 
     /** The new name is identical to the current one, so there is nothing to change. */
-    NAME_UNCHANGED
+    NAME_UNCHANGED,
+
+    /**
+     * Another organisation already holds that name.
+     *
+     * <p>Checked inside the transaction rather than before it. Checking first would leave a window
+     * in which two founders both saw the name free; the unique constraint on
+     * {@code name_normalised} is the real guard, and this denial is how that guard is reported.</p>
+     */
+    NAME_TAKEN,
+
+    // --- lookup ------------------------------------------------------------------------------
+
+    /** No such town. */
+    TOWN_NOT_FOUND,
+
+    /** No such nation. */
+    NATION_NOT_FOUND,
+
+    /** No such resident. The player has never been seen by RiftTowny. */
+    RESIDENT_NOT_FOUND
 }
