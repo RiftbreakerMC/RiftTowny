@@ -119,9 +119,21 @@ but real public API, and fails loudly instead of silently when something is wron
 
 Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 
-- [~] `RT-CORE-RESIDENT` / `RT-CORE-TOWN` — **active**: name normalisation and the
-  membership invariants are implemented and tested; repositories and services follow
-- [ ] Resident, town, nation entities and lifecycle services
+### Done and tested
+
+- [x] Domain style: object-oriented aggregates. `Resident`, `Town` and `Nation` are immutable objects owning their own invariants; every change returns a new instance inside a sealed `Outcome` carrying the events it produced, so an event cannot exist for a change that did not happen
+- [x] Typed identity — `ResidentId`, `TownId`, `NationId`, sealed `OrganisationId`
+- [x] Name validation — display, normalised uniqueness key and lookalike skeleton from one pass; the `i`/`l`/`1` class folds together
+- [x] Membership invariants — one town per resident, one nation per town, trust grants nothing, last-resident and mayor-ordering rules, capital rules
+- [x] `ResidentRepository` + JDBC implementation, tested on real SQLite
+- [x] `TownRepository` + JDBC implementation, tested on real SQLite; `V2` adds `rt_town_trust`
+- [x] `RiftTownyPlugin.getInstance()` — the plugin is reached through the main class rather than threaded through constructors
+
+### Next
+
+- [ ] `NationRepository` + JDBC implementation
+- [ ] Lifecycle services composing the aggregates inside one transaction, writing the outbox in the same transaction
+- [ ] Resident, town, nation lifecycle commands
 - [ ] Chunk claim model, claim/unclaim, outposts, homeblock rules
 - [ ] Central flag resolver and the protection listeners that consult it
 - [ ] 3D areas with non-overlap enforcement, plots, districts
