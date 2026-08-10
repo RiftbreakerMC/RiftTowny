@@ -1,0 +1,230 @@
+package net.riftbreaker.rifttowny.storage;
+
+import net.riftbreaker.rifttowny.domain.config.StorageBackend;
+import net.riftbreaker.rifttowny.domain.naming.NamePolicy;
+import net.riftbreaker.rifttowny.domain.naming.OrganisationName;
+import net.riftbreaker.rifttowny.domain.org.NationId;
+import net.riftbreaker.rifttowny.domain.org.ResidentId;
+import net.riftbreaker.rifttowny.domain.org.Town;
+import net.riftbreaker.rifttowny.domain.org.TownId;
+import net.riftbreaker.rifttowny.domain.store.CivicTransaction;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * Town SQL, bound to one connection.
+ *
+ * <p>A town's residents come from {@code rt_resident.town_id} and are never written here: that
+ * column is the single source of truth for membership, and writing it from both sides would create
+ * two places to disagree. {@link #save} writes the town row and reconciles trust, nothing else.</p>
+ */
+final class ConnectionTownStore implements CivicTransaction.TownStore {
+
+    private static final String COLUMNS =
+            "town_id, name, name_normalised, nation_id, leader_id, bank_account_id, created_at";
+
+    private final Connection connection;
+    private final StorageBackend backend;
+
+    ConnectionTownStore(final Connection connection, final StorageBackend backend) {
+        this.connection = Objects.requireNonNull(connection, "connection");
+        this.backend = Objects.requireNonNull(backend, "backend");
+    }
+
+    @Override
+    public Optional<Town> find(final TownId id) {
+        Objects.requireNonNull(id, "id");
+        return StorageFailure.wrapping(() ->
+                first(load("WHERE town_id = ?", id.value().toString())));
+    }
+
+    @Override
+    public Optional<Town> findByName(final String name) {
+        Objects.requireNonNull(name, "name");
+        return StorageFailure.wrapping(() ->
+                first(load("WHERE name_normalised = ?", name.toLowerCase(Locale.ROOT))));
+    }
+
+    List<Town> findByNation(final NationId nation) {
+        Objects.requireNonNull(nation, "nation");
+        return StorageFailure.wrapping(() ->
+                load("WHERE nation_id = ? ORDER BY created_at, town_id", nation.value().toString()));
+    }
+
+    int count() {
+        return StorageFailure.wrapping(() -> {
+            try (PreparedStatement statement =
+                         connection.prepareStatement("SELECT COUNT(*) FROM rt_town");
+                 ResultSet results = statement.executeQuery()) {
+                return results.next() ? results.getInt(1) : 0;
+            }
+        });
+    }
+
+    @Override
+    public void save(final Town town) {
+        Objects.requireNonNull(town, "town");
+        StorageFailure.wrapping(() -> {
+            // bank_account_id and created_at are absent from both update clauses on purpose. The
+            // civic account must survive every rename and leadership transfer, and letting a save
+            // move it is precisely how a treasury gets orphaned.
+            final String sql = switch (backend) {
+                case SQLITE -> "INSERT INTO rt_town (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?) "
+                        + "ON CONFLICT(town_id) DO UPDATE SET name = excluded.name, "
+                        + "name_normalised = excluded.name_normalised, nation_id = excluded.nation_id, "
+                        + "leader_id = excluded.leader_id";
+                case MARIADB -> "INSERT INTO rt_town (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?) "
+                        + "ON DUPLICATE KEY UPDATE name = VALUES(name), "
+                        + "name_normalised = VALUES(name_normalised), nation_id = VALUES(nation_id), "
+                        + "leader_id = VALUES(leader_id)";
+            };
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, town.id().value().toString());
+                statement.setString(2, town.name().display());
+                statement.setString(3, town.name().normalised());
+                final Optional<NationId> nation = town.nation();
+                if (nation.isPresent()) {
+                    statement.setString(4, nation.get().value().toString());
+                } else {
+                    statement.setNull(4, Types.VARCHAR);
+                }
+                statement.setString(5, town.mayor().value().toString());
+                statement.setString(6, town.bankAccountId().toString());
+                statement.setLong(7, town.createdAt().toEpochMilli());
+                statement.executeUpdate();
+            }
+            replaceTrust(town);
+            return null;
+        });
+    }
+
+    @Override
+    public boolean delete(final TownId id) {
+        Objects.requireNonNull(id, "id");
+        return StorageFailure.wrapping(() -> {
+            // Residents are released rather than cascaded: rt_resident rows are players, and a
+            // cascade here would delete a player because their town disbanded.
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE rt_resident SET town_id = NULL WHERE town_id = ?")) {
+                statement.setString(1, id.value().toString());
+                statement.executeUpdate();
+            }
+            try (PreparedStatement statement =
+                         connection.prepareStatement("DELETE FROM rt_town WHERE town_id = ?")) {
+                statement.setString(1, id.value().toString());
+                return statement.executeUpdate() > 0;
+            }
+        });
+    }
+
+    private static Optional<Town> first(final List<Town> rows) {
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
+    }
+
+    private List<Town> load(final String where, final String... parameters) throws SQLException {
+        record Row(TownId id, OrganisationName name, ResidentId mayor, NationId nation,
+                   UUID bankAccountId, Instant createdAt) {
+        }
+
+        final List<Row> rows = new ArrayList<>();
+        try (PreparedStatement statement =
+                     connection.prepareStatement("SELECT " + COLUMNS + " FROM rt_town " + where)) {
+            for (int index = 0; index < parameters.length; index++) {
+                statement.setString(index + 1, parameters[index]);
+            }
+            try (ResultSet results = statement.executeQuery()) {
+                while (results.next()) {
+                    final String nationId = results.getString("nation_id");
+                    rows.add(new Row(
+                            TownId.parse(results.getString("town_id")),
+                            new OrganisationName(
+                                    results.getString("name"),
+                                    results.getString("name_normalised"),
+                                    NamePolicy.skeleton(results.getString("name_normalised"))),
+                            ResidentId.parse(results.getString("leader_id")),
+                            nationId == null ? null : NationId.parse(nationId),
+                            UUID.fromString(results.getString("bank_account_id")),
+                            Instant.ofEpochMilli(results.getLong("created_at"))));
+                }
+            }
+        }
+
+        final List<Town> towns = new ArrayList<>(rows.size());
+        for (final Row row : rows) {
+            towns.add(Town.restore(
+                    row.id(), row.name(), row.mayor(), row.nation(), row.bankAccountId(),
+                    residentsOf(row.id()), trustedBy(row.id()), row.createdAt()));
+        }
+        return List.copyOf(towns);
+    }
+
+    private Set<ResidentId> residentsOf(final TownId town) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT resident_id FROM rt_resident WHERE town_id = ? "
+                        + "ORDER BY joined_at, resident_id")) {
+            statement.setString(1, town.value().toString());
+            return readIds(statement);
+        }
+    }
+
+    private Set<ResidentId> trustedBy(final TownId town) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT resident_id FROM rt_town_trust WHERE town_id = ? "
+                        + "ORDER BY granted_at, resident_id")) {
+            statement.setString(1, town.value().toString());
+            return readIds(statement);
+        }
+    }
+
+    private static Set<ResidentId> readIds(final PreparedStatement statement) throws SQLException {
+        final Set<ResidentId> ids = new LinkedHashSet<>();
+        try (ResultSet results = statement.executeQuery()) {
+            while (results.next()) {
+                ids.add(ResidentId.parse(results.getString(1)));
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Rewrites the trust rows to match the aggregate.
+     *
+     * <p>Delete-then-insert rather than a diff: the set is small, the whole save is one transaction,
+     * and a diff would need to know which entries changed — information the aggregate does not
+     * carry, since it exposes a state rather than a changelog.</p>
+     */
+    private void replaceTrust(final Town town) throws SQLException {
+        try (PreparedStatement statement =
+                     connection.prepareStatement("DELETE FROM rt_town_trust WHERE town_id = ?")) {
+            statement.setString(1, town.id().value().toString());
+            statement.executeUpdate();
+        }
+        if (town.trustedOutsiders().isEmpty()) {
+            return;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO rt_town_trust (town_id, resident_id, granted_at) VALUES (?, ?, ?)")) {
+            final long now = Instant.now().toEpochMilli();
+            for (final ResidentId trusted : town.trustedOutsiders()) {
+                statement.setString(1, town.id().value().toString());
+                statement.setString(2, trusted.value().toString());
+                statement.setLong(3, now);
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+}
