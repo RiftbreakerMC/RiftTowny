@@ -44,6 +44,8 @@ class TownServiceTest extends SqliteFixture {
     private static final ResidentId CITIZEN = ResidentId.of(UUID.randomUUID());
 
     private TownService service;
+    private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index =
+            net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
     private JdbcCivicStore store;
     private JdbcTownRepository towns;
     private JdbcResidentRepository residents;
@@ -52,7 +54,7 @@ class TownServiceTest extends SqliteFixture {
     @BeforeEach
     void createService() {
         store = new JdbcCivicStore(database, DIRECT, CLOCK);
-        service = new TownService(store, NamePolicy.defaults(), CLOCK);
+        service = new TownService(store, NamePolicy.defaults(), CLOCK, index);
         towns = new JdbcTownRepository(database, DIRECT);
         residents = new JdbcResidentRepository(database, DIRECT);
         outbox = new JdbcOutboxRepository(database, DIRECT);

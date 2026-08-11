@@ -36,6 +36,10 @@ class TownRoleServiceTest extends SqliteFixture {
     private static final ResidentId OFFICER = ResidentId.of(UUID.randomUUID());
     private static final ResidentId CITIZEN = ResidentId.of(UUID.randomUUID());
 
+    private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index =
+
+            net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
+
     private JdbcCivicStore store;
     private TownService towns;
     private TownRoleService roles;
@@ -44,7 +48,7 @@ class TownRoleServiceTest extends SqliteFixture {
     @BeforeEach
     void setUp() {
         store = new JdbcCivicStore(database, DIRECT, CLOCK);
-        towns = new TownService(store, NamePolicy.defaults(), CLOCK);
+        towns = new TownService(store, NamePolicy.defaults(), CLOCK, index);
         roles = new TownRoleService(store, CLOCK, Set.of());
         riftholm = towns.found(MAYOR, "Mayor", "Riftholm").join().value().orElseThrow();
     }

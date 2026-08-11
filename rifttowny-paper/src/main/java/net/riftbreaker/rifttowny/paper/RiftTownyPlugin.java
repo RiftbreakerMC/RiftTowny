@@ -55,6 +55,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.TownService townService;
     private net.riftbreaker.rifttowny.domain.service.TownRoleService townRoleService;
     private net.riftbreaker.rifttowny.domain.service.TerritoryService territoryService;
+    private net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
     /**
@@ -206,14 +207,24 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     new net.riftbreaker.rifttowny.storage.JdbcCivicStore(database, storageExecutor);
 
             final java.time.Clock clock = java.time.Clock.systemUTC();
+            this.territoryIndex =
+                    net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
             this.townService = new net.riftbreaker.rifttowny.domain.service.TownService(
                     civicStore,
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
-                    clock);
+                    clock,
+                    territoryIndex);
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions());
-            this.territoryService =
-                    new net.riftbreaker.rifttowny.domain.service.TerritoryService(civicStore, clock);
+            this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
+                    civicStore, clock, territoryIndex);
+
+            // Loaded before enable returns, and waited on. A protection listener answers from this
+            // index and cannot wait for a database, so a partially loaded index would read as
+            // wilderness and let the first player through the door break anything they liked.
+            final int loaded = territoryService.loadIndex()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + loaded + " claimed chunk(s) into memory.");
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "

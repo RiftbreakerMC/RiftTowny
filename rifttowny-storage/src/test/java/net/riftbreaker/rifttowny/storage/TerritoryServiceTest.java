@@ -39,6 +39,10 @@ class TerritoryServiceTest extends SqliteFixture {
     private static final ResidentId RIVAL = ResidentId.of(UUID.randomUUID());
     private static final ResidentId CITIZEN = ResidentId.of(UUID.randomUUID());
 
+    private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index =
+
+            net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
+
     private JdbcCivicStore store;
     private TownService towns;
     private TerritoryService territory;
@@ -47,8 +51,8 @@ class TerritoryServiceTest extends SqliteFixture {
     @BeforeEach
     void setUp() {
         store = new JdbcCivicStore(database, DIRECT, CLOCK);
-        towns = new TownService(store, NamePolicy.defaults(), CLOCK);
-        territory = new TerritoryService(store, CLOCK);
+        towns = new TownService(store, NamePolicy.defaults(), CLOCK, index);
+        territory = new TerritoryService(store, CLOCK, index);
         riftholm = towns.found(MAYOR, "Mayor", "Riftholm").join().value().orElseThrow();
     }
 

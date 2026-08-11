@@ -286,7 +286,7 @@ public final class TownCommands {
         whereTheyStand(actor, chunk -> withTown(actor, (who, town) ->
                 reply(actor, territory.moveHomeblock(who, town.id(), chunk), moved ->
                         messages.send(actor::send, MessageKey.TOWN_HOMEBLOCK_MOVED,
-                                MessageService.value("chunk", describe(moved))))));
+                                MessageService.value("chunk", describe(moved.newChunk()))))));
     }
 
     private void previewClaim(final CommandActor actor, final List<String> args) {

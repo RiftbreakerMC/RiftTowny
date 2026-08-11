@@ -48,11 +48,23 @@ public final class TownService {
     private final CivicStore store;
     private final NamePolicy namePolicy;
     private final Clock clock;
+    private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index;
 
-    public TownService(final CivicStore store, final NamePolicy namePolicy, final Clock clock) {
+    /**
+     * @param index needed only so disbanding can drop the town's chunks from the in-memory cache.
+     *        A disbanded town whose claims lingered there would keep protecting land the database
+     *        says is wilderness, and no command would be able to clear it
+     */
+    public TownService(
+            final CivicStore store,
+            final NamePolicy namePolicy,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.namePolicy = Objects.requireNonNull(namePolicy, "namePolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.index = Objects.requireNonNull(index, "index");
     }
 
     /**
@@ -253,6 +265,11 @@ public final class TownService {
                     new DomainEvent.TownDisbanded(townId, town.name(), released),
                     correlation("disband", townId));
             return townId;
+        }).thenApply(result -> {
+            // After the commit, never inside it. A rolled-back disband whose claims had already
+            // left the cache would leave the town's land unprotected until the next restart.
+            result.value().ifPresent(index::removeAllOf);
+            return result;
         });
     }
 

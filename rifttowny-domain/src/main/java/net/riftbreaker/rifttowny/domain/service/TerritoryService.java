@@ -39,10 +39,41 @@ public final class TerritoryService {
 
     private final CivicStore store;
     private final Clock clock;
+    private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index;
 
-    public TerritoryService(final CivicStore store, final Clock clock) {
+    /**
+     * @param index kept current by this service, and the only thing a protection listener is
+     *        allowed to consult. Updated <em>after</em> the transaction commits, never inside it: a
+     *        rolled-back claim that had already reached the cache would leave the server believing
+     *        in territory the database does not have
+     */
+    public TerritoryService(
+            final CivicStore store,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.index = Objects.requireNonNull(index, "index");
+    }
+
+    /**
+     * Fills the in-memory index from storage.
+     *
+     * <p>Called once at enable, before the server accepts players. Everything after that is kept
+     * current incrementally by the methods below.</p>
+     */
+    public CompletableFuture<Integer> loadIndex() {
+        return store.inTransaction(transaction -> {
+            final java.util.List<Claim> loaded = transaction.claims().all();
+            index.replaceAll(loaded);
+            return loaded.size();
+        });
+    }
+
+    /** The index, for listeners and for {@code /rifttowny status}. */
+    public net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index() {
+        return index;
     }
 
     /** Claims a chunk for the actor's town. Requires {@link Permission#CLAIM_LAND}. */
@@ -69,6 +100,9 @@ public final class TerritoryService {
             transaction.claims().insert(created);
             transaction.publishAll(outcome.events(), correlation("claim", townId));
             return created;
+        }).thenApply(result -> {
+            result.value().ifPresent(index::put);
+            return result;
         });
     }
 
@@ -85,11 +119,19 @@ public final class TerritoryService {
             transaction.claims().delete(chunk);
             transaction.publishAll(outcome.events(), correlation("unclaim", townId));
             return chunk;
+        }).thenApply(result -> {
+            result.value().ifPresent(index::remove);
+            return result;
         });
     }
 
-    /** Moves the homeblock to another chunk the town owns. Requires {@link Permission#SET_HOMEBLOCK}. */
-    public CompletableFuture<ServiceResult<ChunkKey>> moveHomeblock(
+    /**
+     * Moves the homeblock to another chunk the town owns. Requires {@link Permission#SET_HOMEBLOCK}.
+     *
+     * <p>Returns both chunks rather than just the new one, because both changed and the caller — the
+     * command, the index, a map renderer — needs to know which chunk stopped being the homeblock.</p>
+     */
+    public CompletableFuture<ServiceResult<HomeblockMove>> moveHomeblock(
             final ResidentId actor, final TownId townId, final ChunkKey chunk) {
         Objects.requireNonNull(chunk, "chunk");
 
@@ -97,7 +139,7 @@ public final class TerritoryService {
             final TownClaims claims = load(transaction, townId);
             final Optional<Claim> previous = claims.homeblock();
             final Outcome<TownClaims> outcome = claims.moveHomeblock(chunk);
-            require(outcome);
+            final TownClaims updated = require(outcome);
 
             // Both kinds change together. A moment with two homeblocks, or none, would make the
             // next unclaim refuse or permit the wrong thing.
@@ -105,8 +147,36 @@ public final class TerritoryService {
                     transaction.claims().updateKind(old.chunk(), ClaimKind.ORDINARY));
             transaction.claims().updateKind(chunk, ClaimKind.HOMEBLOCK);
             transaction.publishAll(outcome.events(), correlation("homeblock", townId));
-            return chunk;
+
+            return new HomeblockMove(
+                    previous.map(Claim::chunk).orElse(null),
+                    chunk,
+                    previous.map(old -> updated.at(old.chunk()).orElseThrow()).orElse(null),
+                    updated.at(chunk).orElseThrow());
+        }).thenApply(result -> {
+            // Both entries refreshed. Ownership did not move, but a stale kind would make the old
+            // homeblock still read as one, and the rule that it is unclaimed last would then guard
+            // the wrong chunk.
+            result.value().ifPresent(move -> {
+                if (move.demoted() != null) {
+                    index.put(move.demoted());
+                }
+                index.put(move.promoted());
+            });
+            return result;
         });
+    }
+
+    /**
+     * The two chunks a homeblock move touched.
+     *
+     * @param previousChunk the chunk that stopped being the homeblock, or null if the town had none
+     * @param newChunk the chunk that became it
+     * @param demoted the previous claim in its new ordinary form, or null
+     * @param promoted the new homeblock claim
+     */
+    public record HomeblockMove(
+            ChunkKey previousChunk, ChunkKey newChunk, Claim demoted, Claim promoted) {
     }
 
     /**

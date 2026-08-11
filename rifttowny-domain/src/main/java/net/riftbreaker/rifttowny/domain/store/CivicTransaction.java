@@ -115,6 +115,14 @@ public interface CivicTransaction {
         List<net.riftbreaker.rifttowny.domain.territory.Claim> of(
                 net.riftbreaker.rifttowny.domain.org.TownId town);
 
+        /**
+         * Every claim on the server.
+         *
+         * <p>For loading the in-memory index at startup, and nothing else. It is a full table read,
+         * so anything calling it per command or per event is wrong.</p>
+         */
+        List<net.riftbreaker.rifttowny.domain.territory.Claim> all();
+
         void insert(net.riftbreaker.rifttowny.domain.territory.Claim claim);
 
         boolean delete(net.riftbreaker.rifttowny.api.ChunkKey chunk);

@@ -65,6 +65,16 @@ final class ConnectionClaimStore implements CivicTransaction.ClaimStore {
     }
 
     @Override
+    public List<Claim> all() {
+        return StorageFailure.wrapping(() -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT " + COLUMNS + " FROM rt_claim ORDER BY claimed_at, claim_id")) {
+                return readAll(statement);
+            }
+        });
+    }
+
+    @Override
     public void insert(final Claim claim) {
         Objects.requireNonNull(claim, "claim");
         StorageFailure.wrapping(() -> {
