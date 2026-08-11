@@ -139,9 +139,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 "VelocitySrv has no channel-provisioning API; see INTEGRATION_CONTRACTS.md 2.6");
         // Same shape: RiftLogger records events, not block changes, and has no rollback. Reported
         // blocked so an operator is told there is no rollback tool rather than assuming there is.
+        // RiftLogger gained block history in 4e91300, so the upstream gap is closed. Still
+        // reported blocked because RiftTowny has not written the adapter or the listeners yet -
+        // an operator should be told there is no history being recorded, not that there is.
         capabilities.markBlocked(Capability.AUDIT_BLOCK_HISTORY,
-                "RiftLogger has no block-change record or rollback; "
-                        + "see INTEGRATION_CONTRACTS.md 2.2.1");
+                "RiftLogger supports block history; RiftTowny's adapter is not written yet. "
+                        + "See INTEGRATION_CONTRACTS.md 2.2.1");
 
         RiftTownyProvider.register(new RiftTownyApiImpl(capabilities, scheduler));
 

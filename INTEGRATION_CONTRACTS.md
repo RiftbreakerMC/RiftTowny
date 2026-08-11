@@ -128,55 +128,59 @@ retried outbox delivery cannot duplicate an audit row.
 **RiftLogger is the only audit integration.** CoreProtect was dropped on 2026-08-10, and
 per-block history moves here.
 
-### 2.2.1 `BLOCKED` — per-block change history
+### 2.2.1 Per-block change history — **implemented upstream 2026-08-10**
 
-Verified by reading `mc.riftbreaker.riftlogger.service.AsyncRiftLoggerService` and
-`mc.riftbreaker.riftlogger.model`: RiftLogger records **events** — `LogEvent`,
-`ModerationRecord`, `EconomyRecord`, `TownyRecord`, `ReportRecord`, `PunishmentAuditRecord`.
-There is **no block record type and no rollback**, so it cannot replace CoreProtect today.
-
-RiftLogger needs the following before RiftTowny can log block changes. **None of this exists
-yet and nothing is written against it:**
+RiftLogger recorded events but not block changes, so it could not replace CoreProtect. That
+gap was closed in `Riftlogger@4e91300` — schema migration 3, 14 tests against real SQLite.
+**The API below is verified against that commit, not proposed.**
 
 ```java
-public record BlockChangeRecord(
-        BlockAction action,        // PLACE, BREAK, INTERACT, CONTAINER_ACCESS,
-                                   // EXPLODE, BURN, FLOW, PISTON, REGENERATE
-        UUID actorId,              // null for a non-player cause
-        String actorName,          // "creeper", "fire", "rifttowny-regen" when actorId is null
-        UUID worldId,
-        int x, int y, int z,
-        String previousBlock,      // namespaced material id
-        String newBlock,
-        String blockData,          // serialised state; null when uninteresting
-        String containerContents,  // serialised, only for CONTAINER_ACCESS; null otherwise
-        String source,             // "RiftTowny"
-        Map<String, String> metadata) { }
-
+// mc.riftbreaker.riftlogger.service.AsyncRiftLoggerService
 CompletableFuture<Void> logBlockChange(BlockChangeRecord record);
 CompletableFuture<Void> logBlockChanges(List<BlockChangeRecord> records);   // batched
-CompletableFuture<Void> logBlockChangeIdempotent(String sourceEventId, BlockChangeRecord record);
+CompletableFuture<List<StoredBlockChange>> queryBlocks(BlockQuery query);
+CompletableFuture<RollbackResult> rollbackBlocks(
+        BlockQuery query, UUID performedBy, String performedByName, boolean dryRun);
+CompletableFuture<Integer> pruneBlockChangesBefore(Instant cutoff);
+boolean supportsBlockHistory();
 
-CompletableFuture<List<StoredBlockChange>> queryBlocks(BlockQuery query);   // area + time + actor
-CompletableFuture<RollbackResult> rollback(BlockQuery query, UUID performedBy, boolean dryRun);
+// mc.riftbreaker.riftlogger.model
+record BlockChangeRecord(Instant occurredAt, BlockAction action, UUID actorId, String actorName,
+        UUID worldId, int x, int y, int z, String previousBlock, String newBlock,
+        String blockData, String containerContents, String source, Map<String, String> metadata)
+enum BlockAction { PLACE, BREAK, MODIFY, EXPLODE, BURN, FLOW, PISTON, REGENERATE,
+                   CONTAINER_ACCESS, INTERACT }   // isRollbackable() false for the last two
+
+// mc.riftbreaker.riftlogger.query
+record BlockQuery(UUID worldId, int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+        Instant since, Instant until, UUID actorId, BlockAction action, int limit)
+record RollbackResult(int matched, List<BlockRestoration> restorations, boolean dryRun,
+        UUID performedBy, Instant performedAt)
 ```
 
-Three requirements that are not obvious from the signatures, and that make the difference
-between a usable tool and a log nobody trusts:
+**One correction to what this section originally specified.** It implied RiftLogger would
+apply the rollback. It does not, and should not: placing blocks safely means region
+scheduling on Folia, rate limiting, and knowing which blocks belong to a shop or a spawner —
+all of which live in the plugin that owns the land. `rollbackBlocks` computes the plan, marks
+the rows it accounted for, and returns `List<BlockRestoration>` for **RiftTowny** to apply
+through its own scheduler.
 
-- **Batched writes.** A single creeper produces dozens of rows and a regeneration sweep
-  produces thousands. One future per block would swamp the executor; `logBlockChanges` must
-  take the whole batch.
-- **`dryRun` on rollback is not optional.** Rolling back is destructive and irreversible; an
-  operator has to be able to see what would change first. This mirrors the preview rule
-  RiftTowny applies to claims.
-- **Retention is separate from event retention.** Block rows are orders of magnitude more
-  numerous than civic events, so they need their own pruning policy or the audit log becomes
-  unqueryable within a week.
+Semantics RiftTowny's adapter must respect:
 
-Until this lands, `AUDIT_BLOCK_HISTORY` reports `BLOCKED` in `/rifttowny status`, land
-regeneration writes only its own `rt_regen_snapshot` rows, and **no rollback tool exists**.
-Nothing in RiftTowny pretends otherwise.
+- **Batch, never per block.** A creeper is dozens of rows and a regeneration sweep is
+  thousands.
+- **The plan restores the oldest state in the window**, so undoing one incident is one
+  rollback rather than three.
+- **Rows already rolled back are skipped**, so undoing twice cannot overwrite a legitimate
+  rebuild.
+- **`dryRun` first** for anything an operator triggers, mirroring the preview rule RiftTowny
+  applies to claims.
+- **Block writes have no JSONL fallback.** If the database is down, the write fails loudly
+  rather than spilling to a file that cannot be queried by area or rolled back.
+
+**Still to do in RiftTowny:** the adapter itself, the listeners that feed it, and wiring
+regeneration to record `REGENERATE` rows. Until that lands `AUDIT_BLOCK_HISTORY` stays
+`BLOCKED` at startup — the upstream API exists, RiftTowny does not yet call it.
 
 **Gap:** `TownyEntityType` and `TownyAction` are fixed enums upstream. RiftTowny adds
 concepts Towny never had (areas, elections, shields, occupation). Actions with no upstream
@@ -476,7 +480,7 @@ decision.
 | # | Missing | Effect | Needed to proceed |
 |---|---|---|---|
 | 1 | VelocitySrv Discord channel provisioning | `RT-MOD-DISCORD-CHAN` **BLOCKED**; RiftWars per-organisation feeds limited to the global channel | Implement §2.6's contract in VelocitySrv |
-| 1b | RiftLogger per-block history and rollback | `AUDIT_BLOCK_HISTORY` **BLOCKED**; no rollback tool, no forensic trail behind regeneration | Implement §2.2.1's contract in RiftLogger |
+| ~~1b~~ | ~~RiftLogger per-block history~~ | **Resolved 2026-08-10** — implemented in `Riftlogger@4e91300`. `AUDIT_BLOCK_HISTORY` stays `BLOCKED` only until RiftTowny writes the adapter | Write the RiftTowny adapter and listeners |
 | 2 | RiftSeasons / RiftWars / RiftInfrastructure / RiftCivics repos | Those releases cannot start | Create the repositories |
 | 3 | ExperienceManager identity | No progression adapter planned | Confirm which of three repos is current |
 | 4 | RiftPlots ownership | `RT-CORE-AREA` scope ambiguous | Decide: absorb, integrate, or retire |

@@ -253,12 +253,14 @@ War shields are specified alongside it in the same document.
 > **CoreProtect is not used; RiftLogger carries block history instead.** One audit system
 > means one place to look and one retention policy.
 >
-> **This is `BLOCKED` today.** RiftLogger records *events*, not per-block changes, and has no
-> rollback — verified against its source. The contract it needs is specified in
-> [INTEGRATION_CONTRACTS.md](INTEGRATION_CONTRACTS.md) §2.2.1, and until it ships there is no
-> rollback tool. Regeneration still works, because the restore data comes from RiftTowny's own
-> `rt_regen_snapshot` and never depended on an audit plugin; what is missing is the forensic
-> trail and the ability to undo.
+> **Upstream support landed 2026-08-10** (`Riftlogger@4e91300`): block records, area queries,
+> retention, and rollback *planning*. RiftLogger computes what to restore and RiftTowny
+> applies it, because placing blocks safely needs region scheduling, rate limiting and
+> knowledge of which blocks belong to a shop or a spawner.
+>
+> **RiftTowny's own adapter and listeners are still to be written**, so nothing is being
+> recorded yet and `AUDIT_BLOCK_HISTORY` reports `BLOCKED` at startup. See
+> [INTEGRATION_CONTRACTS.md](INTEGRATION_CONTRACTS.md) §2.2.1.
 - Operators get preview, pause, resume, status and repair tools.
 
 ---

@@ -139,7 +139,7 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 - [x] **Nine review defects fixed**, two of them authority escalations: a departed resident kept their roles, and `assign` was the one permission path not bounded by what the actor holds
 - [x] **CoreProtect dropped** (2026-08-10) — RiftLogger is the only audit integration
 - [x] **`RT-CORE-FLAGS` resolver** — flag catalogue, relationship ladder, seven-layer ordered resolution, world flags collapsing to wilderness, decisions that explain which layer decided; pure and exhaustively tested
-- [!] **Per-block history and rollback** — **blocked on RiftLogger**, which records events and has no block record type or rollback. Contract specified in [INTEGRATION_CONTRACTS.md](INTEGRATION_CONTRACTS.md) §2.2.1; `AUDIT_BLOCK_HISTORY` reports `BLOCKED` at startup
+- [~] **Per-block history and rollback** — **upstream done**: implemented in `Riftlogger@4e91300` (schema 3, batched writes, area queries, retention, rollback planning, 14 tests). RiftTowny's adapter and listeners are **not** written, so `AUDIT_BLOCK_HISTORY` still reports `BLOCKED` and nothing is being recorded
 
 ### Next
 - [ ] `RT-CORE-FLAGS` — the flag resolver and its listeners, plus the chunk→town cache a per-block lookup needs. **Renamed from `RT-CORE-PROTECT`**, which read as the CoreProtect plugin
