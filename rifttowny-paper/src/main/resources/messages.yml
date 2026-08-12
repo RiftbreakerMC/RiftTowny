@@ -140,6 +140,7 @@ denial:
   flag-not-set: 'That flag was not set here, so there was nothing to clear.'
   flag-target-not-yours: 'That land is not yours to configure.'
   town-not-in-a-nation: 'Your town does not belong to a nation.'
+  not-a-citizen-of-this-nation: 'That player does not live in one of this nation''s towns.'
   no-invitation: 'That nation has not invited your town.'
   invitation-expired: 'That invitation has expired. Ask the nation to send another.'
   claim-must-touch-town: 'A claim must border your town. Claim it as an outpost if you meant to settle away from home.'

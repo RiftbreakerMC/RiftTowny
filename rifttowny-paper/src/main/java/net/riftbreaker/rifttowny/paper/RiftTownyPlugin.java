@@ -55,6 +55,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.storage.JdbcNationRepository nationRepository;
     private net.riftbreaker.rifttowny.domain.service.TownService townService;
     private net.riftbreaker.rifttowny.domain.service.NationService nationService;
+    private net.riftbreaker.rifttowny.domain.service.NationRoleService nationRoleService;
     private net.riftbreaker.rifttowny.domain.service.TownRoleService townRoleService;
     private net.riftbreaker.rifttowny.domain.service.TerritoryService territoryService;
     private net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex;
@@ -171,8 +172,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 townRepository, messages, denialText).tree());
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
-                nationService, residentRepository, townRepository, nationRepository, messages,
-                denialText).tree());
+                nationService, nationRoleService, residentRepository, townRepository,
+                nationRepository, messages, denialText).tree());
 
         registerProtection();
         scheduleHousekeeping();
@@ -242,6 +243,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
                     civicStore, clock, territoryIndex);
+            this.nationRoleService =
+                    new net.riftbreaker.rifttowny.domain.service.NationRoleService(
+                            civicStore, clock, lockedPermissions());
             this.nationService = new net.riftbreaker.rifttowny.domain.service.NationService(
                     civicStore,
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),

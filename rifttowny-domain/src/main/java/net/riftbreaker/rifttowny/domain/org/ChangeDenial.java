@@ -58,6 +58,14 @@ public enum ChangeDenial {
     TOWN_NOT_IN_A_NATION,
 
     /**
+     * That person is not a resident of any of this nation's towns.
+     *
+     * <p>Handing a nation role to somebody outside it would give a stranger authority over towns
+     * they do not belong to.</p>
+     */
+    NOT_A_CITIZEN_OF_THIS_NATION,
+
+    /**
      * No outstanding invitation.
      *
      * <p>Joining takes two consents. A nation that could admit a town unilaterally would move that

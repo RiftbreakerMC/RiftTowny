@@ -11,6 +11,7 @@ import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.org.TownRepository;
+import net.riftbreaker.rifttowny.domain.role.Role;
 import net.riftbreaker.rifttowny.domain.service.NationService;
 import net.riftbreaker.rifttowny.domain.service.ServiceResult;
 import net.riftbreaker.rifttowny.paper.command.tree.CommandActor;
@@ -42,6 +43,7 @@ import java.util.function.Consumer;
 public final class NationCommands {
 
     private final NationService nations;
+    private final net.riftbreaker.rifttowny.domain.service.NationRoleService roles;
     private final ResidentRepository residents;
     private final TownRepository towns;
     private final NationRepository nationRepository;
@@ -50,6 +52,7 @@ public final class NationCommands {
 
     public NationCommands(
             final NationService nations,
+            final net.riftbreaker.rifttowny.domain.service.NationRoleService roles,
             final ResidentRepository residents,
             final TownRepository towns,
             final NationRepository nationRepository,
@@ -57,6 +60,7 @@ public final class NationCommands {
             final DenialText denials
     ) {
         this.nations = Objects.requireNonNull(nations, "nations");
+        this.roles = Objects.requireNonNull(roles, "roles");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.towns = Objects.requireNonNull(towns, "towns");
         this.nationRepository = Objects.requireNonNull(nationRepository, "nationRepository");
@@ -134,6 +138,53 @@ public final class NationCommands {
                         .usage("nation delete")
                         .describedAs("Disband your nation")
                         .runs(this::disband, Surface.CHAT))
+                .child(roleTree())
+                .build();
+    }
+
+    /**
+     * The {@code /nation role} tree.
+     *
+     * <p>The same shape as {@code /town role}, because the rules behind it are the same ones. The
+     * one difference a player can see is who a role may be given to: a nation's roles go to citizens
+     * of its member towns, not to its own residents, because it has none.</p>
+     */
+    private CommandNode roleTree() {
+        return CommandNode.group("role")
+                .permission("rifttowny.nation.role.view")
+                .describedAs("Manage nation roles")
+                .usage("nation role")
+                .child(CommandNode.action("list")
+                        // Repeated from the parent deliberately; see TownCommands.roleTree.
+                        .permission("rifttowny.nation.role.view")
+                        .usage("nation role list")
+                        .describedAs("List the nation's roles")
+                        .runs(this::roleList, Surface.CHAT))
+                .child(CommandNode.action("new")
+                        .aliases("create")
+                        .permission("rifttowny.nation.role.manage")
+                        .usage("nation role new <name> <priority>")
+                        .describedAs("Create a role")
+                        .runs(this::roleCreate, Surface.CHAT))
+                .child(CommandNode.action("delete")
+                        .permission("rifttowny.nation.role.manage")
+                        .usage("nation role delete <name>")
+                        .describedAs("Delete a role")
+                        .runs(this::roleDelete, Surface.CHAT))
+                .child(CommandNode.action("assign")
+                        .aliases("give")
+                        .permission("rifttowny.nation.role.assign")
+                        .usage("nation role assign <player> <role>")
+                        .describedAs("Give a citizen a role")
+                        .completer((actor, args) -> args.size() <= 1 ? onlinePlayerNames() : List.of())
+                        .runs(this::roleAssign, Surface.CHAT))
+                .child(CommandNode.action("unassign")
+                        .aliases("take")
+                        .permission("rifttowny.nation.role.assign")
+                        .usage("nation role unassign <player> <role>")
+                        .describedAs("Take a role away")
+                        .completer((actor, args) -> args.size() <= 1 ? onlinePlayerNames() : List.of())
+                        .runs(this::roleUnassign, Surface.CHAT))
                 .build();
     }
 
@@ -265,6 +316,104 @@ public final class NationCommands {
                                 MessageService.value("nation", nation.name().display()))));
     }
 
+    // --- role actions --------------------------------------------------------------------------
+
+    private void roleList(final CommandActor actor, final List<String> args) {
+        withNation(actor, (who, nation) -> then(actor, roles.list(nation.id()), found -> {
+            messages.send(actor::send, MessageKey.ROLE_LIST_HEADER,
+                    MessageService.value("town", nation.name().display()));
+            for (final Role role : found) {
+                messages.sendRaw(actor::send, MessageKey.ROLE_LIST_LINE,
+                        MessageService.value("role", role.name()),
+                        MessageService.value("priority", role.priority()),
+                        MessageService.value("permissions", role.permissions().size()));
+            }
+        }));
+    }
+
+    private void roleCreate(final CommandActor actor, final List<String> args) {
+        if (args.size() < 2) {
+            usage(actor, "nation role new <name> <priority>");
+            return;
+        }
+        final Optional<Integer> priority = parsePriority(args.get(1));
+        if (priority.isEmpty()) {
+            usage(actor, "nation role new <name> <priority>");
+            return;
+        }
+        withNation(actor, (who, nation) -> reply(actor,
+                roles.create(who, nation.id(), args.getFirst(), priority.get(), java.util.Set.of()),
+                role -> messages.send(actor::send, MessageKey.ROLE_CREATED,
+                        MessageService.value("role", role.name()))));
+    }
+
+    private void roleDelete(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "nation role delete <name>");
+            return;
+        }
+        withNation(actor, (who, nation) -> then(actor, roles.list(nation.id()), found -> {
+            final Optional<Role> role = byName(found, args.getFirst());
+            if (role.isEmpty()) {
+                denied(actor, ChangeDenial.ROLE_NOT_FOUND);
+                return;
+            }
+            reply(actor, roles.delete(who, nation.id(), role.get().id()), ignored ->
+                    messages.send(actor::send, MessageKey.ROLE_DELETED,
+                            MessageService.value("role", role.get().name())));
+        }));
+    }
+
+    private void roleAssign(final CommandActor actor, final List<String> args) {
+        withRoleAndTarget(actor, args, "nation role assign <player> <role>",
+                (who, nation, target, role) -> reply(actor,
+                        roles.assign(who, nation.id(), target, role.id()), ignored ->
+                                messages.send(actor::send, MessageKey.ROLE_ASSIGNED,
+                                        MessageService.value("resident", args.getFirst()),
+                                        MessageService.value("role", role.name()))));
+    }
+
+    private void roleUnassign(final CommandActor actor, final List<String> args) {
+        withRoleAndTarget(actor, args, "nation role unassign <player> <role>",
+                (who, nation, target, role) -> reply(actor,
+                        roles.unassign(who, nation.id(), target, role.id()), ignored ->
+                                messages.send(actor::send, MessageKey.ROLE_UNASSIGNED,
+                                        MessageService.value("resident", args.getFirst()),
+                                        MessageService.value("role", role.name()))));
+    }
+
+    private void withRoleAndTarget(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final RoleWork work
+    ) {
+        if (args.size() < 2) {
+            usage(actor, usage);
+            return;
+        }
+        withNation(actor, (who, nation) -> then(actor, residents.findByName(args.getFirst()),
+                target -> target.ifPresentOrElse(
+                        found -> then(actor, roles.list(nation.id()), all -> byName(all, args.get(1))
+                                .ifPresentOrElse(
+                                        role -> work.accept(who, nation, found.id(), role),
+                                        () -> denied(actor, ChangeDenial.ROLE_NOT_FOUND))),
+                        () -> denied(actor, ChangeDenial.RESIDENT_NOT_FOUND))));
+    }
+
+    private static Optional<Role> byName(final List<Role> roles, final String name) {
+        final String normalised = name.toLowerCase(java.util.Locale.ROOT);
+        return roles.stream().filter(role -> role.nameNormalised().equals(normalised)).findFirst();
+    }
+
+    private static Optional<Integer> parsePriority(final String raw) {
+        try {
+            return Optional.of(Integer.parseInt(raw));
+        } catch (final NumberFormatException notANumber) {
+            return Optional.empty();
+        }
+    }
+
     // --- plumbing ------------------------------------------------------------------------------
 
     private Optional<ResidentId> player(final CommandActor actor) {
@@ -388,5 +537,10 @@ public final class NationCommands {
     @FunctionalInterface
     private interface TownWork {
         void accept(ResidentId actor, Nation nation, Town target);
+    }
+
+    @FunctionalInterface
+    private interface RoleWork {
+        void accept(ResidentId actor, Nation nation, ResidentId target, Role role);
     }
 }

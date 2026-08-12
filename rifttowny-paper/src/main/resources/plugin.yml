@@ -147,6 +147,9 @@ permissions:
       rifttowny.nation.king: true
       rifttowny.nation.rename: true
       rifttowny.nation.delete: true
+      rifttowny.nation.role.view: true
+      rifttowny.nation.role.manage: true
+      rifttowny.nation.role.assign: true
   rifttowny.nation.new:
     description: Found a nation.
     default: true
@@ -176,4 +179,13 @@ permissions:
     default: true
   rifttowny.nation.delete:
     description: Disband your nation.
+    default: true
+  rifttowny.nation.role.view:
+    description: View your nation's roles.
+    default: true
+  rifttowny.nation.role.manage:
+    description: Create, edit and delete your nation's roles.
+    default: true
+  rifttowny.nation.role.assign:
+    description: Give and take your nation's roles.
     default: true
