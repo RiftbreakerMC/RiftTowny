@@ -49,6 +49,7 @@ public final class TownService {
     private final NamePolicy namePolicy;
     private final Clock clock;
     private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index;
+    private final CivicCacheRefresher civic;
 
     /**
      * @param index needed only so disbanding can drop the town's chunks from the in-memory cache.
@@ -61,10 +62,26 @@ public final class TownService {
             final Clock clock,
             final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index
     ) {
+        this(store, namePolicy, clock, index, CivicCacheRefresher.none());
+    }
+
+    /**
+     * @param civic told after every successful change. Membership, trust and leadership all decide
+     *        protection, and a change that did not reach the cache would leave a kicked player still
+     *        building and a new resident still locked out
+     */
+    public TownService(
+            final CivicStore store,
+            final NamePolicy namePolicy,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
+            final CivicCacheRefresher civic
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.namePolicy = Objects.requireNonNull(namePolicy, "namePolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.index = Objects.requireNonNull(index, "index");
+        this.civic = Objects.requireNonNull(civic, "civic");
     }
 
     /**
@@ -87,7 +104,7 @@ public final class TownService {
         }
         final OrganisationName name = accepted.name();
 
-        return transaction(transaction -> {
+        return refreshing(transaction(transaction -> {
             if (transaction.towns().findByName(name.normalised()).isPresent()) {
                 throw new ChangeRefusedException(ChangeDenial.NAME_TAKEN);
             }
@@ -109,7 +126,7 @@ public final class TownService {
                     RoleBook.defaultsFor(OrganisationScope.TOWN, id.value(), clock.instant()));
             transaction.publish(new DomainEvent.TownFounded(id, name, founder), correlation("found", id));
             return town;
-        });
+        }), Town::id);
     }
 
     /**
@@ -125,7 +142,7 @@ public final class TownService {
         Objects.requireNonNull(who, "who");
         Objects.requireNonNull(townId, "townId");
 
-        return transaction(transaction -> {
+        return refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
             requirePermission(transaction, town, actor, Permission.INVITE_RESIDENT);
 
@@ -138,7 +155,7 @@ public final class TownService {
             transaction.towns().save(updated);
             transaction.publishAll(admitted.events(), correlation("join", townId));
             return updated;
-        });
+        }), Town::id);
     }
 
     /**
@@ -182,7 +199,7 @@ public final class TownService {
         Objects.requireNonNull(townId, "townId");
         Objects.requireNonNull(candidate, "candidate");
 
-        return transaction(transaction -> {
+        return refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
             if (town.standingOf(actor) != SystemRole.LEADER) {
                 throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
@@ -192,7 +209,7 @@ public final class TownService {
             transaction.towns().save(updated);
             transaction.publishAll(transferred.events(), correlation("leadership", townId));
             return updated;
-        });
+        }), Town::id);
     }
 
     /** Renames a town, keeping its id and civic account. Requires {@link Permission#RENAME_ORGANISATION}. */
@@ -207,7 +224,7 @@ public final class TownService {
         }
         final OrganisationName name = accepted.name();
 
-        return transaction(transaction -> {
+        return refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
             requirePermission(transaction, town, actor, Permission.RENAME_ORGANISATION);
 
@@ -223,7 +240,7 @@ public final class TownService {
             transaction.towns().save(updated);
             transaction.publishAll(renamed.events(), correlation("rename", townId));
             return updated;
-        });
+        }), Town::id);
     }
 
     /**
@@ -270,6 +287,14 @@ public final class TownService {
             // left the cache would leave the town's land unprotected until the next restart.
             result.value().ifPresent(index::removeAllOf);
             return result;
+        }).thenCompose(result -> {
+            // The civic cache is told the same way every other change tells it: by re-reading. The
+            // town is gone, so the read finds nothing and the refresh drops it - one path for
+            // "changed" and "vanished" rather than two that could disagree.
+            if (result.value().isEmpty()) {
+                return CompletableFuture.completedFuture(result);
+            }
+            return civic.refresh(result.value().orElseThrow()).thenApply(ignored -> result);
         });
     }
 
@@ -290,7 +315,7 @@ public final class TownService {
             final boolean voluntary,
             final ResidentId actor
     ) {
-        return transaction(transaction -> {
+        return refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
             if (actor != null) {
                 requirePermission(transaction, town, actor, Permission.KICK_RESIDENT);
@@ -319,7 +344,7 @@ public final class TownService {
                 transaction.publishAll(stripped.events(), correlation("leave", townId));
             });
             return updated;
-        });
+        }), Town::id);
     }
 
     private static void requirePermission(
@@ -387,6 +412,28 @@ public final class TownService {
 
     private static <T> CompletableFuture<ServiceResult<T>> completed(final ServiceResult<T> result) {
         return CompletableFuture.completedFuture(result);
+    }
+
+    /**
+     * Tells the civic cache which town a successful change touched.
+     *
+     * <p>Applied per method rather than inside {@link #transaction}, because unlike the role service
+     * the town this call changed is not always the one it was given — founding mints its id inside
+     * the transaction, and disbanding returns nothing else.</p>
+     *
+     * @param which where to find the town id in a successful result
+     */
+    private <T> CompletableFuture<ServiceResult<T>> refreshing(
+            final CompletableFuture<ServiceResult<T>> pending,
+            final java.util.function.Function<T, TownId> which
+    ) {
+        return pending.thenCompose(result -> {
+            final Optional<TownId> town = result.value().map(which);
+            if (town.isEmpty()) {
+                return CompletableFuture.completedFuture(result);
+            }
+            return civic.refresh(town.get()).thenApply(ignored -> result);
+        });
     }
 
     /**

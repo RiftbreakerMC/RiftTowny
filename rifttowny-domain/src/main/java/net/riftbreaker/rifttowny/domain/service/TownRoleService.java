@@ -48,6 +48,7 @@ public final class TownRoleService {
     private final CivicStore store;
     private final Clock clock;
     private final Set<Permission> lockedByAdmin;
+    private final CivicCacheRefresher civic;
 
     /**
      * @param lockedByAdmin permissions the server administrator has forbidden to configurable roles,
@@ -55,11 +56,25 @@ public final class TownRoleService {
      */
     public TownRoleService(
             final CivicStore store, final Clock clock, final Set<Permission> lockedByAdmin) {
+        this(store, clock, lockedByAdmin, CivicCacheRefresher.none());
+    }
+
+    /**
+     * @param civic told after every successful change. A role edit that did not reach the cache
+     *        would leave protection answering from the permissions the role used to have
+     */
+    public TownRoleService(
+            final CivicStore store,
+            final Clock clock,
+            final Set<Permission> lockedByAdmin,
+            final CivicCacheRefresher civic
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.lockedByAdmin = lockedByAdmin == null || lockedByAdmin.isEmpty()
                 ? Set.of()
                 : Set.copyOf(lockedByAdmin);
+        this.civic = Objects.requireNonNull(civic, "civic");
     }
 
     /** Creates a configurable role. Requires {@link Permission#MANAGE_ROLES}. */
@@ -314,6 +329,14 @@ public final class TownRoleService {
             throw failure instanceof CompletionException completion
                     ? completion
                     : new CompletionException(failure);
+        }).thenCompose(result -> {
+            // Every mutating method funnels through here, so the cache refresh does too. Putting it
+            // on each method instead would leave the next one added to be the one that forgets, and
+            // a forgotten refresh is a permission check answering from a role that no longer exists.
+            if (!result.succeeded()) {
+                return CompletableFuture.completedFuture(result);
+            }
+            return civic.refresh(townId).thenApply(ignored -> result);
         });
     }
 

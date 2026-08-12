@@ -60,6 +60,15 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
                 first(load("WHERE name_normalised = ?", name.toLowerCase(Locale.ROOT))));
     }
 
+    @Override
+    public List<Town> all() {
+        // One query for the town rows and two more per town for its residents and trust. That is an
+        // N+1, and deliberate: it runs once at startup, it reuses the same row-to-aggregate path as
+        // every other lookup, and a hand-rolled three-way join here would be a second place for the
+        // restore rules to drift from find().
+        return StorageFailure.wrapping(() -> load("ORDER BY created_at, town_id"));
+    }
+
     List<Town> findByNation(final NationId nation) {
         Objects.requireNonNull(nation, "nation");
         return StorageFailure.wrapping(() ->

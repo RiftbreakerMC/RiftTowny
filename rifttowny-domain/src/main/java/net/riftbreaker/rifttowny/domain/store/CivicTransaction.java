@@ -73,6 +73,15 @@ public interface CivicTransaction {
 
         Optional<Town> findByName(String name);
 
+        /**
+         * Every town on the server, oldest first.
+         *
+         * <p>For filling the in-memory civic cache at startup, and nothing else. It reads every town
+         * row and each town's residents and trust list, so anything calling it per command or per
+         * event is wrong.</p>
+         */
+        List<Town> all();
+
         void save(Town town);
 
         /** Deletes the town and releases its residents. Claims, areas and trust cascade. */
