@@ -56,6 +56,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.TownRoleService townRoleService;
     private net.riftbreaker.rifttowny.domain.service.TerritoryService territoryService;
     private net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex;
+    private net.riftbreaker.rifttowny.domain.civic.CivicCache civicCache;
+    private net.riftbreaker.rifttowny.domain.service.CivicCacheService civicCacheService;
+    private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
     /**
@@ -163,6 +166,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 townService, townRoleService, territoryService, residentRepository, townRepository,
                 messages, denialText).tree());
 
+        registerProtection();
+
         getLogger().info("RiftTowny enabled on " + platformName() + ". " + schema.describe() + '.');
         getLogger().info("Storage: " + settings.storage().describeForLog()
                 + ", topology: " + settings.describeTopology() + '.');
@@ -209,22 +214,30 @@ public final class RiftTownyPlugin extends JavaPlugin {
             final java.time.Clock clock = java.time.Clock.systemUTC();
             this.territoryIndex =
                     net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
+            this.civicCache = net.riftbreaker.rifttowny.domain.civic.CivicCache.empty();
+            this.civicCacheService = new net.riftbreaker.rifttowny.domain.service.CivicCacheService(
+                    civicStore, civicCache, getLogger()::warning);
             this.townService = new net.riftbreaker.rifttowny.domain.service.TownService(
                     civicStore,
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
                     clock,
-                    territoryIndex);
+                    territoryIndex,
+                    civicCacheService);
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
-                    civicStore, clock, lockedPermissions());
+                    civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
                     civicStore, clock, territoryIndex);
 
-            // Loaded before enable returns, and waited on. A protection listener answers from this
-            // index and cannot wait for a database, so a partially loaded index would read as
+            // Both loaded before enable returns, and waited on. A protection listener answers from
+            // these and cannot wait for a database, so a partially loaded index would read as
             // wilderness and let the first player through the door break anything they liked.
             final int loaded = territoryService.loadIndex()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + loaded + " claimed chunk(s) into memory.");
+
+            final var civicLoad = civicCacheService.loadAll()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info(civicLoad.describe());
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "
@@ -235,6 +248,39 @@ public final class RiftTownyPlugin extends JavaPlugin {
             }
             return false;
         }
+    }
+
+    /**
+     * Registers the listeners that make a claim mean something in-world.
+     *
+     * <p>Registered last, after the caches are loaded and waited on. A listener that started
+     * answering from an empty index would report every chunk as wilderness, which is the one wrong
+     * answer that cannot be taken back — the blocks are already gone.</p>
+     */
+    private void registerProtection() {
+        final var messenger =
+                new net.riftbreaker.rifttowny.paper.protection.ProtectionMessenger(messages);
+        // Built-in flag defaults only: nothing persists flag overrides yet, so every resolution
+        // reaches ProtectionFlag.allowedByDefault. See FlagSettingsSource.
+        final var query = new net.riftbreaker.rifttowny.domain.flag.ProtectionQuery(
+                territoryIndex, civicCache);
+        this.protection = new net.riftbreaker.rifttowny.paper.protection.ProtectionService(
+                query, messenger);
+
+        final var manager = getServer().getPluginManager();
+        manager.registerEvents(messenger, this);
+        manager.registerEvents(
+                new net.riftbreaker.rifttowny.paper.protection.BlockProtectionListener(protection),
+                this);
+        manager.registerEvents(
+                new net.riftbreaker.rifttowny.paper.protection.InteractionListener(protection),
+                this);
+        manager.registerEvents(
+                new net.riftbreaker.rifttowny.paper.protection.EntityProtectionListener(protection),
+                this);
+        manager.registerEvents(
+                new net.riftbreaker.rifttowny.paper.protection.WorldProtectionListener(protection),
+                this);
     }
 
     /**
@@ -308,5 +354,18 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
     public SchemaMigrator.MigrationSummary schema() {
         return schema;
+    }
+
+    /** The protection checks, for diagnostics and for anything that needs to ask before acting. */
+    public net.riftbreaker.rifttowny.paper.protection.ProtectionService protection() {
+        return protection;
+    }
+
+    public net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex() {
+        return territoryIndex;
+    }
+
+    public net.riftbreaker.rifttowny.domain.civic.CivicCache civicCache() {
+        return civicCache;
     }
 }

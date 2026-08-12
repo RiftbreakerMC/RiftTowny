@@ -52,6 +52,13 @@ permissions:
     description: View platform, storage, outbox and integration state.
     default: op
 
+  # Deliberately not a child of rifttowny.admin. Ignoring every claim on the server is a distinct
+  # decision from being able to read diagnostics, and bundling the two would hand it out by
+  # accident to every role a server gives its moderators.
+  rifttowny.bypass:
+    description: Ignore town protection entirely.
+    default: op
+
   # Granted to everyone: these are the commands a town is played through, and the services
   # themselves check who may actually do what. A permission node here only decides whether the
   # subcommand is offered at all.

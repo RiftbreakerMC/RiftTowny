@@ -56,6 +56,11 @@ role:
   list-header: '<gray>Roles in <white><town></white>, highest first:</gray>'
   list-line: '  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> <dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>'
 
+protection:
+  denied: '<red>You cannot do that in <white><town></white>.</red>'
+  denied-by-role: '<red>Your role in <white><town></white> does not allow that <gray>(<permission>)</gray>.</red>'
+  town-not-loaded: '<red>This land is protected, but its town could not be loaded. Please tell an administrator.</red>'
+
 status:
   header: '<gray>RiftTowny <white><version></white></gray>'
   platform: '  <gray>Platform</gray> <white><platform></white> <dark_gray>|</dark_gray> <gray>API</gray> <white><api></white>'

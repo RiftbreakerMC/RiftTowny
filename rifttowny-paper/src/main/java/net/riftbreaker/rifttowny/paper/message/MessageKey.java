@@ -123,6 +123,20 @@ public enum MessageKey {
             "  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> "
                     + "<dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>"),
 
+    /** The land refused it. {@code <town>} is empty in wilderness, which no default message uses. */
+    PROTECTION_DENIED("protection.denied",
+            "<red>You cannot do that in <white><town></white>.</red>"),
+
+    /** The land allowed it and the player's own role did not. A different sentence on purpose. */
+    PROTECTION_DENIED_BY_ROLE("protection.denied-by-role",
+            "<red>Your role in <white><town></white> does not allow that "
+                    + "<gray>(<permission>)</gray>.</red>"),
+
+    /** A cache fault, not a rule. The player is told it is a fault so they report it. */
+    PROTECTION_TOWN_NOT_LOADED("protection.town-not-loaded",
+            "<red>This land is protected, but its town could not be loaded. "
+                    + "Please tell an administrator.</red>"),
+
     STATUS_HEADER("status.header",
             "<gray>RiftTowny <white><version></white></gray>"),
 

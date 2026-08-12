@@ -139,14 +139,16 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 - [x] **Nine review defects fixed**, two of them authority escalations: a departed resident kept their roles, and `assign` was the one permission path not bounded by what the actor holds
 - [x] **CoreProtect dropped** (2026-08-10) — RiftLogger is the only audit integration
 - [x] **`RT-CORE-FLAGS` resolver** — flag catalogue, relationship ladder, seven-layer ordered resolution, world flags collapsing to wilderness, decisions that explain which layer decided; pure and exhaustively tested
+- [x] **In-memory answering** — `TerritoryIndex` holds every claim, `CivicCache` holds every town's residents, trust and role book. `CivicCacheService` fills both at enable and re-reads a town after every committed change, so protection never touches storage and never answers from stale membership
+- [x] **`ProtectionQuery`** — one synchronous call composing territory, relationship, flags and the member's role permission. Two gates: the territory decides what a relationship may do, the role decides what a person may do, both must pass. An unknown town denies rather than falling through to allowed
+- [~] **`RT-CORE-FLAGS` listeners** — break, place, multi-block place, buckets, interact, entity interact, armour stands, entity and vehicle damage, hangings, explosions, fire, ignition, fluid flow across a border, pistons reaching into foreign land. `rifttowny.bypass` skips all of it. **Not runtime-verified: no Paper server here**, and the pieces that need the Bukkit registry (`BlockActions`, `Chunks.of`) are covered by compilation and review rather than by tests
 - [~] **Per-block history and rollback** — **upstream done**: implemented in `Riftlogger@4e91300` (schema 3, batched writes, area queries, retention, rollback planning, 14 tests). RiftTowny's adapter and listeners are **not** written, so `AUDIT_BLOCK_HISTORY` still reports `BLOCKED` and nothing is being recorded
 
 ### Next
-- [ ] `RT-CORE-FLAGS` — the flag resolver and its listeners, plus the chunk→town cache a per-block lookup needs. **Renamed from `RT-CORE-PROTECT`**, which read as the CoreProtect plugin
+- [ ] **Flag persistence** — `rt_flag_override` does not exist, so `FlagSettingsSource.builtInOnly()` is the only implementation and every resolution reaches the built-in default. Claims, organisations, worlds and areas cannot yet change a flag; `/town set flag` is unwritten
+- [ ] **Protection gaps to close** — no border-crossing message, no `/town toggle` per-town flags, no plot-level overrides, and `BlockActions` covers interactive blocks by name so an unlisted one is treated as scenery
 - [ ] `RT-CORE-UI` — Java GUI framework and Floodgate Bedrock forms. **Nothing declares `Surface.GUI` yet**, which is why the parity test passes; it becomes a real constraint with the first menu
 - [ ] `NationService` and nation roles — a nation's standing depends on residency in a member town, which is a different lookup than a town's
-- [ ] Chunk claim model, claim/unclaim, outposts, homeblock rules
-- [ ] Central flag resolver and the protection listeners that consult it
 - [ ] 3D areas with non-overlap enforcement, plots, districts
 - [ ] Claim and area preview / dry-run
 - [ ] Command trees with complete tab completion
