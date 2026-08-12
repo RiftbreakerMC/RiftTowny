@@ -54,4 +54,24 @@ public enum Relationship {
     public boolean isMember() {
         return this == TOWN || this == RESIDENT;
     }
+
+    /**
+     * Parses a stored or player-supplied value.
+     *
+     * <p>Empty rather than throwing: a typo in a command is a message, not a crash, and a value
+     * removed in a later version must not stop a stored override loading.</p>
+     */
+    public static java.util.Optional<Relationship> parse(final String raw) {
+        if (raw == null || raw.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        final String normalised =
+                raw.trim().toUpperCase(java.util.Locale.ROOT).replace('-', '_');
+        for (final Relationship relationship : values()) {
+            if (relationship.name().equals(normalised)) {
+                return java.util.Optional.of(relationship);
+            }
+        }
+        return java.util.Optional.empty();
+    }
 }

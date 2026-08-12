@@ -33,5 +33,35 @@ public enum FlagSource {
     WORLD,
 
     /** The shipped default, when nothing above had an opinion. */
-    BUILT_IN
+    BUILT_IN;
+
+    /**
+     * Whether an override at this layer can be stored.
+     *
+     * <p>{@link #WAR_OR_EVENT} and {@link #BUILT_IN} cannot: a war supplies its own layer for as
+     * long as it lasts, and the built-in default is code. Storing either would give two places to
+     * change one answer.</p>
+     */
+    public boolean isConfigurable() {
+        return this != WAR_OR_EVENT && this != BUILT_IN;
+    }
+
+    /**
+     * Parses a stored value.
+     *
+     * <p>Empty rather than throwing for an unknown name: a layer removed in a later version must not
+     * stop the override set loading.</p>
+     */
+    public static java.util.Optional<FlagSource> parse(final String raw) {
+        if (raw == null || raw.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        final String normalised = raw.trim().toUpperCase(java.util.Locale.ROOT).replace('-', '_');
+        for (final FlagSource source : values()) {
+            if (source.name().equals(normalised)) {
+                return java.util.Optional.of(source);
+            }
+        }
+        return java.util.Optional.empty();
+    }
 }

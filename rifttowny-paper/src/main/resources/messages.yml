@@ -56,6 +56,15 @@ role:
   list-header: '<gray>Roles in <white><town></white>, highest first:</gray>'
   list-line: '  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> <dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>'
 
+flag:
+  set: '<green><white><flag></white> for <white><relationship></white> is now <white><state></white> <gray>(<scope>)</gray>.</green>'
+  cleared: '<yellow><white><flag></white> for <white><relationship></white> is no longer set <gray>(<scope>)</gray>; the layer below decides again.</yellow>'
+  list-header: '<gray>Overrides for <white><target></white>:</gray>'
+  list-line: '  <aqua><flag></aqua> <gray>for</gray> <white><relationship></white> <dark_gray>-</dark_gray> <white><state></white>'
+  list-empty: '<gray>Nothing is overridden for <white><target></white>, so the built-in defaults apply.</gray>'
+  unknown: '<red>Unknown flag <white><input></white>. One of: <white><options></white></red>'
+  unknown-relationship: '<red>Unknown relationship <white><input></white>. One of: <white><options></white></red>'
+
 protection:
   denied: '<red>You cannot do that in <white><town></white>.</red>'
   denied-by-role: '<red>Your role in <white><town></white> does not allow that <gray>(<permission>)</gray>.</red>'
@@ -112,6 +121,8 @@ denial:
   chunk-already-claimed: 'Your town already owns that chunk.'
   chunk-owned-by-another-town: 'Another town already owns that chunk.'
   chunk-not-claimed: 'Your town does not own that chunk.'
+  flag-not-set: 'That flag was not set here, so there was nothing to clear.'
+  flag-target-not-yours: 'That land is not yours to configure.'
   claim-must-touch-town: 'A claim must border your town. Claim it as an outpost if you meant to settle away from home.'
   outpost-must-not-touch-town: 'That chunk borders your town, so claim it normally rather than as an outpost.'
   unclaim-would-disconnect: 'That would cut your town in two. Unclaim from the edges inwards.'

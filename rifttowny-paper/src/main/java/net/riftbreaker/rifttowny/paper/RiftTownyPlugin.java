@@ -58,6 +58,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex;
     private net.riftbreaker.rifttowny.domain.civic.CivicCache civicCache;
     private net.riftbreaker.rifttowny.domain.service.CivicCacheService civicCacheService;
+    private net.riftbreaker.rifttowny.domain.flag.FlagOverrides flagOverrides;
+    private net.riftbreaker.rifttowny.domain.service.FlagService flagService;
     private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
@@ -163,8 +165,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
         }
 
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
-                townService, townRoleService, territoryService, residentRepository, townRepository,
-                messages, denialText).tree());
+                townService, townRoleService, territoryService, flagService, residentRepository,
+                townRepository, messages, denialText).tree());
 
         registerProtection();
 
@@ -217,12 +219,16 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.civicCache = net.riftbreaker.rifttowny.domain.civic.CivicCache.empty();
             this.civicCacheService = new net.riftbreaker.rifttowny.domain.service.CivicCacheService(
                     civicStore, civicCache, getLogger()::warning);
+            this.flagOverrides = net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty();
+            this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
+                    civicStore, clock, flagOverrides);
             this.townService = new net.riftbreaker.rifttowny.domain.service.TownService(
                     civicStore,
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
                     clock,
                     territoryIndex,
-                    civicCacheService);
+                    civicCacheService,
+                    flagOverrides);
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
@@ -238,6 +244,13 @@ public final class RiftTownyPlugin extends JavaPlugin {
             final var civicLoad = civicCacheService.loadAll()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info(civicLoad.describe());
+
+            // Waited on for the same reason: a check that ran before this finished would answer from
+            // built-in defaults, so a town that had opened its doors would appear to have closed
+            // them. Wrong quietly is worse than slow.
+            final int flags = flagService.loadAll()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + flags + " flag override(s) into memory.");
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "
@@ -260,10 +273,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private void registerProtection() {
         final var messenger =
                 new net.riftbreaker.rifttowny.paper.protection.ProtectionMessenger(messages);
-        // Built-in flag defaults only: nothing persists flag overrides yet, so every resolution
-        // reaches ProtectionFlag.allowedByDefault. See FlagSettingsSource.
+        // The loaded overrides are the settings source, so admin, claim, organisation and world
+        // layers all answer. Area and war supply their own layers when those modules land.
         final var query = new net.riftbreaker.rifttowny.domain.flag.ProtectionQuery(
-                territoryIndex, civicCache);
+                territoryIndex, civicCache, flagOverrides);
         this.protection = new net.riftbreaker.rifttowny.paper.protection.ProtectionService(
                 query, messenger);
 

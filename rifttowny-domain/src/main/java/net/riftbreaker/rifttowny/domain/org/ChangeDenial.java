@@ -203,6 +203,24 @@ public enum ChangeDenial {
     /** That chunk is not one of this town's claims. */
     CHUNK_NOT_CLAIMED,
 
+    // --- flags -------------------------------------------------------------------------------
+
+    /**
+     * The flag was already at that setting, or there was nothing to clear.
+     *
+     * <p>Refused rather than accepted quietly so a mayor is told their command did nothing, instead
+     * of believing they changed something they did not.</p>
+     */
+    FLAG_NOT_SET,
+
+    /**
+     * That land or organisation is not yours to configure.
+     *
+     * <p>The resolver reads a claim's overrides without asking who wrote them, so a town that could
+     * write one on somebody else's chunk could open their doors from outside.</p>
+     */
+    FLAG_TARGET_NOT_YOURS,
+
     /**
      * An ordinary claim must touch the town's existing territory.
      *

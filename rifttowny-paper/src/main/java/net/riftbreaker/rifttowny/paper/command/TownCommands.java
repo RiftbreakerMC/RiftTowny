@@ -1,6 +1,11 @@
 package net.riftbreaker.rifttowny.paper.command;
 
 import net.riftbreaker.rifttowny.api.ChunkKey;
+import net.riftbreaker.rifttowny.domain.flag.FlagOverride;
+import net.riftbreaker.rifttowny.domain.flag.FlagSource;
+import net.riftbreaker.rifttowny.domain.flag.FlagTarget;
+import net.riftbreaker.rifttowny.domain.flag.ProtectionFlag;
+import net.riftbreaker.rifttowny.domain.flag.Relationship;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
 import net.riftbreaker.rifttowny.domain.territory.ClaimKind;
 import net.riftbreaker.rifttowny.domain.org.Resident;
@@ -45,6 +50,7 @@ public final class TownCommands {
     private final TownService towns;
     private final TownRoleService roles;
     private final net.riftbreaker.rifttowny.domain.service.TerritoryService territory;
+    private final net.riftbreaker.rifttowny.domain.service.FlagService flags;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
     private final MessageService messages;
@@ -54,6 +60,7 @@ public final class TownCommands {
             final TownService towns,
             final TownRoleService roles,
             final net.riftbreaker.rifttowny.domain.service.TerritoryService territory,
+            final net.riftbreaker.rifttowny.domain.service.FlagService flags,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
             final MessageService messages,
@@ -62,6 +69,7 @@ public final class TownCommands {
         this.towns = Objects.requireNonNull(towns, "towns");
         this.roles = Objects.requireNonNull(roles, "roles");
         this.territory = Objects.requireNonNull(territory, "territory");
+        this.flags = Objects.requireNonNull(flags, "flags");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -141,6 +149,47 @@ public final class TownCommands {
                         .describedAs("Move your home chunk here")
                         .runs(this::homeblock, Surface.CHAT))
                 .child(roleTree())
+                .child(flagTree())
+                .build();
+    }
+
+    /**
+     * The {@code /town flag} tree.
+     *
+     * <p>Two scopes, because a town wants both: {@code set} and {@code clear} apply to all of its
+     * land, {@code here} to the one chunk the player is standing in. A claim override beats an
+     * organisation one, which is what lets a town open a single market square without opening the
+     * rest of itself.</p>
+     */
+    private CommandNode flagTree() {
+        return CommandNode.group("flag")
+                .permission("rifttowny.town.flag")
+                .describedAs("Change what your town allows")
+                .usage("town flag")
+                .child(CommandNode.action("list")
+                        .permission("rifttowny.town.flag")
+                        .usage("town flag list [here]")
+                        .describedAs("Show what your town has overridden")
+                        .completer((actor, args) -> List.of("here"))
+                        .runs(this::flagList, Surface.CHAT))
+                .child(CommandNode.action("set")
+                        .permission("rifttowny.town.flag")
+                        .usage("town flag set <flag> <relationship> <allow|deny>")
+                        .describedAs("Set a flag for the whole town")
+                        .completer(TownCommands::completeFlagArguments)
+                        .runs((actor, args) -> flagSet(actor, args, false), Surface.CHAT))
+                .child(CommandNode.action("clear")
+                        .permission("rifttowny.town.flag")
+                        .usage("town flag clear <flag> <relationship>")
+                        .describedAs("Remove a town-wide override")
+                        .completer(TownCommands::completeFlagArguments)
+                        .runs((actor, args) -> flagClear(actor, args, false), Surface.CHAT))
+                .child(CommandNode.action("here")
+                        .permission("rifttowny.town.flag")
+                        .usage("town flag here <flag> <relationship> <allow|deny|clear>")
+                        .describedAs("Set a flag on this chunk only")
+                        .completer(TownCommands::completeFlagArguments)
+                        .runs(this::flagHere, Surface.CHAT))
                 .build();
     }
 
@@ -396,6 +445,177 @@ public final class TownCommands {
                                 messages.send(actor::send, MessageKey.ROLE_UNASSIGNED,
                                         MessageService.value("resident", args.getFirst()),
                                         MessageService.value("role", role.name()))));
+    }
+
+    // --- flag actions --------------------------------------------------------------------------
+
+    /** What this town, or this chunk, has been told. Not what resolves — that is a different sum. */
+    private void flagList(final CommandActor actor, final List<String> args) {
+        final boolean here = !args.isEmpty() && args.getFirst().equalsIgnoreCase("here");
+        if (!here) {
+            withTown(actor, (who, town) ->
+                    showOverrides(actor, FlagTarget.organisation(town.id()), town.name().display()));
+            return;
+        }
+        whereTheyStand(actor, chunk ->
+                showOverrides(actor, FlagTarget.claim(chunk), "chunk " + describe(chunk)));
+    }
+
+    private void showOverrides(
+            final CommandActor actor, final FlagTarget target, final String label) {
+        then(actor, flags.of(target), found -> {
+            if (found.isEmpty()) {
+                messages.send(actor::send, MessageKey.FLAG_LIST_EMPTY,
+                        MessageService.value("target", label));
+                return;
+            }
+            messages.send(actor::send, MessageKey.FLAG_LIST_HEADER,
+                    MessageService.value("target", label));
+            for (final FlagOverride override : found) {
+                messages.sendRaw(actor::send, MessageKey.FLAG_LIST_LINE,
+                        MessageService.value("flag", override.flag()),
+                        MessageService.value("relationship", override.relationship()),
+                        MessageService.value("state", override.allowed() ? "allowed" : "denied"));
+            }
+        });
+    }
+
+    private void flagSet(final CommandActor actor, final List<String> args, final boolean here) {
+        final String usage = here
+                ? "town flag here <flag> <relationship> <allow|deny|clear>"
+                : "town flag set <flag> <relationship> <allow|deny>";
+        if (args.size() < 3) {
+            usage(actor, usage);
+            return;
+        }
+        parseFlag(actor, args.getFirst()).ifPresent(flag ->
+                parseRelationship(actor, args.get(1)).ifPresent(relationship -> {
+                    final Optional<Boolean> allowed = parseDecision(args.get(2));
+                    if (allowed.isEmpty()) {
+                        usage(actor, usage);
+                        return;
+                    }
+                    if (here) {
+                        whereTheyStand(actor, chunk -> withTown(actor, (who, town) -> reply(actor,
+                                flags.setForClaim(who, town.id(), chunk, flag, relationship,
+                                        allowed.get()),
+                                stored -> announce(actor, stored))));
+                        return;
+                    }
+                    withTown(actor, (who, town) -> reply(actor,
+                            flags.setForTown(who, town.id(), flag, relationship, allowed.get()),
+                            stored -> announce(actor, stored)));
+                }));
+    }
+
+    private void flagClear(final CommandActor actor, final List<String> args, final boolean here) {
+        final String usage = here
+                ? "town flag here <flag> <relationship> clear"
+                : "town flag clear <flag> <relationship>";
+        if (args.size() < 2) {
+            usage(actor, usage);
+            return;
+        }
+        parseFlag(actor, args.getFirst()).ifPresent(flag ->
+                parseRelationship(actor, args.get(1)).ifPresent(relationship -> {
+                    if (here) {
+                        whereTheyStand(actor, chunk -> withTown(actor, (who, town) -> reply(actor,
+                                flags.clearForClaim(who, town.id(), chunk, flag, relationship),
+                                target -> announceCleared(actor, target, flag, relationship))));
+                        return;
+                    }
+                    withTown(actor, (who, town) -> reply(actor,
+                            flags.clearForTown(who, town.id(), flag, relationship),
+                            target -> announceCleared(actor, target, flag, relationship)));
+                }));
+    }
+
+    /** {@code here} takes the same arguments as {@code set}, plus {@code clear} as a decision. */
+    private void flagHere(final CommandActor actor, final List<String> args) {
+        if (args.size() >= 3 && args.get(2).equalsIgnoreCase("clear")) {
+            flagClear(actor, args, true);
+            return;
+        }
+        flagSet(actor, args, true);
+    }
+
+    private void announce(final CommandActor actor, final FlagOverride stored) {
+        messages.send(actor::send, MessageKey.FLAG_SET,
+                MessageService.value("flag", stored.flag()),
+                MessageService.value("relationship", stored.relationship()),
+                MessageService.value("state", stored.allowed() ? "allowed" : "denied"),
+                MessageService.value("scope", scopeLabel(stored.source())));
+    }
+
+    private void announceCleared(
+            final CommandActor actor,
+            final FlagTarget target,
+            final ProtectionFlag flag,
+            final Relationship relationship
+    ) {
+        messages.send(actor::send, MessageKey.FLAG_CLEARED,
+                MessageService.value("flag", flag),
+                MessageService.value("relationship", relationship),
+                MessageService.value("scope", scopeLabel(target.source())));
+    }
+
+    private static String scopeLabel(final FlagSource source) {
+        return source == FlagSource.CLAIM ? "this chunk" : "town-wide";
+    }
+
+    private Optional<ProtectionFlag> parseFlag(final CommandActor actor, final String raw) {
+        final Optional<ProtectionFlag> flag = ProtectionFlag.parse(raw);
+        if (flag.isEmpty()) {
+            messages.send(actor::send, MessageKey.FLAG_UNKNOWN,
+                    MessageService.value("input", raw),
+                    MessageService.value("options", names(ProtectionFlag.values())));
+        }
+        return flag;
+    }
+
+    private Optional<Relationship> parseRelationship(final CommandActor actor, final String raw) {
+        final Optional<Relationship> relationship = Relationship.parse(raw);
+        if (relationship.isEmpty()) {
+            messages.send(actor::send, MessageKey.FLAG_UNKNOWN_RELATIONSHIP,
+                    MessageService.value("input", raw),
+                    MessageService.value("options", names(Relationship.values())));
+        }
+        return relationship;
+    }
+
+    /** {@code allow} or {@code deny}. Anything else is a usage error rather than a guess. */
+    private static Optional<Boolean> parseDecision(final String raw) {
+        return switch (raw.toLowerCase(Locale.ROOT)) {
+            case "allow", "allowed", "true", "on", "yes" -> Optional.of(true);
+            case "deny", "denied", "false", "off", "no" -> Optional.of(false);
+            default -> Optional.empty();
+        };
+    }
+
+    private static String names(final Enum<?>[] values) {
+        final List<String> names = new ArrayList<>(values.length);
+        for (final Enum<?> value : values) {
+            names.add(value.name().toLowerCase(Locale.ROOT));
+        }
+        return String.join(", ", names);
+    }
+
+    private static List<String> completeFlagArguments(
+            final CommandActor actor, final List<String> args) {
+        return switch (args.size()) {
+            case 0, 1 -> lowerNames(ProtectionFlag.values());
+            case 2 -> lowerNames(Relationship.values());
+            case 3 -> List.of("allow", "deny", "clear");
+            default -> List.of();
+        };
+    }
+
+    private static List<String> lowerNames(final Enum<?>[] values) {
+        final List<String> names = new ArrayList<>(values.length);
+        for (final Enum<?> value : values) {
+            names.add(value.name().toLowerCase(Locale.ROOT));
+        }
+        return List.copyOf(names);
     }
 
     // --- plumbing ------------------------------------------------------------------------------

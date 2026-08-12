@@ -1,6 +1,8 @@
 package net.riftbreaker.rifttowny.domain.service;
 
 import net.riftbreaker.rifttowny.domain.event.DomainEvent;
+import net.riftbreaker.rifttowny.domain.flag.FlagOverrides;
+import net.riftbreaker.rifttowny.domain.flag.FlagTarget;
 import net.riftbreaker.rifttowny.domain.naming.NameCheck;
 import net.riftbreaker.rifttowny.domain.naming.NamePolicy;
 import net.riftbreaker.rifttowny.domain.naming.OrganisationName;
@@ -20,6 +22,7 @@ import net.riftbreaker.rifttowny.domain.store.CivicStore;
 import net.riftbreaker.rifttowny.domain.store.CivicTransaction;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +53,7 @@ public final class TownService {
     private final Clock clock;
     private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index;
     private final CivicCacheRefresher civic;
+    private final FlagOverrides overrides;
 
     /**
      * @param index needed only so disbanding can drop the town's chunks from the in-memory cache.
@@ -62,7 +66,7 @@ public final class TownService {
             final Clock clock,
             final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index
     ) {
-        this(store, namePolicy, clock, index, CivicCacheRefresher.none());
+        this(store, namePolicy, clock, index, CivicCacheRefresher.none(), FlagOverrides.empty());
     }
 
     /**
@@ -77,11 +81,27 @@ public final class TownService {
             final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
             final CivicCacheRefresher civic
     ) {
+        this(store, namePolicy, clock, index, civic, FlagOverrides.empty());
+    }
+
+    /**
+     * @param overrides needed only so disbanding can drop the town's flag overrides from memory.
+     *        They are removed from storage inside the transaction; this is the in-memory half
+     */
+    public TownService(
+            final CivicStore store,
+            final NamePolicy namePolicy,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
+            final CivicCacheRefresher civic,
+            final FlagOverrides overrides
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.namePolicy = Objects.requireNonNull(namePolicy, "namePolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.index = Objects.requireNonNull(index, "index");
         this.civic = Objects.requireNonNull(civic, "civic");
+        this.overrides = Objects.requireNonNull(overrides, "overrides");
     }
 
     /**
@@ -267,6 +287,17 @@ public final class TownService {
                 transaction.residents().save(require(resident.leaveTown()));
                 released++;
             }
+
+            // Flag overrides are swept before the claims go, because the claim rows are where the
+            // chunk list comes from. They have no foreign key to sweep them - the target column
+            // holds four kinds of identifier and so cannot reference one table - and an override
+            // left behind would come back into force the moment another town claimed the chunk.
+            final List<FlagTarget> flagTargets = new java.util.ArrayList<>();
+            flagTargets.add(FlagTarget.organisation(townId));
+            transaction.claims().of(townId).forEach(claim ->
+                    flagTargets.add(FlagTarget.claim(claim.chunk())));
+            flagTargets.forEach(target -> transaction.flags().clearAll(target));
+
             // Territory is released explicitly: rt_claim cascades from rt_town, but relying on the
             // cascade would make the claim count in the announcement below unknowable, and it would
             // hide the release from anything watching claims rather than towns.
@@ -281,21 +312,42 @@ public final class TownService {
             transaction.publish(
                     new DomainEvent.TownDisbanded(townId, town.name(), released),
                     correlation("disband", townId));
-            return townId;
+            return new Disbanded(townId, List.copyOf(flagTargets));
         }).thenApply(result -> {
             // After the commit, never inside it. A rolled-back disband whose claims had already
             // left the cache would leave the town's land unprotected until the next restart.
-            result.value().ifPresent(index::removeAllOf);
+            result.value().ifPresent(disbanded -> {
+                index.removeAllOf(disbanded.town());
+                disbanded.flagTargets().forEach(overrides::clearAll);
+            });
             return result;
         }).thenCompose(result -> {
             // The civic cache is told the same way every other change tells it: by re-reading. The
             // town is gone, so the read finds nothing and the refresh drops it - one path for
             // "changed" and "vanished" rather than two that could disagree.
             if (result.value().isEmpty()) {
-                return CompletableFuture.completedFuture(result);
+                return CompletableFuture.completedFuture(map(result));
             }
-            return civic.refresh(result.value().orElseThrow()).thenApply(ignored -> result);
+            return civic.refresh(result.value().orElseThrow().town())
+                    .thenApply(ignored -> map(result));
         });
+    }
+
+    /**
+     * What a disband removed, carried out of the transaction so the caches can follow.
+     *
+     * <p>Internal: {@link #disband} still answers with the town id, because the targets are a
+     * cache-maintenance detail and no caller has a use for them.</p>
+     */
+    private record Disbanded(TownId town, List<FlagTarget> flagTargets) {
+    }
+
+    private static ServiceResult<TownId> map(final ServiceResult<Disbanded> result) {
+        return result.value()
+                .<ServiceResult<TownId>>map(disbanded -> ServiceResult.success(disbanded.town()))
+                .orElseGet(() -> result.denial()
+                        .<ServiceResult<TownId>>map(ServiceResult::refused)
+                        .orElseGet(() -> ServiceResult.nameRejected(result.nameProblems())));
     }
 
     /** What a resident may do in a town, for a GUI or a public API query. */

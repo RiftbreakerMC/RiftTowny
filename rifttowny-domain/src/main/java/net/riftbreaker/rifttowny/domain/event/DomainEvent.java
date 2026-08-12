@@ -272,4 +272,48 @@ public sealed interface DomainEvent {
             return "town.trust.revoked";
         }
     }
+
+    /**
+     * A protection flag was set.
+     *
+     * <p>Carries the scope and target as strings rather than a typed identifier. The target is a
+     * chunk, a town, a world or the whole server depending on the scope, and an event that had to
+     * name a type for each would need four records to say one thing.</p>
+     *
+     * <p>Worth recording at all because "why can visitors suddenly build here" is a question neither
+     * the resolver nor the state of the table can answer afterwards — only the change can.</p>
+     */
+    record FlagChanged(
+            String scope, String target, String flag, String relationship, boolean allowed)
+            implements DomainEvent {
+
+        public FlagChanged {
+            Objects.requireNonNull(scope, "scope");
+            Objects.requireNonNull(target, "target");
+            Objects.requireNonNull(flag, "flag");
+            Objects.requireNonNull(relationship, "relationship");
+        }
+
+        @Override
+        public String type() {
+            return "flag.set";
+        }
+    }
+
+    /** A protection flag override was removed, letting the layer below answer again. */
+    record FlagCleared(String scope, String target, String flag, String relationship)
+            implements DomainEvent {
+
+        public FlagCleared {
+            Objects.requireNonNull(scope, "scope");
+            Objects.requireNonNull(target, "target");
+            Objects.requireNonNull(flag, "flag");
+            Objects.requireNonNull(relationship, "relationship");
+        }
+
+        @Override
+        public String type() {
+            return "flag.cleared";
+        }
+    }
 }

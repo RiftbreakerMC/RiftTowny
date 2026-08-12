@@ -40,6 +40,8 @@ public interface CivicTransaction {
 
     ClaimStore claims();
 
+    FlagStore flags();
+
     /**
      * Queues an event for delivery.
      *
@@ -142,6 +144,40 @@ public interface CivicTransaction {
 
         /** Releases a whole town's territory. Returns how many chunks went. */
         int deleteAllOf(net.riftbreaker.rifttowny.domain.org.TownId town);
+    }
+
+    /**
+     * Configured flag overrides, inside the transaction.
+     *
+     * <p>Written one opinion at a time rather than as a whole layer. A layer is partial by design —
+     * an absent entry means "no opinion" — so replacing one wholesale to change a single flag would
+     * turn every unrelated opinion into a deliberate deletion.</p>
+     */
+    interface FlagStore {
+
+        /**
+         * Every override on the server.
+         *
+         * <p>For filling the in-memory set at startup, and nothing else. Anything calling it per
+         * command is wrong.</p>
+         */
+        List<net.riftbreaker.rifttowny.domain.flag.FlagOverride> all();
+
+        /** Everything one target holds. */
+        List<net.riftbreaker.rifttowny.domain.flag.FlagOverride> of(
+                net.riftbreaker.rifttowny.domain.flag.FlagTarget target);
+
+        /** Records one opinion, replacing any existing one for the same flag and relationship. */
+        void set(net.riftbreaker.rifttowny.domain.flag.FlagOverride override);
+
+        /** Removes one opinion. Returns whether there was one. */
+        boolean clear(
+                net.riftbreaker.rifttowny.domain.flag.FlagTarget target,
+                net.riftbreaker.rifttowny.domain.flag.ProtectionFlag flag,
+                net.riftbreaker.rifttowny.domain.flag.Relationship relationship);
+
+        /** Removes everything a target holds. Returns how many went. */
+        int clearAll(net.riftbreaker.rifttowny.domain.flag.FlagTarget target);
     }
 
     /** Nations, inside the transaction. */

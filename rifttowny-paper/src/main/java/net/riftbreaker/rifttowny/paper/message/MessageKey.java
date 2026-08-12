@@ -137,6 +137,33 @@ public enum MessageKey {
             "<red>This land is protected, but its town could not be loaded. "
                     + "Please tell an administrator.</red>"),
 
+    FLAG_SET("flag.set",
+            "<green><white><flag></white> for <white><relationship></white> is now "
+                    + "<white><state></white> <gray>(<scope>)</gray>.</green>"),
+
+    /** Cleared, not denied. The distinction matters: the layer below answers again. */
+    FLAG_CLEARED("flag.cleared",
+            "<yellow><white><flag></white> for <white><relationship></white> is no longer set "
+                    + "<gray>(<scope>)</gray>; the layer below decides again.</yellow>"),
+
+    FLAG_LIST_HEADER("flag.list-header",
+            "<gray>Overrides for <white><target></white>:</gray>"),
+
+    FLAG_LIST_LINE("flag.list-line",
+            "  <aqua><flag></aqua> <gray>for</gray> <white><relationship></white> "
+                    + "<dark_gray>-</dark_gray> <white><state></white>"),
+
+    FLAG_LIST_EMPTY("flag.list-empty",
+            "<gray>Nothing is overridden for <white><target></white>, "
+                    + "so the built-in defaults apply.</gray>"),
+
+    FLAG_UNKNOWN("flag.unknown",
+            "<red>Unknown flag <white><input></white>. One of: <white><options></white></red>"),
+
+    FLAG_UNKNOWN_RELATIONSHIP("flag.unknown-relationship",
+            "<red>Unknown relationship <white><input></white>. "
+                    + "One of: <white><options></white></red>"),
+
     STATUS_HEADER("status.header",
             "<gray>RiftTowny <white><version></white></gray>"),
 

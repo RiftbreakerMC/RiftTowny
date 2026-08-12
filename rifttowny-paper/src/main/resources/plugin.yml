@@ -77,6 +77,7 @@ permissions:
       rifttowny.town.claim: true
       rifttowny.town.unclaim: true
       rifttowny.town.homeblock: true
+      rifttowny.town.flag: true
       rifttowny.role.view: true
       rifttowny.role.manage: true
       rifttowny.role.assign: true
@@ -112,6 +113,9 @@ permissions:
     default: true
   rifttowny.town.homeblock:
     description: Move your town's home chunk.
+    default: true
+  rifttowny.town.flag:
+    description: Change what your town allows. The MANAGE_FLAGS role permission decides who really can.
     default: true
   rifttowny.role.view:
     description: View your town's roles.
