@@ -44,6 +44,11 @@ public final class FlagResolver {
         Objects.requireNonNull(actual, "actual");
         Objects.requireNonNull(layers, "layers");
 
+        // Whether the land is owned, taken from the actor's real standing before the collapse
+        // below throws that information away. A world flag inside a town still resolves at
+        // wilderness, but it must not inherit wilderness's vanilla defaults while doing so.
+        final boolean claimed = actual != Relationship.WILDERNESS;
+
         // A world flag collapses to wilderness: piston and fluid rules are about the land, not
         // about whoever happens to be standing nearby, and letting a member's relationship widen
         // them is exactly how a border grief works.
@@ -56,7 +61,7 @@ public final class FlagResolver {
             }
         }
         return new FlagDecision(
-                flag, relationship, flag.allowedByDefault(relationship), FlagSource.BUILT_IN);
+                flag, relationship, flag.allowedByDefault(relationship, claimed), FlagSource.BUILT_IN);
     }
 
     /**

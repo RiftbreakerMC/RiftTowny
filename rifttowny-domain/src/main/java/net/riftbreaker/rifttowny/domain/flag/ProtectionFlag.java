@@ -81,9 +81,19 @@ public enum ProtectionFlag {
      * <p>Deliberately conservative inside claims and permissive in wilderness: a server that
      * installs RiftTowny and configures nothing should find its towns protected, not find that
      * claiming land changed nothing.</p>
+     *
+     * <p><strong>{@code claimed} is a separate argument on purpose.</strong> It cannot be inferred
+     * from the relationship, because {@link #effectiveRelationship} deliberately reports a world
+     * flag at {@link Relationship#WILDERNESS} even inside a town. Reading "wilderness" as "nobody
+     * owns this" was exactly that mistake: it made every explosion, fire and piston inside a claim
+     * fall through to the vanilla default and be allowed, which is the opposite of what the switch
+     * below says. One value cannot answer both "whose land is this" and "what standing does the
+     * actor have", so it no longer tries.</p>
+     *
+     * @param claimed whether a town owns this land, independent of the actor's standing on it
      */
-    public boolean allowedByDefault(final Relationship relationship) {
-        if (relationship == Relationship.WILDERNESS) {
+    public boolean allowedByDefault(final Relationship relationship, final boolean claimed) {
+        if (!claimed) {
             // Unclaimed land behaves like vanilla, except for the two that would let somebody grief
             // across a border from outside it.
             return this != EVENT_ACTION && this != WAR_ACTION;

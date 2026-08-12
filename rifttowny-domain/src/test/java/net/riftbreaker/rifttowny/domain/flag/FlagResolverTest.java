@@ -241,6 +241,33 @@ class FlagResolverTest {
         }
 
         @Test
+        @DisplayName("a world flag inside a claim is refused, though it resolves at wilderness")
+        void worldFlagsDoNotInheritWildernessDefaults() {
+            for (final ProtectionFlag flag : List.of(
+                    ProtectionFlag.EXPLOSIONS, ProtectionFlag.FIRE_SPREAD,
+                    ProtectionFlag.FLUID_FLOW, ProtectionFlag.PISTONS)) {
+                final FlagDecision decision = resolve(flag, Relationship.TOWN, List.of());
+
+                assertThat(decision.allowed())
+                        .as("%s inside a claim: the world does not get to rearrange a town", flag)
+                        .isFalse();
+                assertThat(decision.relationship()).isEqualTo(Relationship.WILDERNESS);
+            }
+        }
+
+        @Test
+        @DisplayName("the same world flag outside a claim is vanilla")
+        void worldFlagsAreVanillaOutsideClaims() {
+            for (final ProtectionFlag flag : List.of(
+                    ProtectionFlag.EXPLOSIONS, ProtectionFlag.FIRE_SPREAD,
+                    ProtectionFlag.FLUID_FLOW, ProtectionFlag.PISTONS)) {
+                assertThat(resolve(flag, Relationship.WILDERNESS, List.of()).allowed())
+                        .as("%s in wilderness", flag)
+                        .isTrue();
+            }
+        }
+
+        @Test
         @DisplayName("a player flag keeps the actor's own relationship")
         void playerFlagsUseTheActualRelationship() {
             assertThat(resolve(ProtectionFlag.BUILD, Relationship.RESIDENT, List.of())
