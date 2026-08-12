@@ -104,6 +104,50 @@ public enum MessageKey {
     TOWN_CONSOLE_HAS_NO_CHUNK("town.console-has-no-chunk",
             "<red>The console is not standing anywhere.</red>"),
 
+    NATION_FOUNDED("nation.founded",
+            "<green>Founded <white><nation></white>. Your town is its capital.</green>"),
+
+    NATION_INFO_HEADER("nation.info-header",
+            "<gray>Nation <white><nation></white></gray>"),
+
+    /** An offer, not a change: the town has to accept it. The wording says so on purpose. */
+    NATION_INVITED("nation.invited",
+            "<green>Invited <white><town></white> to <white><nation></white>. "
+                    + "They must accept before anything changes.</green>"),
+
+    NATION_INVITE_WITHDRAWN("nation.invite-withdrawn",
+            "<yellow>Withdrew the invitation to <white><town></white>.</yellow>"),
+
+    NATION_INVITES_HEADER("nation.invites-header",
+            "<gray>Nations that have invited <white><town></white>:</gray>"),
+
+    NATION_INVITES_LINE("nation.invites-line",
+            "  <aqua><nation></aqua> <dark_gray>-</dark_gray> <gray>until <expires></gray>"),
+
+    NATION_NO_INVITES("nation.no-invites",
+            "<gray>No nation has invited your town.</gray>"),
+
+    NATION_JOINED("nation.joined",
+            "<green><white><town></white> joined <white><nation></white>.</green>"),
+
+    NATION_LEFT("nation.left",
+            "<yellow><white><town></white> left <white><nation></white>.</yellow>"),
+
+    NATION_EXPELLED("nation.expelled",
+            "<yellow><white><town></white> was removed from <white><nation></white>.</yellow>"),
+
+    NATION_CAPITAL_MOVED("nation.capital-moved",
+            "<green>The capital is now <white><town></white>.</green>"),
+
+    NATION_KING_TRANSFERRED("nation.king-transferred",
+            "<green><white><resident></white> now leads <white><nation></white>.</green>"),
+
+    NATION_RENAMED("nation.renamed",
+            "<green>Renamed to <white><nation></white>.</green>"),
+
+    NATION_DISBANDED("nation.disbanded",
+            "<yellow>Disbanded <white><nation></white>.</yellow>"),
+
     ROLE_CREATED("role.created",
             "<green>Created the role <white><role></white>.</green>"),
 

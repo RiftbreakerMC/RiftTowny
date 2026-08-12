@@ -3,6 +3,7 @@ package net.riftbreaker.rifttowny.domain.store;
 import net.riftbreaker.rifttowny.domain.event.DomainEvent;
 import net.riftbreaker.rifttowny.domain.org.Nation;
 import net.riftbreaker.rifttowny.domain.org.NationId;
+import net.riftbreaker.rifttowny.domain.org.OrganisationId;
 import net.riftbreaker.rifttowny.domain.org.Resident;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.Town;
@@ -41,6 +42,8 @@ public interface CivicTransaction {
     ClaimStore claims();
 
     FlagStore flags();
+
+    InvitationStore invitations();
 
     /**
      * Queues an event for delivery.
@@ -178,6 +181,40 @@ public interface CivicTransaction {
 
         /** Removes everything a target holds. Returns how many went. */
         int clearAll(net.riftbreaker.rifttowny.domain.flag.FlagTarget target);
+    }
+
+    /**
+     * Outstanding invitations, inside the transaction.
+     *
+     * <p>Read and consumed in the same transaction as the join they authorise. Checking for an
+     * invitation, committing, then deleting it separately would leave a window in which one offer
+     * could be accepted twice.</p>
+     */
+    interface InvitationStore {
+
+        /** The offer from this organisation to this invitee, if one stands. */
+        Optional<net.riftbreaker.rifttowny.domain.org.Invitation> find(
+                OrganisationId inviter, net.riftbreaker.rifttowny.domain.org.Invitation.Invitee invitee);
+
+        /** Every offer addressed to one invitee, newest first. */
+        List<net.riftbreaker.rifttowny.domain.org.Invitation> to(
+                net.riftbreaker.rifttowny.domain.org.Invitation.Invitee invitee);
+
+        /** Every offer one organisation has outstanding. */
+        List<net.riftbreaker.rifttowny.domain.org.Invitation> from(OrganisationId inviter);
+
+        /** Records an offer, refreshing one that already exists for the same pairing. */
+        void save(net.riftbreaker.rifttowny.domain.org.Invitation invitation);
+
+        /** Withdraws or consumes one. Returns whether there was one. */
+        boolean delete(
+                OrganisationId inviter, net.riftbreaker.rifttowny.domain.org.Invitation.Invitee invitee);
+
+        /** Removes everything an organisation offered or was offered, as when it is disbanded. */
+        int deleteAllFor(OrganisationId organisation);
+
+        /** Sweeps lapsed offers. Returns how many went. */
+        int deleteExpired(java.time.Instant now);
     }
 
     /** Nations, inside the transaction. */

@@ -40,7 +40,11 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|add|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|delete|role>
+    usage: /town <new|info|add|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|delete|role|flag>
+  nation:
+    aliases: [n]
+    description: Found and manage a nation.
+    usage: /nation <new|info|invite|withdraw|invites|join|leave|expel|capital|king|rename|delete>
 
 permissions:
   rifttowny.admin:
@@ -125,4 +129,51 @@ permissions:
     default: true
   rifttowny.role.assign:
     description: Give and take your town's roles.
+    default: true
+
+  # Same shape as the town nodes: granted to everyone, with the nation's own role book deciding who
+  # can actually do what. A node here only decides whether the subcommand is offered.
+  rifttowny.nation:
+    description: Use the nation commands.
+    default: true
+    children:
+      rifttowny.nation.new: true
+      rifttowny.nation.info: true
+      rifttowny.nation.invite: true
+      rifttowny.nation.join: true
+      rifttowny.nation.leave: true
+      rifttowny.nation.expel: true
+      rifttowny.nation.capital: true
+      rifttowny.nation.king: true
+      rifttowny.nation.rename: true
+      rifttowny.nation.delete: true
+  rifttowny.nation.new:
+    description: Found a nation.
+    default: true
+  rifttowny.nation.info:
+    description: View a nation and its invitations.
+    default: true
+  rifttowny.nation.invite:
+    description: Offer membership to a town, and withdraw the offer.
+    default: true
+  rifttowny.nation.join:
+    description: Accept an invitation on your town's behalf.
+    default: true
+  rifttowny.nation.leave:
+    description: Take your town out of its nation.
+    default: true
+  rifttowny.nation.expel:
+    description: Remove a member town.
+    default: true
+  rifttowny.nation.capital:
+    description: Move the capital.
+    default: true
+  rifttowny.nation.king:
+    description: Hand over the crown.
+    default: true
+  rifttowny.nation.rename:
+    description: Rename your nation.
+    default: true
+  rifttowny.nation.delete:
+    description: Disband your nation.
     default: true

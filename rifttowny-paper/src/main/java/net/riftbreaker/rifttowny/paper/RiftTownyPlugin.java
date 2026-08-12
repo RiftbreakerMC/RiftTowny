@@ -52,7 +52,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.storage.JdbcResidentRepository residentRepository;
     private net.riftbreaker.rifttowny.storage.JdbcTownRepository townRepository;
     private net.riftbreaker.rifttowny.storage.JdbcCivicStore civicStore;
+    private net.riftbreaker.rifttowny.storage.JdbcNationRepository nationRepository;
     private net.riftbreaker.rifttowny.domain.service.TownService townService;
+    private net.riftbreaker.rifttowny.domain.service.NationService nationService;
     private net.riftbreaker.rifttowny.domain.service.TownRoleService townRoleService;
     private net.riftbreaker.rifttowny.domain.service.TerritoryService territoryService;
     private net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex;
@@ -168,7 +170,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 townService, townRoleService, territoryService, flagService, residentRepository,
                 townRepository, messages, denialText).tree());
 
+        registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
+                nationService, residentRepository, townRepository, nationRepository, messages,
+                denialText).tree());
+
         registerProtection();
+        scheduleHousekeeping();
 
         getLogger().info("RiftTowny enabled on " + platformName() + ". " + schema.describe() + '.');
         getLogger().info("Storage: " + settings.storage().describeForLog()
@@ -210,6 +217,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     new net.riftbreaker.rifttowny.storage.JdbcResidentRepository(database, storageExecutor);
             this.townRepository =
                     new net.riftbreaker.rifttowny.storage.JdbcTownRepository(database, storageExecutor);
+            this.nationRepository =
+                    new net.riftbreaker.rifttowny.storage.JdbcNationRepository(database, storageExecutor);
             this.civicStore =
                     new net.riftbreaker.rifttowny.storage.JdbcCivicStore(database, storageExecutor);
 
@@ -233,6 +242,11 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
                     civicStore, clock, territoryIndex);
+            this.nationService = new net.riftbreaker.rifttowny.domain.service.NationService(
+                    civicStore,
+                    net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
+                    clock,
+                    civicCacheService);
 
             // Both loaded before enable returns, and waited on. A protection listener answers from
             // these and cannot wait for a database, so a partially loaded index would read as
@@ -294,6 +308,27 @@ public final class RiftTownyPlugin extends JavaPlugin {
         manager.registerEvents(
                 new net.riftbreaker.rifttowny.paper.protection.WorldProtectionListener(protection),
                 this);
+    }
+
+    /**
+     * Periodic tidying that nothing depends on having run.
+     *
+     * <p>Deliberately asynchronous and deliberately unhurried. An expired invitation is already
+     * inert — hidden from every listing and refused on accept — so this only stops the table growing
+     * without bound, and running it hourly rather than every tick costs nothing.</p>
+     */
+    private void scheduleHousekeeping() {
+        scheduler.asyncRepeating(
+                () -> nationService.pruneExpiredInvitations().whenComplete((removed, failure) -> {
+                    if (failure != null) {
+                        getLogger().log(java.util.logging.Level.WARNING,
+                                "Could not sweep expired invitations", failure);
+                    } else if (removed > 0) {
+                        getLogger().info("Swept " + removed + " expired invitation(s).");
+                    }
+                }),
+                java.time.Duration.ofMinutes(5),
+                java.time.Duration.ofHours(1));
     }
 
     /**

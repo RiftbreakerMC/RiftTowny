@@ -125,6 +125,43 @@ public sealed interface DomainEvent {
         }
     }
 
+    record NationCreated(
+            NationId nation, OrganisationName name, ResidentId founder, TownId capital)
+            implements DomainEvent {
+
+        public NationCreated {
+            Objects.requireNonNull(nation, "nation");
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(founder, "founder");
+            Objects.requireNonNull(capital, "capital");
+        }
+
+        @Override
+        public String type() {
+            return "nation.created";
+        }
+    }
+
+    /**
+     * A nation ended.
+     *
+     * @param townsReleased how many member towns were freed, so an announcement can say whether a
+     *        federation collapsed or a one-town nation quietly folded
+     */
+    record NationDisbanded(NationId nation, OrganisationName name, int townsReleased)
+            implements DomainEvent {
+
+        public NationDisbanded {
+            Objects.requireNonNull(nation, "nation");
+            Objects.requireNonNull(name, "name");
+        }
+
+        @Override
+        public String type() {
+            return "nation.disbanded";
+        }
+    }
+
     record CapitalMoved(NationId nation, TownId from, TownId to) implements DomainEvent {
         public CapitalMoved {
             Objects.requireNonNull(nation, "nation");

@@ -48,6 +48,22 @@ town:
   claim-preview-refused: '<red>Claiming <white><chunk></white> would fail: <white><reason></white></red>'
   console-has-no-chunk: '<red>The console is not standing anywhere.</red>'
 
+nation:
+  founded: '<green>Founded <white><nation></white>. Your town is its capital.</green>'
+  info-header: '<gray>Nation <white><nation></white></gray>'
+  invited: '<green>Invited <white><town></white> to <white><nation></white>. They must accept before anything changes.</green>'
+  invite-withdrawn: '<yellow>Withdrew the invitation to <white><town></white>.</yellow>'
+  invites-header: '<gray>Nations that have invited <white><town></white>:</gray>'
+  invites-line: '  <aqua><nation></aqua> <dark_gray>-</dark_gray> <gray>until <expires></gray>'
+  no-invites: '<gray>No nation has invited your town.</gray>'
+  joined: '<green><white><town></white> joined <white><nation></white>.</green>'
+  left: '<yellow><white><town></white> left <white><nation></white>.</yellow>'
+  expelled: '<yellow><white><town></white> was removed from <white><nation></white>.</yellow>'
+  capital-moved: '<green>The capital is now <white><town></white>.</green>'
+  king-transferred: '<green><white><resident></white> now leads <white><nation></white>.</green>'
+  renamed: '<green>Renamed to <white><nation></white>.</green>'
+  disbanded: '<yellow>Disbanded <white><nation></white>.</yellow>'
+
 role:
   created: '<green>Created the role <white><role></white>.</green>'
   deleted: '<yellow>Deleted the role <white><role></white>.</yellow>'
@@ -123,6 +139,9 @@ denial:
   chunk-not-claimed: 'Your town does not own that chunk.'
   flag-not-set: 'That flag was not set here, so there was nothing to clear.'
   flag-target-not-yours: 'That land is not yours to configure.'
+  town-not-in-a-nation: 'Your town does not belong to a nation.'
+  no-invitation: 'That nation has not invited your town.'
+  invitation-expired: 'That invitation has expired. Ask the nation to send another.'
   claim-must-touch-town: 'A claim must border your town. Claim it as an outpost if you meant to settle away from home.'
   outpost-must-not-touch-town: 'That chunk borders your town, so claim it normally rather than as an outpost.'
   unclaim-would-disconnect: 'That would cut your town in two. Unclaim from the edges inwards.'

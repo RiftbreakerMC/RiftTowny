@@ -54,6 +54,21 @@ public enum ChangeDenial {
     /** The town is not in this nation, or is in no nation at all. */
     TOWN_NOT_IN_THIS_NATION,
 
+    /** The town belongs to no nation, so there is nothing to leave. */
+    TOWN_NOT_IN_A_NATION,
+
+    /**
+     * No outstanding invitation.
+     *
+     * <p>Joining takes two consents. A nation that could admit a town unilaterally would move that
+     * town's protection relationship without asking it, and a town that could attach itself to any
+     * nation would walk into every member town's territory as a citizen.</p>
+     */
+    NO_INVITATION,
+
+    /** The invitation lapsed. A nation that invited a town a month ago has not agreed to today's. */
+    INVITATION_EXPIRED,
+
     /**
      * A nation's capital must be one of its member towns.
      *

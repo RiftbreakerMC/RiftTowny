@@ -174,6 +174,26 @@ public final class Nation {
         return towns.size() == 1 && towns.contains(town);
     }
 
+    /**
+     * How this person stands in the nation: its leader, a citizen, or an outsider.
+     *
+     * <p>Takes their town rather than looking it up, for the same reason
+     * {@link #transferLeadership} takes {@code candidateIsMember}: nation citizenship is residency in
+     * a member town, and only a town knows its residents. Passing it in keeps the dependency visible
+     * instead of hiding a repository call inside a domain object.</p>
+     *
+     * @param theirTown the town this person belongs to, or null if they belong to none
+     */
+    public net.riftbreaker.rifttowny.domain.role.SystemRole standingOf(
+            final ResidentId who, final TownId theirTown) {
+        if (leader.equals(who)) {
+            return net.riftbreaker.rifttowny.domain.role.SystemRole.LEADER;
+        }
+        return theirTown != null && towns.contains(theirTown)
+                ? net.riftbreaker.rifttowny.domain.role.SystemRole.MEMBER
+                : net.riftbreaker.rifttowny.domain.role.SystemRole.VISITOR;
+    }
+
     public NationId id() {
         return id;
     }
