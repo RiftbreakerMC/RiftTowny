@@ -33,6 +33,12 @@ command:
 town:
   founded: '<green>Founded <white><town></white>. You are its mayor.</green>'
   joined: '<green><white><resident></white> joined <white><town></white>.</green>'
+  invited: '<green>Invited <white><resident></white> to <white><town></white>. They must accept before anything changes.</green>'
+  invite-withdrawn: '<yellow>Withdrew the invitation to <white><resident></white>.</yellow>'
+  invite-declined: '<yellow>Turned down the invitation from <white><town></white>.</yellow>'
+  invites-header: '<gray>Towns that have invited you:</gray>'
+  invites-line: '  <aqua><town></aqua> <dark_gray>-</dark_gray> <gray>until <expires></gray>'
+  no-invites: '<gray>No town has invited you.</gray>'
   left: '<yellow>You left <white><town></white>.</yellow>'
   kicked: '<yellow><white><resident></white> was removed from <white><town></white>.</yellow>'
   renamed: '<green>Renamed to <white><town></white>.</green>'

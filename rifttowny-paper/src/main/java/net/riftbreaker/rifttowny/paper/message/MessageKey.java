@@ -60,6 +60,26 @@ public enum MessageKey {
     TOWN_JOINED("town.joined",
             "<green><white><resident></white> joined <white><town></white>.</green>"),
 
+    /** An offer, not a change. The wording says so, because a mayor will assume otherwise. */
+    TOWN_INVITED("town.invited",
+            "<green>Invited <white><resident></white> to <white><town></white>. "
+                    + "They must accept before anything changes.</green>"),
+
+    TOWN_INVITE_WITHDRAWN("town.invite-withdrawn",
+            "<yellow>Withdrew the invitation to <white><resident></white>.</yellow>"),
+
+    TOWN_INVITE_DECLINED("town.invite-declined",
+            "<yellow>Turned down the invitation from <white><town></white>.</yellow>"),
+
+    TOWN_INVITES_HEADER("town.invites-header",
+            "<gray>Towns that have invited you:</gray>"),
+
+    TOWN_INVITES_LINE("town.invites-line",
+            "  <aqua><town></aqua> <dark_gray>-</dark_gray> <gray>until <expires></gray>"),
+
+    TOWN_NO_INVITES("town.no-invites",
+            "<gray>No town has invited you.</gray>"),
+
     TOWN_LEFT("town.left",
             "<yellow>You left <white><town></white>.</yellow>"),
 

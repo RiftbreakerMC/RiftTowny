@@ -97,9 +97,33 @@ public final class TownCommands {
                         .aliases("invite")
                         .permission("rifttowny.town.add")
                         .usage("town add <player>")
-                        .describedAs("Add a resident")
+                        .describedAs("Invite a player to your town")
                         .completer((actor, args) -> onlinePlayerNames())
                         .runs(this::add, Surface.CHAT))
+                .child(CommandNode.action("uninvite")
+                        .aliases("withdraw")
+                        .permission("rifttowny.town.add")
+                        .usage("town uninvite <player>")
+                        .describedAs("Withdraw an invitation")
+                        .completer((actor, args) -> onlinePlayerNames())
+                        .runs(this::uninvite, Surface.CHAT))
+                .child(CommandNode.action("invites")
+                        .permission("rifttowny.town.invites")
+                        .usage("town invites")
+                        .describedAs("Show the towns that have invited you")
+                        .runs(this::invites, Surface.CHAT))
+                .child(CommandNode.action("accept")
+                        .aliases("join")
+                        .permission("rifttowny.town.invites")
+                        .usage("town accept <town>")
+                        .describedAs("Accept an invitation")
+                        .runs(this::accept, Surface.CHAT))
+                .child(CommandNode.action("deny")
+                        .aliases("decline")
+                        .permission("rifttowny.town.invites")
+                        .usage("town deny <town>")
+                        .describedAs("Turn an invitation down")
+                        .runs(this::decline, Surface.CHAT))
                 .child(CommandNode.action("kick")
                         .aliases("remove")
                         .permission("rifttowny.town.kick")
@@ -271,10 +295,69 @@ public final class TownCommands {
 
     private void add(final CommandActor actor, final List<String> args) {
         withTownAndTarget(actor, args, "town add <player>", (who, town, target) ->
-                reply(actor, towns.join(who, target, town.id()), updated ->
-                        messages.send(actor::send, MessageKey.TOWN_JOINED,
+                reply(actor, towns.invite(who, town.id(), target), invitation ->
+                        messages.send(actor::send, MessageKey.TOWN_INVITED,
                                 MessageService.value("resident", args.getFirst()),
+                                MessageService.value("town", town.name().display()))));
+    }
+
+    private void uninvite(final CommandActor actor, final List<String> args) {
+        withTownAndTarget(actor, args, "town uninvite <player>", (who, town, target) ->
+                reply(actor, towns.withdrawInvitation(who, town.id(), target), ignored ->
+                        messages.send(actor::send, MessageKey.TOWN_INVITE_WITHDRAWN,
+                                MessageService.value("resident", args.getFirst()))));
+    }
+
+    /** What the player has been offered. Their own list, so it needs no town. */
+    private void invites(final CommandActor actor, final List<String> args) {
+        player(actor).ifPresent(who -> then(actor, towns.invitationsFor(who), offers -> {
+            if (offers.isEmpty()) {
+                messages.send(actor::send, MessageKey.TOWN_NO_INVITES);
+                return;
+            }
+            messages.send(actor::send, MessageKey.TOWN_INVITES_HEADER);
+            for (final var offer : offers) {
+                then(actor, townRepository.find(TownId.parse(offer.inviter().value().toString())),
+                        town -> messages.sendRaw(actor::send, MessageKey.TOWN_INVITES_LINE,
+                                MessageService.value("town", town
+                                        .map(found -> found.name().display())
+                                        .orElse(offer.inviter().value().toString())),
+                                MessageService.value("expires", offer.expiresAt())));
+            }
+        }));
+    }
+
+    private void accept(final CommandActor actor, final List<String> args) {
+        withInvitingTown(actor, args, "town accept <town>", (who, town) ->
+                reply(actor, towns.acceptInvitation(who, town.id()), updated ->
+                        messages.send(actor::send, MessageKey.TOWN_JOINED,
+                                MessageService.value("resident", actor.name()),
                                 MessageService.value("town", updated.name().display()))));
+    }
+
+    private void decline(final CommandActor actor, final List<String> args) {
+        withInvitingTown(actor, args, "town deny <town>", (who, town) ->
+                reply(actor, towns.declineInvitation(who, town.id()), ignored ->
+                        messages.send(actor::send, MessageKey.TOWN_INVITE_DECLINED,
+                                MessageService.value("town", town.name().display()))));
+    }
+
+    /** Resolves a town by name for a player answering an offer, who is in no town of their own. */
+    private void withInvitingTown(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final BiConsumer<ResidentId, Town> work
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        player(actor).ifPresent(who ->
+                then(actor, townRepository.findByName(args.getFirst()), found ->
+                        found.ifPresentOrElse(
+                                town -> work.accept(who, town),
+                                () -> denied(actor, ChangeDenial.TOWN_NOT_FOUND))));
     }
 
     private void kick(final CommandActor actor, final List<String> args) {

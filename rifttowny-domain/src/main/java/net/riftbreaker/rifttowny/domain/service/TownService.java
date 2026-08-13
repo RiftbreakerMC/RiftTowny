@@ -7,6 +7,7 @@ import net.riftbreaker.rifttowny.domain.naming.NameCheck;
 import net.riftbreaker.rifttowny.domain.naming.NamePolicy;
 import net.riftbreaker.rifttowny.domain.naming.OrganisationName;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
+import net.riftbreaker.rifttowny.domain.org.Invitation;
 import net.riftbreaker.rifttowny.domain.org.OrganisationScope;
 import net.riftbreaker.rifttowny.domain.org.Outcome;
 import net.riftbreaker.rifttowny.domain.org.Resident;
@@ -179,11 +180,127 @@ public final class TownService {
     }
 
     /**
-     * Adds a resident to a town.
+     * Offers a place in the town to a player.
      *
-     * <p>Requires {@link Permission#INVITE_RESIDENT}. Self-service joining through an invitation the
-     * player accepts is a separate flow and does not exist yet; until it does, somebody with the
-     * permission has to do the adding.</p>
+     * <p>Requires {@link Permission#INVITE_RESIDENT}. The offer alone changes nothing — the player
+     * has to accept it — which is the whole point: joining a town moves what a player may do and
+     * where, and a town that could conscript somebody would be deciding that for them.</p>
+     */
+    public CompletableFuture<ServiceResult<Invitation>> invite(
+            final ResidentId actor, final TownId townId, final ResidentId who) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(who, "who");
+        Objects.requireNonNull(townId, "townId");
+
+        return transaction(transaction -> {
+            final Town town = town(transaction, townId);
+            requirePermission(transaction, town, actor, Permission.INVITE_RESIDENT);
+            if (town.hasResident(who)) {
+                throw new ChangeRefusedException(ChangeDenial.ALREADY_IN_THIS_TOWN);
+            }
+            final Resident resident = resident(transaction, who);
+            if (resident.town().isPresent()) {
+                throw new ChangeRefusedException(ChangeDenial.ALREADY_IN_ANOTHER_TOWN);
+            }
+
+            final Invitation invitation = Invitation.offer(
+                    townId, Invitation.Invitee.of(who), actor, clock.instant());
+            transaction.invitations().save(invitation);
+            return invitation;
+        });
+    }
+
+    /** Withdraws an offer. Requires {@link Permission#INVITE_RESIDENT}. */
+    public CompletableFuture<ServiceResult<ResidentId>> withdrawInvitation(
+            final ResidentId actor, final TownId townId, final ResidentId who) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(who, "who");
+        Objects.requireNonNull(townId, "townId");
+
+        return transaction(transaction -> {
+            final Town town = town(transaction, townId);
+            requirePermission(transaction, town, actor, Permission.INVITE_RESIDENT);
+            if (!transaction.invitations().delete(townId, Invitation.Invitee.of(who))) {
+                throw new ChangeRefusedException(ChangeDenial.NO_INVITATION);
+            }
+            return who;
+        });
+    }
+
+    /**
+     * A player accepting a town's offer.
+     *
+     * <p>Needs no permission: it is their own decision, and the town already made its half of it by
+     * sending the invitation. The offer is consumed in the same transaction as the join, so one
+     * invitation cannot be accepted twice.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> acceptInvitation(
+            final ResidentId who, final TownId townId) {
+        Objects.requireNonNull(who, "who");
+        Objects.requireNonNull(townId, "townId");
+
+        return refreshing(transaction(transaction -> {
+            final Optional<Invitation> invitation =
+                    transaction.invitations().find(townId, Invitation.Invitee.of(who));
+            if (invitation.isEmpty()) {
+                throw new ChangeRefusedException(ChangeDenial.NO_INVITATION);
+            }
+            if (invitation.get().hasExpired(clock.instant())) {
+                // Not deleted here: the refusal rolls the transaction back, so the tidy-up would go
+                // with it. The sweep owns that, and the listings already hide lapsed offers.
+                throw new ChangeRefusedException(ChangeDenial.INVITATION_EXPIRED);
+            }
+
+            final Town updated = admit(transaction, townId, who);
+            transaction.invitations().delete(townId, Invitation.Invitee.of(who));
+            return updated;
+        }), Town::id);
+    }
+
+    /** Turns an offer down, so it stops appearing in the player's list. */
+    public CompletableFuture<ServiceResult<TownId>> declineInvitation(
+            final ResidentId who, final TownId townId) {
+        Objects.requireNonNull(who, "who");
+        Objects.requireNonNull(townId, "townId");
+
+        return transaction(transaction -> {
+            if (!transaction.invitations().delete(townId, Invitation.Invitee.of(who))) {
+                throw new ChangeRefusedException(ChangeDenial.NO_INVITATION);
+            }
+            return townId;
+        });
+    }
+
+    /** Every town that has offered this player a place, lapsed offers excluded. */
+    public CompletableFuture<List<Invitation>> invitationsFor(final ResidentId who) {
+        Objects.requireNonNull(who, "who");
+        return store.inTransaction(transaction -> {
+            final java.time.Instant now = clock.instant();
+            return transaction.invitations().to(Invitation.Invitee.of(who)).stream()
+                    .filter(invitation -> !invitation.hasExpired(now))
+                    .toList();
+        });
+    }
+
+    /** Every offer a town has outstanding. */
+    public CompletableFuture<List<Invitation>> invitationsFrom(final TownId townId) {
+        Objects.requireNonNull(townId, "townId");
+        return store.inTransaction(transaction -> {
+            final java.time.Instant now = clock.instant();
+            return transaction.invitations().from(townId).stream()
+                    .filter(invitation -> !invitation.hasExpired(now))
+                    .toList();
+        });
+    }
+
+    /**
+     * Adds a resident without asking them.
+     *
+     * <p>Requires {@link Permission#INVITE_RESIDENT}, and <strong>bypasses the player's
+     * consent</strong> — which is why no command reaches it. It exists for administration and for
+     * migration imports, where the consent already happened somewhere else. The player-facing path
+     * is {@link #invite} and {@link #acceptInvitation}, and anything wired to this instead would be
+     * quietly undoing that.</p>
      */
     public CompletableFuture<ServiceResult<Town>> join(
             final ResidentId actor, final ResidentId who, final TownId townId) {
@@ -194,17 +311,23 @@ public final class TownService {
         return refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
             requirePermission(transaction, town, actor, Permission.INVITE_RESIDENT);
-
-            final Resident resident = resident(transaction, who);
-            final Resident joined = require(resident.joinTown(townId));
-            final Outcome<Town> admitted = town.admit(who);
-            final Town updated = require(admitted);
-
-            transaction.residents().save(joined);
-            transaction.towns().save(updated);
-            transaction.publishAll(admitted.events(), correlation("join", townId));
-            return updated;
+            return admit(transaction, townId, who);
         }), Town::id);
+    }
+
+    /** The membership change itself, shared by the consented path and the forced one. */
+    private Town admit(
+            final CivicTransaction transaction, final TownId townId, final ResidentId who) {
+        final Town town = town(transaction, townId);
+        final Resident resident = resident(transaction, who);
+        final Resident joined = require(resident.joinTown(townId));
+        final Outcome<Town> admitted = town.admit(who);
+        final Town updated = require(admitted);
+
+        transaction.residents().save(joined);
+        transaction.towns().save(updated);
+        transaction.publishAll(admitted.events(), correlation("join", townId));
+        return updated;
     }
 
     /**
@@ -340,6 +463,9 @@ public final class TownService {
             // cascade would make the claim count in the announcement below unknowable, and it would
             // hide the release from anything watching claims rather than towns.
             final int releasedChunks = transaction.claims().deleteAllOf(townId);
+            // Offers go with the town that made them. One left behind could be accepted into a town
+            // that no longer exists, which fails confusingly instead of simply not being there.
+            transaction.invitations().deleteAllFor(townId);
             transaction.roles().delete(OrganisationScope.TOWN, townId.value());
             transaction.towns().delete(townId);
             if (releasedChunks > 0) {

@@ -40,7 +40,7 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|add|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|reclaim|delete|role|flag>
+    usage: /town <new|info|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|reclaim|delete|role|flag>
   nation:
     aliases: [n]
     description: Found and manage a nation.
@@ -73,6 +73,7 @@ permissions:
       rifttowny.town.new: true
       rifttowny.town.info: true
       rifttowny.town.add: true
+      rifttowny.town.invites: true
       rifttowny.town.kick: true
       rifttowny.town.leave: true
       rifttowny.town.rename: true
@@ -93,7 +94,10 @@ permissions:
     description: View a town.
     default: true
   rifttowny.town.add:
-    description: Add a resident to your town.
+    description: Invite a player to your town, and withdraw the invitation.
+    default: true
+  rifttowny.town.invites:
+    description: See, accept and decline invitations addressed to you.
     default: true
   rifttowny.town.kick:
     description: Remove a resident from your town.
