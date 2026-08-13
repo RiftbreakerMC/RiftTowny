@@ -49,6 +49,8 @@ public interface CivicTransaction {
 
     SpawnStore spawns();
 
+    BankStore bank();
+
     /**
      * Queues an event for delivery.
      *
@@ -303,6 +305,37 @@ public interface CivicTransaction {
 
         /** Removes it, as when the land it stood on stops being the town's. */
         boolean clear(TownId town);
+    }
+
+    /**
+     * Civic money, inside the transaction.
+     *
+     * <p>The balance and the ledger entry that explains it are written together, always. A balance
+     * that does not equal the sum of its history is a bug rather than a race, and the only way to
+     * keep that true is to make them one write.</p>
+     */
+    interface BankStore {
+
+        /** What an account holds in one currency, or empty if it has never held any. */
+        Optional<net.riftbreaker.rifttowny.domain.bank.Money> balance(
+                java.util.UUID accountId, String currency);
+
+        /**
+         * Records a movement and the balance it produced.
+         *
+         * <p>The caller has already worked out the new balance, because the rule about whether it is
+         * allowed — enough money, a permission — belongs above the SQL.</p>
+         */
+        void record(
+                net.riftbreaker.rifttowny.domain.bank.LedgerEntry entry,
+                java.time.Instant now);
+
+        /** The most recent movements on an account, newest first. */
+        List<net.riftbreaker.rifttowny.domain.bank.LedgerEntry> history(
+                java.util.UUID accountId, int limit);
+
+        /** Removes an account's balance and history, as when its organisation is disbanded. */
+        int forget(java.util.UUID accountId);
     }
 
     /** Nations, inside the transaction. */

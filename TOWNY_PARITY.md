@@ -72,7 +72,7 @@ rows as the truth.
 | `/town rank add|remove` | `/town role assign|unassign` | DONE |
 | Custom ranks with configurable permissions | `/town role new|delete`, grant, revoke, reprioritise | DONE — Towny's ranks are config-defined; ours are per-town and editable in game |
 | `/town buy bonus`, `/town claim` cost | — | **MISSING** — `RT-MOD-BANK` |
-| `/town deposit`, `/town withdraw` | — | **MISSING** — `RT-MOD-BANK` |
+| `/town deposit`, `/town withdraw` | `/town deposit`, `/town withdraw`, `/town bank` | PARTIAL — the ledger, balances, history and permissions are done; the two transfer commands refuse until an economy provider exists. See `INTEGRATION_CONTRACTS.md` §2.7 |
 | Town upkeep, bankruptcy, ruin on unpaid upkeep | Ruins exist; upkeep does not | PARTIAL |
 | `/town outlaw add|remove` | — | **MISSING** |
 | `/town merge` | — | **MISSING** |
@@ -138,7 +138,7 @@ rows as the truth.
 
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
-| Economy: town/nation banks, taxes, upkeep, plot prices | — | **MISSING** — `RT-MOD-BANK`, `RT-MOD-TAX`. Blocks the reclaim price, plot sales, spawn cost and claim cost rows above |
+| Economy: town/nation banks, taxes, upkeep, plot prices | Town bank and ledger built; no player wallet, no taxes, no prices | PARTIAL — the civic half exists and every price row above is now one `BankService.charge` away. The player half needs RiftEco, which is not in this workspace |
 | Chat channels: town, nation, ally | — | **MISSING** — `RT-MOD-CHAT` |
 | `%townyadvanced_*%` placeholders | Manifest captured, none implemented | **MISSING** — `RT-MOD-PAPI` |
 | Dynmap/BlueMap/squaremap territory rendering | — | **MISSING** — `RT-MOD-MAP` |

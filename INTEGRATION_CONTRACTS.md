@@ -378,6 +378,46 @@ for typed input.
 `TeleportSafetyService` and `ServerPolicyService` both currently consult Towny; both are
 PR targets.
 
+### 2.7 RiftEco — player wallets — `BLOCKED` (2026-08-13)
+
+RiftEco is **not present in this workspace**. Its API cannot be read, so no adapter can be
+written against it and none has been: the only `PlayerWallet` implementation that ships is
+`PlayerWallet.absent()`, which refuses every operation.
+
+**What is built and does not need RiftEco.** The civic ledger is entirely RiftTowny's:
+`rt_organisation_balance` and `rt_bank_ledger`, balances, history, and every rule about who
+may move what. A town has a treasury on a server with no economy plugin at all. Taxes,
+upkeep, claim costs and the ruin reclaim price will all move money inside that ledger.
+
+**What is blocked.** Money crossing between a *player* and an organisation — `/town deposit`
+and `/town withdraw`. A player's balance belongs to the economy plugin, and RiftTowny will
+not keep a second one: a server with two answers to "how much money do I have" has a bug it
+cannot fix. Those two commands refuse with `NO_ECONOMY` and `/town bank` says so on its first
+line, so an operator learns it from the screen rather than from a player's complaint.
+
+**The contract an adapter must satisfy** — `net.riftbreaker.rifttowny.domain.bank.PlayerWallet`:
+
+| Method | Required behaviour |
+|---|---|
+| `available()` | `true` only when the provider is actually usable |
+| `currency()` | The currency organisations bank in. Must be stable for the life of the server; a change is a migration, not a config reload |
+| `balanceOf(ResidentId)` | The player's balance, or empty if the provider cannot say. Must not block a server thread |
+| `take(ResidentId, Money)` | `true` **only if the money was actually taken.** A `true` that did not move money creates money in the civic ledger |
+| `give(ResidentId, Money)` | `true` only if the money arrived. A `false` is handled — the civic side is put back and recorded — but a wrong `true` loses it |
+
+Two properties the adapter must preserve, because `BankService` depends on them:
+
+1. **`take` is atomic.** RiftTowny debits the player first and credits the town second; a
+   partial take would credit a town from a player who kept their money.
+2. **Amounts are exact.** `Money` is `BigDecimal` at four decimal places. An adapter that
+   round-trips through `double` reintroduces the error the ledger was built to avoid.
+
+This is not a two-phase commit and does not claim to be. A crash between `take` succeeding
+and the civic write committing loses that transaction; the window is one write wide, the loss
+is in the safe direction, and the ledger records what did commit.
+
+**VaultUnlocked** is the intended fallback and is equally unbuilt, for the same reason.
+
 ### 2.12 Third-party — `NOT INSPECTED`
 
 | Plugin | Use | Note |

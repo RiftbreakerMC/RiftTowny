@@ -54,6 +54,7 @@ public final class TownCommands {
     private final net.riftbreaker.rifttowny.domain.service.RuinService ruins;
     private final net.riftbreaker.rifttowny.domain.service.SpawnService spawns;
     private final net.riftbreaker.rifttowny.paper.spawn.TeleportService teleports;
+    private final net.riftbreaker.rifttowny.domain.service.BankService banks;
     private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
@@ -68,6 +69,7 @@ public final class TownCommands {
             final net.riftbreaker.rifttowny.domain.service.RuinService ruins,
             final net.riftbreaker.rifttowny.domain.service.SpawnService spawns,
             final net.riftbreaker.rifttowny.paper.spawn.TeleportService teleports,
+            final net.riftbreaker.rifttowny.domain.service.BankService banks,
             final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
@@ -81,6 +83,7 @@ public final class TownCommands {
         this.ruins = Objects.requireNonNull(ruins, "ruins");
         this.spawns = Objects.requireNonNull(spawns, "spawns");
         this.teleports = Objects.requireNonNull(teleports, "teleports");
+        this.banks = Objects.requireNonNull(banks, "banks");
         this.names = Objects.requireNonNull(names, "names");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
@@ -184,6 +187,21 @@ public final class TownCommands {
                         .usage("town homeblock")
                         .describedAs("Move your home chunk here")
                         .runs(this::homeblock, Surface.CHAT))
+                .child(CommandNode.action("bank")
+                        .permission("rifttowny.town.bank")
+                        .usage("town bank")
+                        .describedAs("Show the town treasury and its recent movements")
+                        .runs(this::bank, Surface.CHAT))
+                .child(CommandNode.action("deposit")
+                        .permission("rifttowny.town.bank")
+                        .usage("town deposit <amount>")
+                        .describedAs("Put your own money into the town")
+                        .runs(this::deposit, Surface.CHAT))
+                .child(CommandNode.action("withdraw")
+                        .permission("rifttowny.town.bank")
+                        .usage("town withdraw <amount>")
+                        .describedAs("Take money out of the town")
+                        .runs(this::withdraw, Surface.CHAT))
                 .child(CommandNode.action("spawn")
                         .permission("rifttowny.town.spawn")
                         .usage("town spawn")
@@ -312,6 +330,8 @@ public final class TownCommands {
             messages.send(actor::send, MessageKey.TOWN_INFO_HEADER,
                     MessageService.value("town", town.name().display()));
             line(actor, "Mayor", names.describe(town.mayor()));
+            then(actor, banks.balanceOf(town.id()),
+                    balance -> line(actor, "Treasury", balance.describe()));
             line(actor, "Residents", String.valueOf(town.residentCount()));
             line(actor, "Nation", town.nation().map(Object::toString).orElse("none"));
             line(actor, "Trusted", String.valueOf(town.trustedOutsiders().size()));
@@ -570,6 +590,81 @@ public final class TownCommands {
                                 messages.send(actor::send, MessageKey.ROLE_UNASSIGNED,
                                         MessageService.value("resident", args.getFirst()),
                                         MessageService.value("role", role.name()))));
+    }
+
+    // --- bank actions --------------------------------------------------------------------------
+
+    /**
+     * The treasury and how it got that way.
+     *
+     * <p>Works with no economy plugin: the balance and the ledger are civic state. Only the two
+     * commands that move money between a player and the town need a wallet, and they say so.</p>
+     */
+    private void bank(final CommandActor actor, final List<String> args) {
+        withTown(actor, (who, town) -> then(actor, banks.balanceOf(town.id()), balance -> {
+            messages.send(actor::send, MessageKey.TOWN_BANK_HEADER,
+                    MessageService.value("town", town.name().display()),
+                    MessageService.value("balance", balance.describe()));
+            if (!banks.economyAvailable()) {
+                messages.sendRaw(actor::send, MessageKey.TOWN_BANK_NO_ECONOMY);
+            }
+            then(actor, banks.historyOf(town.id(),
+                    net.riftbreaker.rifttowny.domain.service.BankService.DEFAULT_HISTORY),
+                    history -> {
+                        if (history.isEmpty()) {
+                            messages.sendRaw(actor::send, MessageKey.TOWN_BANK_NO_HISTORY);
+                            return;
+                        }
+                        for (final var entry : history) {
+                            messages.sendRaw(actor::send, MessageKey.TOWN_BANK_LINE,
+                                    MessageService.value("movement", entry.describe()),
+                                    MessageService.value("by",
+                                            entry.author().map(names::describe).orElse("the server")));
+                        }
+                    });
+        }));
+    }
+
+    private void deposit(final CommandActor actor, final List<String> args) {
+        withAmount(actor, args, "town deposit <amount>", (who, town, amount) ->
+                reply(actor, banks.deposit(who, town.id(), amount), balance ->
+                        messages.send(actor::send, MessageKey.TOWN_BANK_DEPOSITED,
+                                MessageService.value("amount", amount.describe()),
+                                MessageService.value("balance", balance.describe()))));
+    }
+
+    private void withdraw(final CommandActor actor, final List<String> args) {
+        withAmount(actor, args, "town withdraw <amount>", (who, town, amount) ->
+                reply(actor, banks.withdraw(who, town.id(), amount), balance ->
+                        messages.send(actor::send, MessageKey.TOWN_BANK_WITHDREW,
+                                MessageService.value("amount", amount.describe()),
+                                MessageService.value("balance", balance.describe()))));
+    }
+
+    /** Reads an amount, refusing anything that is not one rather than guessing at it. */
+    private void withAmount(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final AmountWork work
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        final var amount = net.riftbreaker.rifttowny.domain.bank.Money.parse(
+                args.getFirst(), banks.currency());
+        if (amount.isEmpty()) {
+            messages.send(actor::send, MessageKey.TOWN_BANK_BAD_AMOUNT,
+                    MessageService.value("input", args.getFirst()));
+            return;
+        }
+        withTown(actor, (who, town) -> work.accept(who, town, amount.get()));
+    }
+
+    @FunctionalInterface
+    private interface AmountWork {
+        void accept(ResidentId actor, Town town, net.riftbreaker.rifttowny.domain.bank.Money amount);
     }
 
     // --- spawn actions -------------------------------------------------------------------------

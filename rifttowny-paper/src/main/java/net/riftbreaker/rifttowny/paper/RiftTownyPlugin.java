@@ -67,6 +67,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.RuinService ruinService;
     private net.riftbreaker.rifttowny.domain.service.SpawnService spawnService;
     private net.riftbreaker.rifttowny.domain.service.PlotService plotService;
+    private net.riftbreaker.rifttowny.domain.service.BankService bankService;
     private net.riftbreaker.rifttowny.domain.civic.ResidentNames residentNames;
     private net.riftbreaker.rifttowny.domain.service.ResidentNameService residentNameService;
     private net.riftbreaker.rifttowny.paper.spawn.TeleportService teleportService;
@@ -158,6 +159,13 @@ public final class RiftTownyPlugin extends JavaPlugin {
         // RiftLogger gained block history in 4e91300, so the upstream gap is closed. Still
         // reported blocked because RiftTowny has not written the adapter or the listeners yet -
         // an operator should be told there is no history being recorded, not that there is.
+        // Same shape again: the civic ledger is built and works, and the half that needs a player's
+        // wallet cannot be written without RiftEco's API to write against. Reported blocked so an
+        // operator is told deposits will refuse, rather than finding out when one does.
+        capabilities.markBlocked(Capability.ECONOMY_RIFTECO,
+                "RiftEco's API is not available to build against; the civic ledger works but "
+                        + "money cannot move between players and organisations. "
+                        + "See INTEGRATION_CONTRACTS.md 2.7");
         capabilities.markBlocked(Capability.AUDIT_BLOCK_HISTORY,
                 "RiftLogger supports block history; RiftTowny's adapter is not written yet. "
                         + "See INTEGRATION_CONTRACTS.md 2.2.1");
@@ -183,8 +191,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
                 townService, townRoleService, territoryService, flagService, ruinService,
-                spawnService, teleportService, residentNames, residentRepository, townRepository,
-                messages, denialText).tree());
+                spawnService, teleportService, bankService, residentNames, residentRepository,
+                townRepository, messages, denialText).tree());
 
         registerTree("plot", new net.riftbreaker.rifttowny.paper.command.PlotCommands(
                 plotService, residentNames, residentRepository, townRepository, messages,
@@ -257,6 +265,14 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicStore, clock, territoryIndex);
             this.plotService = new net.riftbreaker.rifttowny.domain.service.PlotService(
                     civicStore, clock, territoryIndex);
+            // No wallet implementation exists: RiftEco is the intended provider and its API is not
+            // available to build against. The civic ledger works regardless - a town has a balance
+            // and a history - and only the two commands that move money between a player and the
+            // town are refused. A stub that pretended to move money would fill treasuries with
+            // money nobody paid, which is a duplication bug found months later.
+            this.bankService = new net.riftbreaker.rifttowny.domain.service.BankService(
+                    civicStore, clock,
+                    net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent());
             this.residentNames = net.riftbreaker.rifttowny.domain.civic.ResidentNames.empty();
             this.residentNameService =
                     new net.riftbreaker.rifttowny.domain.service.ResidentNameService(

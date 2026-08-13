@@ -229,6 +229,28 @@ public enum ChangeDenial {
     /** The town has no spawn set. */
     NO_TOWN_SPAWN,
 
+    // --- money -------------------------------------------------------------------------------
+
+    /**
+     * No economy plugin is installed.
+     *
+     * <p>The civic ledger works regardless — a town has a balance and a history — but money cannot
+     * cross between a player and an organisation when there is nothing on the player's side.</p>
+     */
+    NO_ECONOMY,
+
+    /** Zero is not an amount. */
+    AMOUNT_MUST_BE_POSITIVE,
+
+    /** The player does not have that much. */
+    INSUFFICIENT_FUNDS,
+
+    /** The organisation does not have that much. */
+    INSUFFICIENT_CIVIC_FUNDS,
+
+    /** The economy plugin declined, and the money has been put back. */
+    ECONOMY_REFUSED,
+
     // --- plots -------------------------------------------------------------------------------
 
     /** Somebody else already holds that plot. */

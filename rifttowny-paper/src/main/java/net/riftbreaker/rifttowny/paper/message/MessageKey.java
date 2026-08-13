@@ -135,6 +135,32 @@ public enum MessageKey {
     TOWN_UNCLAIMED("town.unclaimed",
             "<yellow>Released <white><chunk></white>.</yellow>"),
 
+    TOWN_BANK_HEADER("town.bank-header",
+            "<gray>Treasury of <white><town></white> <dark_gray>-</dark_gray> "
+                    + "<white><balance></white></gray>"),
+
+    TOWN_BANK_LINE("town.bank-line",
+            "  <white><movement></white> <dark_gray>-</dark_gray> <gray><by></gray>"),
+
+    TOWN_BANK_NO_HISTORY("town.bank-no-history",
+            "  <gray>Nothing has moved yet.</gray>"),
+
+    /** Said once, on the bank screen, rather than only when somebody tries and is refused. */
+    TOWN_BANK_NO_ECONOMY("town.bank-no-economy",
+            "  <yellow>No economy plugin is installed, so money cannot move between "
+                    + "players and the town.</yellow>"),
+
+    TOWN_BANK_DEPOSITED("town.bank-deposited",
+            "<green>Deposited <white><amount></white>. The treasury holds "
+                    + "<white><balance></white>.</green>"),
+
+    TOWN_BANK_WITHDREW("town.bank-withdrew",
+            "<green>Withdrew <white><amount></white>. The treasury holds "
+                    + "<white><balance></white>.</green>"),
+
+    TOWN_BANK_BAD_AMOUNT("town.bank-bad-amount",
+            "<red><white><input></white> is not an amount.</red>"),
+
     TOWN_SPAWN_ARRIVED("town.spawn-arrived",
             "<green>Welcome to <white><town></white>.</green>"),
 

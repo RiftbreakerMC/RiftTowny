@@ -86,6 +86,7 @@ public final class JdbcCivicStore implements CivicStore {
         private final ConnectionInvitationStore invitations;
         private final ConnectionRuinStore ruins;
         private final ConnectionSpawnStore spawns;
+        private final ConnectionBankStore bank;
 
         private JdbcCivicTransaction(
                 final Connection connection, final RiftTownyDatabase database, final Clock clock) {
@@ -100,6 +101,7 @@ public final class JdbcCivicStore implements CivicStore {
             this.invitations = new ConnectionInvitationStore(connection, database.backend());
             this.ruins = new ConnectionRuinStore(connection);
             this.spawns = new ConnectionSpawnStore(connection, database.backend());
+            this.bank = new ConnectionBankStore(connection, database.backend());
         }
 
         @Override
@@ -145,6 +147,11 @@ public final class JdbcCivicStore implements CivicStore {
         @Override
         public SpawnStore spawns() {
             return spawns;
+        }
+
+        @Override
+        public BankStore bank() {
+            return bank;
         }
 
         @Override

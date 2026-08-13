@@ -40,7 +40,7 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|reclaim|delete|role|flag>
+    usage: /town <new|info|bank|deposit|withdraw|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|spawn|setspawn|reclaim|delete|role|flag>
   plot:
     aliases: [p]
     description: Take and manage the plot you are standing on.
@@ -86,6 +86,7 @@ permissions:
       rifttowny.town.claim: true
       rifttowny.town.unclaim: true
       rifttowny.town.homeblock: true
+      rifttowny.town.bank: true
       rifttowny.town.spawn: true
       rifttowny.town.setspawn: true
       rifttowny.town.reclaim: true
@@ -128,6 +129,9 @@ permissions:
     default: true
   rifttowny.town.homeblock:
     description: Move your town's home chunk.
+    default: true
+  rifttowny.town.bank:
+    description: See the treasury, deposit and withdraw. BANK_DEPOSIT and BANK_WITHDRAW decide who really can.
     default: true
   rifttowny.town.spawn:
     description: Travel to your town's spawn. The TOWN_SPAWN role permission decides who really can.
