@@ -153,8 +153,8 @@ public final class TownCommands {
                         .runs(this::homeblock, Surface.CHAT))
                 .child(CommandNode.action("reclaim")
                         .permission("rifttowny.town.reclaim")
-                        .usage("town reclaim <name>")
-                        .describedAs("Found a town on the ruin you are standing in")
+                        .usage("town reclaim")
+                        .describedAs("Rebuild the fallen town you are standing in")
                         .runs(this::reclaim, Surface.CHAT))
                 .child(roleTree())
                 .child(flagTree())
@@ -456,27 +456,21 @@ public final class TownCommands {
     }
 
     /**
-     * Takes on the ruin the player is standing in.
+     * Rebuilds the fallen town the player is standing in.
      *
-     * <p>Founds a new town on the old one's ground. Deliberately not a restoration: the residents,
-     * roles and treasury are gone, and handing a stranger a membership list would be a different
-     * feature entirely. What carries over is the land, which is the part that took work.</p>
+     * <p>Takes no name: the town comes back as itself. What does not come back is its population —
+     * the residents, roles and treasury belonged to people who have moved on.</p>
      */
     private void reclaim(final CommandActor actor, final List<String> args) {
-        if (args.isEmpty()) {
-            usage(actor, "town reclaim <name>");
-            return;
-        }
         player(actor).ifPresent(who -> whereTheyStand(actor, chunk -> {
             final var ruin = ruins.at(chunk);
             if (ruin.isEmpty()) {
                 denied(actor, ChangeDenial.NOT_A_RUIN);
                 return;
             }
-            reply(actor, ruins.reclaim(who, actor.name(), chunk, args.getFirst()), town ->
+            reply(actor, ruins.reclaim(who, actor.name(), chunk), town ->
                     messages.send(actor::send, MessageKey.TOWN_RECLAIMED,
-                            MessageService.value("town", town.name().display()),
-                            MessageService.value("ruin", ruin.get().name().display())));
+                            MessageService.value("town", town.name().display())));
         }));
     }
 

@@ -43,6 +43,9 @@ class RuinServiceTest extends SqliteFixture {
 
     private static final Instant NOW = Instant.parse("2026-08-12T09:00:00Z");
     private static final Duration LIFETIME = Duration.ofDays(3);
+    private static final Duration RECLAIM_DELAY = Duration.ofDays(1);
+    /** After the delay, before the window closes. */
+    private static final Instant OPEN = NOW.plus(RECLAIM_DELAY).plusSeconds(1);
 
     private static final UUID WORLD = UUID.randomUUID();
     private static final ChunkKey HOME = new ChunkKey(WORLD, 0, 0);
@@ -83,7 +86,7 @@ class RuinServiceTest extends SqliteFixture {
         final Clock clock = at(when);
         return new Services(
                 new TownService(store, NamePolicy.defaults(), clock, index, civic, overrides,
-                        ruinIndex, LIFETIME),
+                        ruinIndex, RECLAIM_DELAY, LIFETIME),
                 new RuinService(store, NamePolicy.defaults(), clock, index, ruinIndex, civic,
                         LIFETIME));
     }
@@ -149,7 +152,7 @@ class RuinServiceTest extends SqliteFixture {
             final RuinIndex unused = RuinIndex.empty();
             final TownService noRuins = new TownService(
                     store, NamePolicy.defaults(), at(NOW), index, civic, overrides,
-                    unused, Duration.ZERO);
+                    unused, Duration.ZERO, Duration.ZERO);
             residents.save(Resident.newcomer(MAYOR, "Mayor", NOW)).join();
             final Town town = noRuins.found(MAYOR, "Mayor", "Riftholm").join().value().orElseThrow();
             territory.claim(MAYOR, town.id(), HOME, ClaimKind.HOMEBLOCK).join();
@@ -168,31 +171,52 @@ class RuinServiceTest extends SqliteFixture {
     class Protection {
 
         @Test
-        @DisplayName("the shell stands: nobody may build or break in a ruin")
-        void theShellIsProtected() {
+        @DisplayName("a ruin is not protected: it can be looted and pulled apart")
+        void ruinsAreOpen() {
             fallenRiftholm();
 
-            for (final ResidentId who : java.util.List.of(MAYOR, WANDERER)) {
-                assertThat(query().mayAct(who, HOME, ProtectionFlag.BUILD).denied())
-                        .as("build for %s", who)
-                        .isTrue();
-                assertThat(query().mayAct(who, HOME, ProtectionFlag.BREAK).denied())
-                        .as("break for %s", who)
+            for (final ProtectionFlag flag : java.util.List.of(
+                    ProtectionFlag.BUILD, ProtectionFlag.BREAK, ProtectionFlag.CONTAINER,
+                    ProtectionFlag.INTERACT, ProtectionFlag.PVP)) {
+                assertThat(query().mayAct(WANDERER, HOME, flag).allowed())
+                        .as("%s in a ruin: a fallen town is picked over, not sealed", flag)
                         .isTrue();
             }
         }
 
         @Test
-        @DisplayName("the contents do not: a ruin's chests open")
-        void theContentsAreNot() {
+        @DisplayName("the world takes it apart too: it burns and it blows up")
+        void theWorldIsNotHeldBack() {
+            fallenRiftholm();
+
+            for (final ProtectionFlag flag : java.util.List.of(
+                    ProtectionFlag.EXPLOSIONS, ProtectionFlag.FIRE_SPREAD,
+                    ProtectionFlag.FLUID_FLOW, ProtectionFlag.PISTONS)) {
+                assertThat(query().mayAct(null, HOME, flag).allowed())
+                        .as("%s in a ruin", flag)
+                        .isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("a subsystem action is still refused, in a ruin as anywhere else")
+        void subsystemActionsStillNeedTheirLayer() {
+            fallenRiftholm();
+
+            assertThat(query().mayAct(WANDERER, HOME, ProtectionFlag.WAR_ACTION).denied()).isTrue();
+            assertThat(query().mayAct(WANDERER, HOME, ProtectionFlag.EVENT_ACTION).denied())
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("it is still reported as a ruin, not as wilderness")
+        void itIsStillARuin() {
             fallenRiftholm();
 
             final var answer = query().mayAct(WANDERER, HOME, ProtectionFlag.CONTAINER);
-            assertThat(answer.allowed())
-                    .as("the plunder is what makes a fallen town an event rather than an absence")
-                    .isTrue();
             assertThat(answer.isRuin()).isTrue();
             assertThat(answer.explain()).contains("in the ruins of Riftholm");
+            assertThat(query().mayAct(WANDERER, WILD, ProtectionFlag.CONTAINER).isRuin()).isFalse();
         }
 
         @Test
@@ -200,29 +224,12 @@ class RuinServiceTest extends SqliteFixture {
         void theFormerMayorIsNobody() {
             fallenRiftholm();
 
-            assertThat(query().mayAct(MAYOR, HOME, ProtectionFlag.BUILD).denied())
-                    .as("otherwise disbanding would be a way to keep the land quietly")
-                    .isTrue();
             assertThat(query().relationshipAt(MAYOR, HOME))
                     .isEqualTo(net.riftbreaker.rifttowny.domain.flag.Relationship.VISITOR);
         }
 
         @Test
-        @DisplayName("the world may not take it apart either")
-        void theWorldIsHeldBack() {
-            fallenRiftholm();
-
-            for (final ProtectionFlag flag : java.util.List.of(
-                    ProtectionFlag.EXPLOSIONS, ProtectionFlag.FIRE_SPREAD,
-                    ProtectionFlag.FLUID_FLOW, ProtectionFlag.PISTONS)) {
-                assertThat(query().mayAct(null, HOME, flag).denied())
-                        .as("%s in a ruin: whatever stands has to survive to be reclaimed", flag)
-                        .isTrue();
-            }
-        }
-
-        @Test
-        @DisplayName("an administrator can still overrule the ruin defaults")
+        @DisplayName("an administrator can still shut a ruin down")
         void adminLayerStillApplies() {
             fallenRiftholm();
             overrides.apply(net.riftbreaker.rifttowny.domain.flag.FlagOverride.of(
@@ -238,71 +245,115 @@ class RuinServiceTest extends SqliteFixture {
     }
 
     @Nested
-    @DisplayName("taking a ruin on")
+    @DisplayName("rebuilding a fallen town")
     class Reclaiming {
 
-        @Test
-        @DisplayName("a townless player founds a town on the whole ruin")
-        void reclaiming() {
-            fallenRiftholm();
+        /** The reclaim services, at a moment when the ruin is open. */
+        private RuinService open() {
             residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
+            return servicesAt(OPEN).ruins();
+        }
 
-            final Town taken = ruins.reclaim(WANDERER, "Wanderer", HOME, "Highholm")
+        @Test
+        @DisplayName("the town comes back as itself, with the reclaimer as mayor")
+        void theTownReturns() {
+            final Town fallen = fallenRiftholm();
+
+            final Town restored = open().reclaim(WANDERER, "Wanderer", HOME)
                     .join().value().orElseThrow();
 
-            assertThat(taken.name().display()).isEqualTo("Highholm");
-            assertThat(taken.mayor()).isEqualTo(WANDERER);
-            assertThat(index.ownerOf(HOME)).contains(taken.id());
+            assertThat(restored.name().display())
+                    .as("a restoration, not a land sale")
+                    .isEqualTo("Riftholm");
+            assertThat(restored.id())
+                    .as("the same town, so everything ever written about it still points at it")
+                    .isEqualTo(fallen.id());
+            assertThat(restored.mayor()).isEqualTo(WANDERER);
+        }
+
+        @Test
+        @DisplayName("it takes back every chunk the ruin still held")
+        void theLandReturns() {
+            fallenRiftholm();
+
+            final Town restored = open().reclaim(WANDERER, "Wanderer", MARKET)
+                    .join().value().orElseThrow();
+
+            assertThat(index.ownerOf(HOME)).contains(restored.id());
             assertThat(index.ownerOf(MARKET))
                     .as("the whole ruin, not only the chunk they stood in")
-                    .contains(taken.id());
+                    .contains(restored.id());
             assertThat(ruinIndex.size()).isZero();
         }
 
         @Test
-        @DisplayName("the chunk they stood in becomes the new homeblock")
-        void theirChunkBecomesTheHomeblock() {
+        @DisplayName("the homeblock returns to where it was, not to where the reclaimer stood")
+        void theHomeblockReturns() {
             fallenRiftholm();
-            residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
 
-            final Town taken = ruins.reclaim(WANDERER, "Wanderer", MARKET, "Highholm")
-                    .join().value().orElseThrow();
+            open().reclaim(WANDERER, "Wanderer", MARKET).join();
 
-            assertThat(store.inTransaction(t -> t.claims().at(MARKET).orElseThrow().kind()).join())
-                    .isEqualTo(ClaimKind.HOMEBLOCK);
             assertThat(store.inTransaction(t -> t.claims().at(HOME).orElseThrow().kind()).join())
+                    .as("the town is rebuilt where it was, not where somebody happened to stand")
+                    .isEqualTo(ClaimKind.HOMEBLOCK);
+            assertThat(store.inTransaction(t -> t.claims().at(MARKET).orElseThrow().kind()).join())
                     .isEqualTo(ClaimKind.ORDINARY);
-            assertThat(taken.id()).isNotNull();
         }
 
         @Test
-        @DisplayName("the new town protects its land immediately")
+        @DisplayName("its population does not return: no residents, no roles from before")
+        void thePopulationDoesNot() {
+            fallenRiftholm();
+
+            final Town restored = open().reclaim(WANDERER, "Wanderer", HOME)
+                    .join().value().orElseThrow();
+
+            assertThat(restored.residents())
+                    .as("handing a stranger the old membership list would be a different feature")
+                    .containsExactly(WANDERER);
+            assertThat(store.inTransaction(t -> t.residents().find(MAYOR).orElseThrow().town())
+                    .join()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("the rebuilt town protects its land immediately")
         void protectionFollows() {
             fallenRiftholm();
-            residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
 
-            ruins.reclaim(WANDERER, "Wanderer", HOME, "Highholm").join();
+            open().reclaim(WANDERER, "Wanderer", HOME).join();
 
             assertThat(query().mayAct(WANDERER, HOME, ProtectionFlag.BUILD).allowed())
                     .as("the reclaimer is its mayor")
                     .isTrue();
             assertThat(query().mayAct(MAYOR, HOME, ProtectionFlag.BUILD).denied())
-                    .as("and everybody else is a visitor again")
+                    .as("and the ruin's open season is over")
                     .isTrue();
         }
 
         @Test
-        @DisplayName("the ruin is kept as the record that one town succeeded another")
-        void theRecordSurvives() {
-            final Town fallen = fallenRiftholm();
+        @DisplayName("a ruin that is too fresh cannot be rebuilt yet")
+        void tooFreshToRebuild() {
+            fallenRiftholm();
             residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
 
-            final Town taken = ruins.reclaim(WANDERER, "Wanderer", HOME, "Highholm")
+            assertThat(ruins.reclaim(WANDERER, "Wanderer", HOME).join().denial())
+                    .as("otherwise a mayor disbands and re-founds, shedding everything but the land")
+                    .contains(ChangeDenial.RUIN_NOT_YET_RECLAIMABLE);
+            // Still a ruin, still open to be picked over in the meantime.
+            assertThat(query().mayAct(WANDERER, HOME, ProtectionFlag.CONTAINER).allowed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("the ruin is kept as the record of the fall it recovered from")
+        void theRecordSurvives() {
+            final Town fallen = fallenRiftholm();
+
+            final Town restored = open().reclaim(WANDERER, "Wanderer", HOME)
                     .join().value().orElseThrow();
 
             final Ruin record = storedRuinOf(fallen);
             assertThat(record.isReclaimed()).isTrue();
-            assertThat(record.successor()).contains(taken.id());
+            assertThat(record.successor()).contains(restored.id());
             assertThat(record.reclaimedBy()).isEqualTo(WANDERER);
         }
 
@@ -313,30 +364,47 @@ class RuinServiceTest extends SqliteFixture {
             residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
             towns.found(WANDERER, "Wanderer", "Ashford").join();
 
-            assertThat(ruins.reclaim(WANDERER, "Wanderer", HOME, "Highholm").join().denial())
+            assertThat(servicesAt(OPEN).ruins().reclaim(WANDERER, "Wanderer", HOME).join().denial())
                     .contains(ChangeDenial.ALREADY_IN_ANOTHER_TOWN);
         }
 
         @Test
-        @DisplayName("there is nothing to reclaim in wilderness")
+        @DisplayName("there is nothing to rebuild in wilderness")
         void wildernessIsNotARuin() {
             fallenRiftholm();
-            residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
 
-            assertThat(ruins.reclaim(WANDERER, "Wanderer", WILD, "Highholm").join().denial())
+            assertThat(open().reclaim(WANDERER, "Wanderer", WILD).join().denial())
                     .contains(ChangeDenial.NOT_A_RUIN);
         }
 
         @Test
-        @DisplayName("a reclaimed town's name still has to be free")
-        void namesAreStillUnique() {
+        @DisplayName("a rebuilt town can fall again, leaving a second ruin")
+        void aTownCanFallTwice() {
+            final Town fallen = fallenRiftholm();
+            final Town restored = open().reclaim(WANDERER, "Wanderer", HOME)
+                    .join().value().orElseThrow();
+
+            // Same id as the first fall. Keyed on it, one fall per town would have been a
+            // constraint violation here rather than a second ruin.
+            assertThat(servicesAt(OPEN).towns().disband(WANDERER, restored.id()).join().succeeded())
+                    .isTrue();
+
+            assertThat(ruins.at(HOME)).isPresent();
+            assertThat(countRuinsOf(fallen))
+                    .as("two falls are two ruins, and the first one is still the record of it")
+                    .isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("a town that took the fallen one's name in the meantime blocks the rebuild")
+        void nameTakenSinceTheFall() {
             fallenRiftholm();
             residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
             final ResidentId other = ResidentId.of(UUID.randomUUID());
             residents.save(Resident.newcomer(other, "Other", NOW)).join();
-            towns.found(other, "Other", "Ashford").join();
+            towns.found(other, "Other", "Riftholm").join();
 
-            assertThat(ruins.reclaim(WANDERER, "Wanderer", HOME, "Ashford").join().denial())
+            assertThat(servicesAt(OPEN).ruins().reclaim(WANDERER, "Wanderer", HOME).join().denial())
                     .contains(ChangeDenial.NAME_TAKEN);
         }
     }
@@ -355,9 +423,9 @@ class RuinServiceTest extends SqliteFixture {
 
             assertThat(ruinIndex.size()).isZero();
             assertThat(ruinIndex.claimedChunks()).isZero();
-            assertThat(query().mayAct(WANDERER, HOME, ProtectionFlag.BREAK).allowed())
-                    .as("wilderness again")
-                    .isTrue();
+            assertThat(query().mayAct(WANDERER, HOME, ProtectionFlag.BREAK).isRuin())
+                    .as("wilderness again, not a ruin")
+                    .isFalse();
         }
 
         @Test
@@ -379,13 +447,13 @@ class RuinServiceTest extends SqliteFixture {
         }
 
         @Test
-        @DisplayName("a lapsed ruin cannot be taken on, and says so distinctly")
+        @DisplayName("a lapsed ruin cannot be rebuilt, and says so distinctly")
         void lapsedRuinsRefuseReclaim() {
             fallenRiftholm();
             residents.save(Resident.newcomer(WANDERER, "Wanderer", NOW)).join();
             final RuinService later = servicesAt(NOW.plus(LIFETIME).plusSeconds(1)).ruins();
 
-            assertThat(later.reclaim(WANDERER, "Wanderer", HOME, "Highholm").join().denial())
+            assertThat(later.reclaim(WANDERER, "Wanderer", HOME).join().denial())
                     .as("'there is no ruin here' would read as a bug to somebody standing in one")
                     .contains(ChangeDenial.RUIN_HAS_LAPSED);
         }
@@ -410,10 +478,25 @@ class RuinServiceTest extends SqliteFixture {
      * <p>Read by former town rather than by chunk because these assertions run after the land has
      * gone — which is the point being made: the row outlives the ground.</p>
      */
+    private int countRuinsOf(final Town fallen) {
+        try (java.sql.Connection connection = database.connection();
+             java.sql.PreparedStatement statement = connection.prepareStatement(
+                     "SELECT COUNT(*) FROM rt_ruin WHERE former_town_id = ?")) {
+            statement.setString(1, fallen.id().value().toString());
+            try (java.sql.ResultSet results = statement.executeQuery()) {
+                assertThat(results.next()).isTrue();
+                return results.getInt(1);
+            }
+        } catch (final java.sql.SQLException failure) {
+            throw new IllegalStateException(failure);
+        }
+    }
+
     private Ruin storedRuinOf(final Town fallen) {
         try (java.sql.Connection connection = database.connection();
              java.sql.PreparedStatement statement = connection.prepareStatement(
-                     "SELECT ruin_id FROM rt_ruin WHERE former_town_id = ?")) {
+                     "SELECT ruin_id FROM rt_ruin WHERE former_town_id = ? "
+                             + "ORDER BY ruined_at DESC")) {
             statement.setString(1, fallen.id().value().toString());
             try (java.sql.ResultSet results = statement.executeQuery()) {
                 assertThat(results.next()).isTrue();

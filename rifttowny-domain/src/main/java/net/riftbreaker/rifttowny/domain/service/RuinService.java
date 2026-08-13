@@ -80,6 +80,11 @@ public final class RuinService {
         this.lifetime = Objects.requireNonNull(lifetime, "lifetime");
     }
 
+    /** How long a ruin stands here, for a message that has to say so. */
+    public Duration lifetime() {
+        return lifetime;
+    }
+
     /** The in-memory index, for listeners and for {@code /rifttowny status}. */
     public RuinIndex index() {
         return ruins;
@@ -106,28 +111,26 @@ public final class RuinService {
     }
 
     /**
-     * Takes a fallen town on.
+     * Brings a fallen town back.
      *
-     * <p>Requires the actor to belong to no town: reclaiming founds one, and a resident who already
-     * has a town would be founding a second. The new town takes every chunk the ruin still held, and
-     * the ruin keeps its row as the record that this town is the successor of that one.</p>
+     * <p><strong>A restoration, not a replacement.</strong> The town returns under its own name and
+     * its own identity, with the reclaimer as its mayor and every chunk the ruin still held. That is
+     * what makes the ruin window a second chance rather than a land sale: a town that fell while its
+     * mayor was away is the same town when somebody picks it back up.</p>
+     *
+     * <p>What does not come back: its residents, its roles and its treasury. Those belonged to
+     * people who have moved on, and handing a stranger a membership list would be a different
+     * feature. The town is restored; its population is not.</p>
+     *
+     * <p>Requires the actor to belong to no town, and requires the ruin to have lain open for the
+     * configured delay — without that a mayor could disband and immediately re-found, shedding
+     * whatever the town had accumulated while keeping its land.</p>
      */
     public CompletableFuture<ServiceResult<Town>> reclaim(
-            final ResidentId actor,
-            final String actorName,
-            final ChunkKey standingIn,
-            final String rawName
-    ) {
+            final ResidentId actor, final String actorName, final ChunkKey standingIn) {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(actorName, "actorName");
         Objects.requireNonNull(standingIn, "standingIn");
-
-        final NameCheck check = namePolicy.check(rawName);
-        if (!(check instanceof NameCheck.Accepted accepted)) {
-            return CompletableFuture.completedFuture(
-                    ServiceResult.nameRejected(check.problems()));
-        }
-        final OrganisationName name = accepted.name();
 
         return transaction(transaction -> {
             final Ruin ruin = transaction.ruins().at(standingIn)
@@ -137,13 +140,23 @@ public final class RuinService {
                 // past its window is a ruin the sweep has not reached yet.
                 throw new ChangeRefusedException(ChangeDenial.RUIN_HAS_LAPSED);
             }
+            if (!ruin.isReclaimableAt(clock.instant())) {
+                throw new ChangeRefusedException(ChangeDenial.RUIN_NOT_YET_RECLAIMABLE);
+            }
+
+            final OrganisationName name = ruin.name();
+            // The name should be free - it was released when the town fell - but a second town may
+            // have taken it in the meantime, and restoring over it would be a duplicate.
             if (transaction.towns().findByName(name.normalised()).isPresent()) {
                 throw new ChangeRefusedException(ChangeDenial.NAME_TAKEN);
             }
 
             final Resident resident = transaction.residents().find(actor)
                     .orElseGet(() -> Resident.newcomer(actor, actorName, clock.instant()));
-            final TownId id = TownId.random();
+            // The former id, not a new one. Everything written about this town before it fell - an
+            // audit row, an outbox event, a war record - keeps pointing at the town it was written
+            // about, and the anti-recreation rule can tell a restoration from a fresh founding.
+            final TownId id = ruin.formerTown();
             final Resident joined = require(resident.joinTown(id));
             final Town town = Town.found(id, name, actor, UUID.randomUUID(), clock.instant());
 
@@ -152,16 +165,17 @@ public final class RuinService {
             transaction.roles().save(
                     RoleBook.defaultsFor(OrganisationScope.TOWN, id.value(), clock.instant()));
 
-            // Every chunk the ruin still held becomes the new town's. The homeblock is the chunk the
-            // reclaimer is standing in, because that is the one they chose; the rest follow as
-            // ordinary claims regardless of what kind they were before, since outposts and embassies
-            // describe a relationship to a town that no longer exists.
+            // Every chunk the ruin still held comes back, and the homeblock returns to where it was.
+            // Falling back to the reclaimer's own chunk covers the town that never set one, and a
+            // homeblock the ruin no longer holds - which cannot happen today, but would leave a town
+            // with no home if it ever did.
             final Set<ChunkKey> held = transaction.ruins().chunksOf(ruin.id());
+            final ChunkKey home = ruin.home().filter(held::contains).orElse(standingIn);
             final List<Claim> taken = new ArrayList<>(held.size());
             for (final ChunkKey chunk : held) {
                 final Claim claim = Claim.of(
                         chunk, id,
-                        chunk.equals(standingIn) ? ClaimKind.HOMEBLOCK : ClaimKind.ORDINARY,
+                        chunk.equals(home) ? ClaimKind.HOMEBLOCK : ClaimKind.ORDINARY,
                         clock.instant());
                 transaction.claims().insert(claim);
                 taken.add(claim);
@@ -240,12 +254,23 @@ public final class RuinService {
             final Town town,
             final List<Claim> claims,
             final java.time.Instant now,
+            final Duration reclaimDelay,
             final Duration lifetime
     ) {
         if (lifetime.isZero() || lifetime.isNegative() || claims.isEmpty()) {
             return Optional.empty();
         }
-        final Ruin ruin = Ruin.of(town.id(), town.name(), town.mayor(), now, lifetime);
+        final ChunkKey home = claims.stream()
+                .filter(claim -> claim.kind() == ClaimKind.HOMEBLOCK)
+                .map(Claim::chunk)
+                .findFirst()
+                .orElse(null);
+        final Ruin ruin = Ruin.of(
+                town.id(), town.name(), town.mayor(), home, now,
+                // Clamped: a delay longer than the window would be a ruin nobody could ever take on,
+                // which is a configuration mistake rather than a design anybody wants.
+                reclaimDelay.compareTo(lifetime) > 0 ? lifetime : reclaimDelay,
+                lifetime);
         final List<ChunkKey> chunks = claims.stream().map(Claim::chunk).toList();
         transaction.ruins().save(ruin, chunks);
         transaction.publish(

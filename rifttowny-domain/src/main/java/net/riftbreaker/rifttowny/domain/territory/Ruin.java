@@ -32,7 +32,9 @@ public record Ruin(
         TownId formerTown,
         OrganisationName name,
         ResidentId founder,
+        net.riftbreaker.rifttowny.api.ChunkKey homeblock,
         Instant ruinedAt,
+        Instant reclaimableFrom,
         Instant expiresAt,
         Instant reclaimedAt,
         ResidentId reclaimedBy,
@@ -42,11 +44,23 @@ public record Ruin(
     /** How long a ruin stands before its land reverts, unless configured otherwise. */
     public static final Duration DEFAULT_LIFETIME = Duration.ofDays(3);
 
+    /**
+     * How long a fallen town lies open before anybody may take it on.
+     *
+     * <p>Not zero, and the reason is the point of the delay: without it a mayor could disband and
+     * immediately re-found on the same ground, shedding whatever the town had accumulated —
+     * obligations, a reputation, a war — while keeping its land. The window is the cost of that
+     * manoeuvre, and it is also the interval in which the fallen town's neighbours get to pick it
+     * over.</p>
+     */
+    public static final Duration DEFAULT_RECLAIM_DELAY = Duration.ofDays(1);
+
     public Ruin {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(formerTown, "formerTown");
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(ruinedAt, "ruinedAt");
+        Objects.requireNonNull(reclaimableFrom, "reclaimableFrom");
         Objects.requireNonNull(expiresAt, "expiresAt");
     }
 
@@ -55,23 +69,28 @@ public record Ruin(
             final TownId formerTown,
             final OrganisationName name,
             final ResidentId founder,
+            final net.riftbreaker.rifttowny.api.ChunkKey homeblock,
             final Instant now,
+            final Duration reclaimDelay,
             final Duration lifetime
     ) {
         Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(reclaimDelay, "reclaimDelay");
         Objects.requireNonNull(lifetime, "lifetime");
         return new Ruin(
-                UUID.randomUUID(), formerTown, name, founder, now, now.plus(lifetime),
+                UUID.randomUUID(), formerTown, name, founder, homeblock,
+                now, now.plus(reclaimDelay), now.plus(lifetime),
                 null, null, null);
     }
 
-    /** The same ruin, taken on by a new town. */
+    /** The same ruin, taken on again. */
     public Ruin reclaimedBy(final ResidentId who, final TownId asTown, final Instant now) {
         Objects.requireNonNull(who, "who");
         Objects.requireNonNull(asTown, "asTown");
         Objects.requireNonNull(now, "now");
         return new Ruin(
-                id, formerTown, name, founder, ruinedAt, expiresAt, now, who, asTown);
+                id, formerTown, name, founder, homeblock, ruinedAt, reclaimableFrom, expiresAt,
+                now, who, asTown);
     }
 
     /**
@@ -90,6 +109,26 @@ public record Ruin(
 
     public boolean isReclaimed() {
         return reclaimedAt != null;
+    }
+
+    /**
+     * Whether the ruin has lain open long enough to be taken on.
+     *
+     * <p>Separate from {@link #stands}: a ruin that is too fresh is still there, still unprotected
+     * and still being picked over. It simply cannot be rebuilt yet.</p>
+     */
+    public boolean isReclaimableAt(final Instant now) {
+        return stands(now) && !now.isBefore(reclaimableFrom);
+    }
+
+    /** How long until it may be taken on, or zero once it may. */
+    public Duration untilReclaimable(final Instant now) {
+        final Duration left = Duration.between(now, reclaimableFrom);
+        return left.isNegative() ? Duration.ZERO : left;
+    }
+
+    public Optional<net.riftbreaker.rifttowny.api.ChunkKey> home() {
+        return Optional.ofNullable(homeblock);
     }
 
     public Optional<ResidentId> founderId() {

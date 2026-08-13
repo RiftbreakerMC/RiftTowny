@@ -252,6 +252,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicCacheService,
                     flagOverrides,
                     ruinIndex,
+                    settings.ruinReclaimDelay(),
                     settings.ruinLifetime());
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions(), civicCacheService);

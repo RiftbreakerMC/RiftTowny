@@ -80,7 +80,7 @@ recorded now so "complete" can be measured against a real list instead of a vagu
 | balance | civic bank balance **in the organisation's default RiftEco currency** |
 | peaceful / neutral | town neutrality flag |
 | jailed | justice-module detention state (Phase 6; returns the "not jailed" value until then) |
-| ruins | post-disband ruin state (`RT-CORE-RUIN`; the land is held, the shell is protected, the chests are not) |
+| ruins | post-disband ruin state (`RT-CORE-RUIN`; the land is held but unprotected, and the town can be rebuilt under its own name after a delay) |
 
 Rules that apply to every entry:
 

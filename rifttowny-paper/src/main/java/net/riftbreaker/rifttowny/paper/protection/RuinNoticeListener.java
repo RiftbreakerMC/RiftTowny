@@ -94,9 +94,17 @@ public final class RuinNoticeListener implements Listener {
         if (ruin.isEmpty() || !throttle.shouldSend(player.getUniqueId())) {
             return;
         }
-        messages.send(player, MessageKey.RUIN_ENTERED,
+        final java.time.Instant now = clock.instant();
+        // Two messages rather than one with a conditional clause: whether the place can be rebuilt
+        // yet is the only thing a player standing here actually has to decide, and burying it in a
+        // parenthesis is how it gets missed.
+        messages.send(
+                player,
+                ruin.get().isReclaimableAt(now)
+                        ? MessageKey.RUIN_ENTERED_RECLAIMABLE
+                        : MessageKey.RUIN_ENTERED,
                 MessageService.value("ruin", ruin.get().name().display()),
-                MessageService.value("remaining", describe(ruin.get().remaining(clock.instant()))));
+                MessageService.value("remaining", describe(ruin.get().remaining(now))));
     }
 
     /**

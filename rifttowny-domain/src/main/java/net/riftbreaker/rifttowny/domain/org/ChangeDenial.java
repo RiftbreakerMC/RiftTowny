@@ -240,6 +240,14 @@ public enum ChangeDenial {
      */
     RUIN_HAS_LAPSED,
 
+    /**
+     * The ruin has not lain open long enough to be rebuilt.
+     *
+     * <p>The delay is what stops a mayor disbanding and immediately re-founding on the same ground,
+     * shedding whatever the town had accumulated while keeping its land.</p>
+     */
+    RUIN_NOT_YET_RECLAIMABLE,
+
     // --- flags -------------------------------------------------------------------------------
 
     /**

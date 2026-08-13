@@ -35,7 +35,8 @@ final class ConnectionRuinStore implements CivicTransaction.RuinStore {
 
     private static final String COLUMNS =
             "ruin_id, former_town_id, name, founder_id, ruined_at, expires_at, "
-                    + "reclaimed_at, reclaimed_by, reclaimed_as";
+                    + "reclaimed_at, reclaimed_by, reclaimed_as, reclaimable_from, "
+                    + "homeblock_world, homeblock_x, homeblock_z";
 
     private final Connection connection;
 
@@ -196,7 +197,8 @@ final class ConnectionRuinStore implements CivicTransaction.RuinStore {
 
     private void insert(final Ruin ruin) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO rt_ruin (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                "INSERT INTO rt_ruin (" + COLUMNS + ") "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setString(1, ruin.id().toString());
             statement.setString(2, ruin.formerTown().value().toString());
             statement.setString(3, ruin.name().display());
@@ -206,6 +208,17 @@ final class ConnectionRuinStore implements CivicTransaction.RuinStore {
             setInstant(statement, 7, ruin.reclaimedAt());
             setId(statement, 8, ruin.reclaimedBy() == null ? null : ruin.reclaimedBy().value());
             setId(statement, 9, ruin.reclaimedAs() == null ? null : ruin.reclaimedAs().value());
+            statement.setLong(10, ruin.reclaimableFrom().toEpochMilli());
+            final ChunkKey home = ruin.homeblock();
+            if (home == null) {
+                statement.setNull(11, Types.VARCHAR);
+                statement.setNull(12, Types.INTEGER);
+                statement.setNull(13, Types.INTEGER);
+            } else {
+                statement.setString(11, home.worldId().toString());
+                statement.setInt(12, home.chunkX());
+                statement.setInt(13, home.chunkZ());
+            }
             statement.executeUpdate();
         }
     }
@@ -253,6 +266,7 @@ final class ConnectionRuinStore implements CivicTransaction.RuinStore {
         final boolean reclaimed = !results.wasNull();
         final String reclaimedBy = results.getString("reclaimed_by");
         final String reclaimedAs = results.getString("reclaimed_as");
+        final String homeWorld = results.getString("homeblock_world");
 
         return new Ruin(
                 UUID.fromString(results.getString("ruin_id")),
@@ -264,7 +278,12 @@ final class ConnectionRuinStore implements CivicTransaction.RuinStore {
                         display.toLowerCase(java.util.Locale.ROOT),
                         NamePolicy.skeleton(display.toLowerCase(java.util.Locale.ROOT))),
                 founder == null ? null : ResidentId.parse(founder),
+                homeWorld == null ? null : new ChunkKey(
+                        UUID.fromString(homeWorld),
+                        results.getInt("homeblock_x"),
+                        results.getInt("homeblock_z")),
                 Instant.ofEpochMilli(results.getLong("ruined_at")),
+                Instant.ofEpochMilli(results.getLong("reclaimable_from")),
                 Instant.ofEpochMilli(results.getLong("expires_at")),
                 reclaimed ? Instant.ofEpochMilli(reclaimedAt) : null,
                 reclaimedBy == null ? null : ResidentId.parse(reclaimedBy),

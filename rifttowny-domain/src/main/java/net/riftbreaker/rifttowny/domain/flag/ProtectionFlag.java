@@ -123,33 +123,27 @@ public enum ProtectionFlag {
     /**
      * The shipped default on a ruin.
      *
-     * <p><strong>The shell is protected; the contents are not.</strong> That is a gameplay decision
-     * rather than a technical one, and it is the whole character of the feature, so it is stated
-     * here rather than left implicit in a switch.</p>
+     * <p><strong>A ruin is not protected.</strong> That is the whole character of the state and it
+     * is a gameplay decision rather than a technical one, so it is stated here rather than left
+     * implicit in a switch. A fallen town is picked over: its chests open, its walls come down, it
+     * burns, and people fight in it. Protecting the shell would make a ruin a monument, and a
+     * monument nobody may touch is indistinguishable from a town whose owner is away.</p>
      *
-     * <p>Nobody may build or break: the buildings have to still be standing for reclaiming a ruin to
-     * mean anything, and a town that lost a war would otherwise be dismantled before anyone could
-     * take it on. Nobody has a relationship to a ruin either — there is no town left to have one
-     * with — so this does not vary by actor.</p>
+     * <p>Which is to say the defaults are wilderness's, and deliberately so — the land has no owner
+     * to object. It is still a separate method rather than a fall-through, for two reasons: the
+     * subsystem actions stay refused here as everywhere, and a server that wants ruins to behave
+     * differently has one place to change rather than a condition threaded through the claimed
+     * branch.</p>
      *
-     * <p>Chests, however, open. A ruin nobody may loot is a museum, and the plunder is what makes
-     * a fallen town an event rather than an absence. Servers that disagree can say so: a ruin's
-     * chunks keep answering to the admin and world flag layers.</p>
+     * <p>Nobody has a relationship to a ruin — there is no town left to have one with — so this does
+     * not vary by actor. The former mayor is judged exactly as a stranger is.</p>
      *
-     * <p>The world may not touch it at all. Explosions, fire, fluids and pistons are refused for the
-     * same reason building is: whatever stands has to survive long enough to be reclaimed, or to be
-     * restored by {@code RT-MOD-REGEN} when the window closes.</p>
+     * <p>An operator who disagrees is not stuck with it: a ruin's chunks still answer to the admin
+     * and world flag layers, so explosions or looting can be shut off server-wide.</p>
      */
     public boolean allowedInRuin() {
-        return switch (this) {
-            case BUILD, BREAK, FLIGHT -> false;
-            case CONTAINER, INTERACT, ENTITY_DAMAGE, VEHICLE, FARMLAND, SHOP_USE, SPAWNER_USE -> true;
-            // Contested ground. A ruin is the one place a fight is the point.
-            case PVP -> true;
-            case EXPLOSIONS, FIRE_SPREAD, FLUID_FLOW, PISTONS -> false;
-            case REDSTONE, MOB_SPAWNING -> true;
-            case EVENT_ACTION, WAR_ACTION -> false;
-        };
+        // Granted only by the subsystem that owns them, in a ruin as anywhere else.
+        return this != EVENT_ACTION && this != WAR_ACTION;
     }
 
     /**

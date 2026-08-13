@@ -22,6 +22,7 @@ public record RiftTownySettings(
         NetworkTopology topology,
         boolean townyPermissionAliases,
         java.time.Duration ruinLifetime,
+        java.time.Duration ruinReclaimDelay,
         java.time.Duration ruinSweepInterval
 ) {
 
@@ -29,6 +30,7 @@ public record RiftTownySettings(
         Objects.requireNonNull(storage, "storage");
         Objects.requireNonNull(topology, "topology");
         Objects.requireNonNull(ruinLifetime, "ruinLifetime");
+        Objects.requireNonNull(ruinReclaimDelay, "ruinReclaimDelay");
         Objects.requireNonNull(ruinSweepInterval, "ruinSweepInterval");
     }
 
@@ -79,6 +81,10 @@ public record RiftTownySettings(
         // Clamped at zero rather than rejected. A negative lifetime is nonsense, and the nearest
         // sensible reading of it is the one the operator can also write on purpose: ruins off.
         final long ruinHours = Math.max(0L, config.getLong("ruins.lifetime-hours", 72L));
+        // Clamped to the window rather than refused: a delay longer than the ruin lasts would be a
+        // ruin nobody could ever take on, which is a typo rather than an intention.
+        final long reclaimHours = Math.min(
+                ruinHours, Math.max(0L, config.getLong("ruins.reclaim-after-hours", 24L)));
         // The sweep floor is a minute: a sweep running every few seconds would be a full table scan
         // in a loop to release land nobody is waiting on.
         final long sweepMinutes = Math.max(1L, config.getLong("ruins.sweep-minutes", 15L));
@@ -88,13 +94,15 @@ public record RiftTownySettings(
                 topology,
                 config.getBoolean("permissions.towny-aliases", false),
                 java.time.Duration.ofHours(ruinHours),
+                java.time.Duration.ofHours(reclaimHours),
                 java.time.Duration.ofMinutes(sweepMinutes));
     }
 
     /** How ruins read in the startup log. */
     public String describeRuins() {
         return ruinsEnabled()
-                ? "ruins stand for " + ruinLifetime.toHours() + "h, swept every "
+                ? "ruins stand for " + ruinLifetime.toHours() + "h, reclaimable after "
+                        + ruinReclaimDelay.toHours() + "h, swept every "
                         + ruinSweepInterval.toMinutes() + "m"
                 : "ruins disabled";
     }

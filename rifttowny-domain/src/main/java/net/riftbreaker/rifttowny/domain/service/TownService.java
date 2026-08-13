@@ -56,6 +56,7 @@ public final class TownService {
     private final CivicCacheRefresher civic;
     private final FlagOverrides overrides;
     private final net.riftbreaker.rifttowny.domain.territory.RuinIndex ruins;
+    private final Duration ruinReclaimDelay;
     private final Duration ruinLifetime;
 
     /**
@@ -100,11 +101,13 @@ public final class TownService {
             final FlagOverrides overrides
     ) {
         this(store, namePolicy, clock, index, civic, overrides,
-                net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty(), Duration.ZERO);
+                net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty(),
+                Duration.ZERO, Duration.ZERO);
     }
 
     /**
      * @param ruins the in-memory ruin index, given the chunks a disbanded town gives up
+     * @param ruinReclaimDelay how long the ruin lies open before anybody may rebuild it
      * @param ruinLifetime how long those chunks stay a ruin before reverting. {@link Duration#ZERO}
      *        switches ruins off, and a disbanded town's land goes straight back to wilderness
      */
@@ -116,6 +119,7 @@ public final class TownService {
             final CivicCacheRefresher civic,
             final FlagOverrides overrides,
             final net.riftbreaker.rifttowny.domain.territory.RuinIndex ruins,
+            final Duration ruinReclaimDelay,
             final Duration ruinLifetime
     ) {
         this.store = Objects.requireNonNull(store, "store");
@@ -125,6 +129,7 @@ public final class TownService {
         this.civic = Objects.requireNonNull(civic, "civic");
         this.overrides = Objects.requireNonNull(overrides, "overrides");
         this.ruins = Objects.requireNonNull(ruins, "ruins");
+        this.ruinReclaimDelay = Objects.requireNonNull(ruinReclaimDelay, "ruinReclaimDelay");
         this.ruinLifetime = Objects.requireNonNull(ruinLifetime, "ruinLifetime");
     }
 
@@ -329,7 +334,7 @@ public final class TownService {
             // behaviour is the old one.
             final Optional<RuinService.Fallen> fallen = RuinService.recordFall(
                     transaction, town, transaction.claims().of(townId), clock.instant(),
-                    ruinLifetime);
+                    ruinReclaimDelay, ruinLifetime);
 
             // Territory is released explicitly: rt_claim cascades from rt_town, but relying on the
             // cascade would make the claim count in the announcement below unknowable, and it would
