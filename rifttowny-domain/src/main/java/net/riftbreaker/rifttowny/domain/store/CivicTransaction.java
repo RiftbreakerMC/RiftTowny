@@ -47,6 +47,8 @@ public interface CivicTransaction {
 
     RuinStore ruins();
 
+    SpawnStore spawns();
+
     /**
      * Queues an event for delivery.
      *
@@ -264,6 +266,25 @@ public interface CivicTransaction {
          * letting go of the ground is not the same as forgetting the town.</p>
          */
         int releaseLand(java.util.UUID ruinId);
+    }
+
+    /** Town spawns, inside the transaction. */
+    interface SpawnStore {
+
+        Optional<net.riftbreaker.rifttowny.domain.territory.SpawnPoint> of(TownId town);
+
+        /** Every town's spawn, for filling a cache at startup. */
+        java.util.Map<TownId, net.riftbreaker.rifttowny.domain.territory.SpawnPoint> all();
+
+        /** Sets or replaces a town's spawn. A town has one, so this is an upsert. */
+        void set(
+                TownId town,
+                net.riftbreaker.rifttowny.domain.territory.SpawnPoint spawn,
+                ResidentId setBy,
+                java.time.Instant now);
+
+        /** Removes it, as when the land it stood on stops being the town's. */
+        boolean clear(TownId town);
     }
 
     /** Nations, inside the transaction. */

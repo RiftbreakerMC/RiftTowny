@@ -52,6 +52,7 @@ public final class TownCommands {
     private final net.riftbreaker.rifttowny.domain.service.TerritoryService territory;
     private final net.riftbreaker.rifttowny.domain.service.FlagService flags;
     private final net.riftbreaker.rifttowny.domain.service.RuinService ruins;
+    private final net.riftbreaker.rifttowny.domain.service.SpawnService spawns;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
     private final MessageService messages;
@@ -63,6 +64,7 @@ public final class TownCommands {
             final net.riftbreaker.rifttowny.domain.service.TerritoryService territory,
             final net.riftbreaker.rifttowny.domain.service.FlagService flags,
             final net.riftbreaker.rifttowny.domain.service.RuinService ruins,
+            final net.riftbreaker.rifttowny.domain.service.SpawnService spawns,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
             final MessageService messages,
@@ -73,6 +75,7 @@ public final class TownCommands {
         this.territory = Objects.requireNonNull(territory, "territory");
         this.flags = Objects.requireNonNull(flags, "flags");
         this.ruins = Objects.requireNonNull(ruins, "ruins");
+        this.spawns = Objects.requireNonNull(spawns, "spawns");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -175,6 +178,22 @@ public final class TownCommands {
                         .usage("town homeblock")
                         .describedAs("Move your home chunk here")
                         .runs(this::homeblock, Surface.CHAT))
+                .child(CommandNode.action("spawn")
+                        .permission("rifttowny.town.spawn")
+                        .usage("town spawn")
+                        .describedAs("Travel to your town's spawn")
+                        .runs(this::spawn, Surface.CHAT))
+                .child(CommandNode.action("setspawn")
+                        .permission("rifttowny.town.setspawn")
+                        .usage("town setspawn")
+                        .describedAs("Set your town's spawn to where you stand")
+                        .runs(this::setSpawn, Surface.CHAT))
+                .child(CommandNode.action("delspawn")
+                        .aliases("unsetspawn")
+                        .permission("rifttowny.town.setspawn")
+                        .usage("town delspawn")
+                        .describedAs("Remove your town's spawn")
+                        .runs(this::deleteSpawn, Surface.CHAT))
                 .child(CommandNode.action("reclaim")
                         .permission("rifttowny.town.reclaim")
                         .usage("town reclaim")
@@ -417,9 +436,18 @@ public final class TownCommands {
 
     private void unclaim(final CommandActor actor, final List<String> args) {
         whereTheyStand(actor, chunk -> withTown(actor, (who, town) ->
-                reply(actor, territory.unclaim(who, town.id(), chunk), released ->
-                        messages.send(actor::send, MessageKey.TOWN_UNCLAIMED,
-                                MessageService.value("chunk", describe(released))))));
+                reply(actor, territory.unclaim(who, town.id(), chunk), released -> {
+                    messages.send(actor::send, MessageKey.TOWN_UNCLAIMED,
+                            MessageService.value("chunk", describe(released)));
+                    // Releasing the chunk a spawn stood in takes the spawn with it, and the person
+                    // who did it is the one who should hear about it - not the next resident to
+                    // find the command broken.
+                    then(actor, spawns.clearIfOutsideTerritory(town.id()), lost -> {
+                        if (Boolean.TRUE.equals(lost)) {
+                            messages.send(actor::send, MessageKey.TOWN_SPAWN_LOST_WITH_LAND);
+                        }
+                    });
+                })));
     }
 
     private void homeblock(final CommandActor actor, final List<String> args) {
@@ -536,6 +564,48 @@ public final class TownCommands {
                                 messages.send(actor::send, MessageKey.ROLE_UNASSIGNED,
                                         MessageService.value("resident", args.getFirst()),
                                         MessageService.value("role", role.name()))));
+    }
+
+    // --- spawn actions -------------------------------------------------------------------------
+
+    /**
+     * Travels to the town's spawn.
+     *
+     * <p>The destination is resolved and authorised in one go before anybody moves — the service
+     * checks the role permission and that the town still owns the land, because a teleport costs a
+     * chunk load and a stale spawn drops the player in somebody else's territory.</p>
+     */
+    private void spawn(final CommandActor actor, final List<String> args) {
+        withTown(actor, (who, town) ->
+                reply(actor, spawns.travelTo(who, town.id()), destination ->
+                        then(actor, actor.teleport(destination), moved -> {
+                            if (Boolean.TRUE.equals(moved)) {
+                                messages.send(actor::send, MessageKey.TOWN_SPAWN_ARRIVED,
+                                        MessageService.value("town", town.name().display()));
+                            } else {
+                                messages.send(actor::send, MessageKey.TOWN_SPAWN_FAILED);
+                            }
+                        })));
+    }
+
+    private void setSpawn(final CommandActor actor, final List<String> args) {
+        final var here = actor.position();
+        if (here.isEmpty()) {
+            messages.send(actor::send, MessageKey.TOWN_CONSOLE_HAS_NO_CHUNK);
+            return;
+        }
+        withTown(actor, (who, town) ->
+                reply(actor, spawns.set(who, town.id(), here.get()), set ->
+                        messages.send(actor::send, MessageKey.TOWN_SPAWN_SET,
+                                MessageService.value("town", town.name().display()),
+                                MessageService.value("position", set.describe()))));
+    }
+
+    private void deleteSpawn(final CommandActor actor, final List<String> args) {
+        withTown(actor, (who, town) ->
+                reply(actor, spawns.clear(who, town.id()), ignored ->
+                        messages.send(actor::send, MessageKey.TOWN_SPAWN_CLEARED,
+                                MessageService.value("town", town.name().display()))));
     }
 
     /**

@@ -65,6 +65,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.FlagService flagService;
     private net.riftbreaker.rifttowny.domain.territory.RuinIndex ruinIndex;
     private net.riftbreaker.rifttowny.domain.service.RuinService ruinService;
+    private net.riftbreaker.rifttowny.domain.service.SpawnService spawnService;
     private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
@@ -171,7 +172,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
                 townService, townRoleService, territoryService, flagService, ruinService,
-                residentRepository, townRepository, messages, denialText).tree());
+                spawnService, residentRepository, townRepository, messages, denialText).tree());
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
                 nationService, nationRoleService, residentRepository, townRepository,
@@ -235,6 +236,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.flagOverrides = net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty();
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
+            this.spawnService = new net.riftbreaker.rifttowny.domain.service.SpawnService(
+                    civicStore, clock, territoryIndex);
             this.ruinIndex = net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty();
             this.ruinService = new net.riftbreaker.rifttowny.domain.service.RuinService(
                     civicStore,
@@ -290,6 +293,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
             final int standing = ruinService.loadIndex()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + standing + " standing ruin(s) into memory.");
+
+            final int spawns = spawnService.loadAll()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + spawns + " town spawn(s) into memory.");
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "

@@ -226,6 +226,9 @@ public enum ChangeDenial {
     /** That chunk is not one of this town's claims. */
     CHUNK_NOT_CLAIMED,
 
+    /** The town has no spawn set. */
+    NO_TOWN_SPAWN,
+
     // --- ruins -------------------------------------------------------------------------------
 
     /** There is no fallen town here to take on. */

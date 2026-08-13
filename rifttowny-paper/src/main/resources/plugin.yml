@@ -82,6 +82,8 @@ permissions:
       rifttowny.town.claim: true
       rifttowny.town.unclaim: true
       rifttowny.town.homeblock: true
+      rifttowny.town.spawn: true
+      rifttowny.town.setspawn: true
       rifttowny.town.reclaim: true
       rifttowny.town.flag: true
       rifttowny.role.view: true
@@ -122,6 +124,12 @@ permissions:
     default: true
   rifttowny.town.homeblock:
     description: Move your town's home chunk.
+    default: true
+  rifttowny.town.spawn:
+    description: Travel to your town's spawn. The TOWN_SPAWN role permission decides who really can.
+    default: true
+  rifttowny.town.setspawn:
+    description: Set and remove your town's spawn. The SET_SPAWN role permission decides who really can.
     default: true
   rifttowny.town.reclaim:
     description: Found a town on the ruins of a fallen one.

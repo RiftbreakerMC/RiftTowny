@@ -68,6 +68,18 @@ class CommandRouterTest {
             }
 
             @Override
+            public Optional<net.riftbreaker.rifttowny.domain.territory.SpawnPoint> position() {
+                return Optional.empty();
+            }
+
+            @Override
+            public java.util.concurrent.CompletableFuture<Boolean> teleport(
+                    final net.riftbreaker.rifttowny.domain.territory.SpawnPoint destination) {
+                // Routing is what these tests are about; nobody moves.
+                return java.util.concurrent.CompletableFuture.completedFuture(false);
+            }
+
+            @Override
             public boolean hasPermission(final String permission) {
                 return held.contains(permission);
             }

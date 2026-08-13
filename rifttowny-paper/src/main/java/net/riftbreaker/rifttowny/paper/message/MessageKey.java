@@ -129,6 +129,22 @@ public enum MessageKey {
     TOWN_UNCLAIMED("town.unclaimed",
             "<yellow>Released <white><chunk></white>.</yellow>"),
 
+    TOWN_SPAWN_ARRIVED("town.spawn-arrived",
+            "<green>Welcome to <white><town></white>.</green>"),
+
+    TOWN_SPAWN_SET("town.spawn-set",
+            "<green>Your town's spawn is now <white><position></white>.</green>"),
+
+    TOWN_SPAWN_CLEARED("town.spawn-cleared",
+            "<yellow><white><town></white> no longer has a spawn.</yellow>"),
+
+    /** The destination went away, not the command. Worded so nobody reports it as a bug. */
+    TOWN_SPAWN_FAILED("town.spawn-failed",
+            "<red>Could not travel there. The world may not be loaded.</red>"),
+
+    TOWN_SPAWN_LOST_WITH_LAND("town.spawn-lost-with-land",
+            "<yellow>That chunk held your town's spawn, so the spawn went with it.</yellow>"),
+
     TOWN_HOMEBLOCK_MOVED("town.homeblock-moved",
             "<green>Your home chunk is now <white><chunk></white>.</green>"),
 
