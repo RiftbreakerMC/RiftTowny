@@ -67,6 +67,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.RuinService ruinService;
     private net.riftbreaker.rifttowny.domain.service.SpawnService spawnService;
     private net.riftbreaker.rifttowny.domain.service.PlotService plotService;
+    private net.riftbreaker.rifttowny.domain.civic.ResidentNames residentNames;
+    private net.riftbreaker.rifttowny.domain.service.ResidentNameService residentNameService;
     private net.riftbreaker.rifttowny.paper.spawn.TeleportService teleportService;
     private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
@@ -181,14 +183,15 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
                 townService, townRoleService, territoryService, flagService, ruinService,
-                spawnService, teleportService, residentRepository, townRepository, messages,
-                denialText).tree());
+                spawnService, teleportService, residentNames, residentRepository, townRepository,
+                messages, denialText).tree());
 
         registerTree("plot", new net.riftbreaker.rifttowny.paper.command.PlotCommands(
-                plotService, residentRepository, townRepository, messages, denialText).tree());
+                plotService, residentNames, residentRepository, townRepository, messages,
+                denialText).tree());
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
-                nationService, nationRoleService, residentRepository, townRepository,
+                nationService, nationRoleService, residentNames, residentRepository, townRepository,
                 nationRepository, messages, denialText).tree());
 
         registerProtection();
@@ -254,6 +257,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicStore, clock, territoryIndex);
             this.plotService = new net.riftbreaker.rifttowny.domain.service.PlotService(
                     civicStore, clock, territoryIndex);
+            this.residentNames = net.riftbreaker.rifttowny.domain.civic.ResidentNames.empty();
+            this.residentNameService =
+                    new net.riftbreaker.rifttowny.domain.service.ResidentNameService(
+                            civicStore, clock, residentNames);
             this.ruinIndex = net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty();
             this.ruinService = new net.riftbreaker.rifttowny.domain.service.RuinService(
                     civicStore,
@@ -313,6 +320,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
             final int spawns = spawnService.loadAll()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + spawns + " town spawn(s) into memory.");
+
+            final int named = residentNameService.loadAll()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + named + " resident name(s) into memory.");
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "
@@ -357,6 +368,15 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 new net.riftbreaker.rifttowny.paper.protection.WorldProtectionListener(protection),
                 this);
 
+        // Registered unconditionally: a name that silently stops updating shows a town's mayor under
+        // a username they abandoned, and no configuration should be able to cause that.
+        manager.registerEvents(
+                new net.riftbreaker.rifttowny.paper.protection.ResidentPresenceListener(
+                        residentNameService,
+                        (message, failure) -> getLogger().log(
+                                java.util.logging.Level.WARNING, message, failure)),
+                this);
+
         if (settings.territoryNotices()) {
             // Territory is invisible until it refuses somebody something, and finding a town by
             // failing to break a block in it is a worse introduction than a line above the hotbar.
@@ -365,6 +385,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                             new net.riftbreaker.rifttowny.paper.protection.TerritoryNotice(
                                     territoryIndex, ruinIndex, civicCache),
                             messages,
+                            residentNames,
                             java.time.Clock.systemUTC(),
                             settings.territoryNoticesOnActionBar()),
                     this);

@@ -73,6 +73,15 @@ public interface CivicTransaction {
 
         int countByTown(TownId town);
 
+        /**
+         * Every town member's last known name.
+         *
+         * <p>For filling the name cache at startup. Deliberately not every resident ever seen: a
+         * player who has never joined a town is never named in a listing, and holding them would
+         * grow with the account list rather than with the map.</p>
+         */
+        java.util.Map<ResidentId, String> namesOfTownMembers();
+
         void save(Resident resident);
     }
 

@@ -98,6 +98,27 @@ final class ConnectionResidentStore implements CivicTransaction.ResidentStore {
     }
 
     @Override
+    public java.util.Map<net.riftbreaker.rifttowny.domain.org.ResidentId, String>
+            namesOfTownMembers() {
+        return StorageFailure.wrapping(() -> {
+            final java.util.Map<net.riftbreaker.rifttowny.domain.org.ResidentId, String> names =
+                    new java.util.LinkedHashMap<>();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT resident_id, last_known_name FROM rt_resident "
+                            + "WHERE town_id IS NOT NULL");
+                 ResultSet results = statement.executeQuery()) {
+                while (results.next()) {
+                    names.put(
+                            net.riftbreaker.rifttowny.domain.org.ResidentId.parse(
+                                    results.getString("resident_id")),
+                            results.getString("last_known_name"));
+                }
+            }
+            return java.util.Map.copyOf(names);
+        });
+    }
+
+    @Override
     public void save(final Resident resident) {
         Objects.requireNonNull(resident, "resident");
         StorageFailure.wrapping(() -> {

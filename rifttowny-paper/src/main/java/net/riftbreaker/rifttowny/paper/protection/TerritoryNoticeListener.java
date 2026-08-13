@@ -39,6 +39,7 @@ public final class TerritoryNoticeListener implements Listener {
 
     private final TerritoryNotice notice;
     private final MessageService messages;
+    private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final Clock clock;
     private final boolean actionBar;
     private final Map<UUID, TerritoryNotice.Territory> lastSeen = new ConcurrentHashMap<>();
@@ -51,11 +52,13 @@ public final class TerritoryNoticeListener implements Listener {
     public TerritoryNoticeListener(
             final TerritoryNotice notice,
             final MessageService messages,
+            final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final Clock clock,
             final boolean actionBar
     ) {
         this.notice = Objects.requireNonNull(notice, "notice");
         this.messages = Objects.requireNonNull(messages, "messages");
+        this.names = Objects.requireNonNull(names, "names");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.actionBar = actionBar;
     }
@@ -138,11 +141,9 @@ public final class TerritoryNoticeListener implements Listener {
         if (territory.holder().value().equals(player.getUniqueId())) {
             return "yours";
         }
-        final Player holder = org.bukkit.Bukkit.getPlayer(territory.holder().value());
-        // Only an online holder can be named without a lookup, and a border notice must not wait on
-        // storage. An offline holder's plot reads as held, which is the part that changes what the
-        // player may do there.
-        return holder == null ? "another resident" : holder.getName();
+        // From the name cache, so an offline holder is named too. A border notice runs on movement
+        // and must not wait on storage, which is what the cache is for.
+        return names.describe(territory.holder());
     }
 
     private void send(final Player player, final Component message) {

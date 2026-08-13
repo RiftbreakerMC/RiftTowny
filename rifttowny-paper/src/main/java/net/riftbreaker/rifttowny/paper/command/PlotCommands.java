@@ -33,6 +33,7 @@ import java.util.function.Consumer;
 public final class PlotCommands {
 
     private final PlotService plots;
+    private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final ResidentRepository residents;
     private final TownRepository towns;
     private final MessageService messages;
@@ -40,12 +41,14 @@ public final class PlotCommands {
 
     public PlotCommands(
             final PlotService plots,
+            final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final ResidentRepository residents,
             final TownRepository towns,
             final MessageService messages,
             final DenialText denials
     ) {
         this.plots = Objects.requireNonNull(plots, "plots");
+        this.names = Objects.requireNonNull(names, "names");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.towns = Objects.requireNonNull(towns, "towns");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -116,9 +119,13 @@ public final class PlotCommands {
             line(actor, "Held by", "the town");
             return;
         }
-        then(actor, residents.find(plot.owner()), holder -> line(actor, "Held by",
-                holder.map(net.riftbreaker.rifttowny.domain.org.Resident::lastKnownName)
-                        .orElse(plot.owner().value().toString())));
+        // The cache first, a lookup only if it does not know them. A holder who left the town is no
+        // longer cached but their plot may still be recorded, and a UUID is not an answer.
+        names.of(plot.owner()).ifPresentOrElse(
+                name -> line(actor, "Held by", name),
+                () -> then(actor, residents.find(plot.owner()), holder -> line(actor, "Held by",
+                        holder.map(net.riftbreaker.rifttowny.domain.org.Resident::lastKnownName)
+                                .orElse("someone"))));
     }
 
     private void take(final CommandActor actor, final List<String> args) {

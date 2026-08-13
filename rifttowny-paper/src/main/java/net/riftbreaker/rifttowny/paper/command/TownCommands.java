@@ -54,6 +54,7 @@ public final class TownCommands {
     private final net.riftbreaker.rifttowny.domain.service.RuinService ruins;
     private final net.riftbreaker.rifttowny.domain.service.SpawnService spawns;
     private final net.riftbreaker.rifttowny.paper.spawn.TeleportService teleports;
+    private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
     private final MessageService messages;
@@ -67,6 +68,7 @@ public final class TownCommands {
             final net.riftbreaker.rifttowny.domain.service.RuinService ruins,
             final net.riftbreaker.rifttowny.domain.service.SpawnService spawns,
             final net.riftbreaker.rifttowny.paper.spawn.TeleportService teleports,
+            final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
             final MessageService messages,
@@ -79,6 +81,7 @@ public final class TownCommands {
         this.ruins = Objects.requireNonNull(ruins, "ruins");
         this.spawns = Objects.requireNonNull(spawns, "spawns");
         this.teleports = Objects.requireNonNull(teleports, "teleports");
+        this.names = Objects.requireNonNull(names, "names");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -308,7 +311,7 @@ public final class TownCommands {
         withTown(actor, (who, town) -> {
             messages.send(actor::send, MessageKey.TOWN_INFO_HEADER,
                     MessageService.value("town", town.name().display()));
-            line(actor, "Mayor", town.mayor().value().toString());
+            line(actor, "Mayor", names.describe(town.mayor()));
             line(actor, "Residents", String.valueOf(town.residentCount()));
             line(actor, "Nation", town.nation().map(Object::toString).orElse("none"));
             line(actor, "Trusted", String.valueOf(town.trustedOutsiders().size()));

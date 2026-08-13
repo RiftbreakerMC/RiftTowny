@@ -44,6 +44,7 @@ public final class NationCommands {
 
     private final NationService nations;
     private final net.riftbreaker.rifttowny.domain.service.NationRoleService roles;
+    private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final ResidentRepository residents;
     private final TownRepository towns;
     private final NationRepository nationRepository;
@@ -53,6 +54,7 @@ public final class NationCommands {
     public NationCommands(
             final NationService nations,
             final net.riftbreaker.rifttowny.domain.service.NationRoleService roles,
+            final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final ResidentRepository residents,
             final TownRepository towns,
             final NationRepository nationRepository,
@@ -61,6 +63,7 @@ public final class NationCommands {
     ) {
         this.nations = Objects.requireNonNull(nations, "nations");
         this.roles = Objects.requireNonNull(roles, "roles");
+        this.names = Objects.requireNonNull(names, "names");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.towns = Objects.requireNonNull(towns, "towns");
         this.nationRepository = Objects.requireNonNull(nationRepository, "nationRepository");
@@ -205,7 +208,7 @@ public final class NationCommands {
         withNation(actor, (who, nation) -> {
             messages.send(actor::send, MessageKey.NATION_INFO_HEADER,
                     MessageService.value("nation", nation.name().display()));
-            line(actor, "Leader", nation.leader().value().toString());
+            line(actor, "Leader", names.describe(nation.leader()));
             line(actor, "Towns", String.valueOf(nation.townCount()));
             then(actor, towns.find(nation.capital()), capital -> line(actor, "Capital",
                     capital.map(found -> found.name().display()).orElse("unknown")));
