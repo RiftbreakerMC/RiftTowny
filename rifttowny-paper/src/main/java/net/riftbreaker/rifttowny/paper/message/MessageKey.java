@@ -132,6 +132,19 @@ public enum MessageKey {
     TOWN_SPAWN_ARRIVED("town.spawn-arrived",
             "<green>Welcome to <white><town></white>.</green>"),
 
+    TOWN_SPAWN_WARMUP("town.spawn-warmup",
+            "<gray>Travelling in <white><seconds></white>s. Stand still.</gray>"),
+
+    TOWN_SPAWN_CANCELLED_MOVED("town.spawn-cancelled-moved",
+            "<yellow>You moved, so the journey was called off.</yellow>"),
+
+    /** The reason the warmup exists, so the message says what happened rather than "cancelled". */
+    TOWN_SPAWN_CANCELLED_DAMAGED("town.spawn-cancelled-damaged",
+            "<red>You were hit, so the journey was called off.</red>"),
+
+    TOWN_SPAWN_COOLDOWN("town.spawn-cooldown",
+            "<red>You can travel again in <white><remaining></white>.</red>"),
+
     TOWN_SPAWN_SET("town.spawn-set",
             "<green>Your town's spawn is now <white><position></white>.</green>"),
 

@@ -36,6 +36,21 @@ network:
   # True when more than one backend server shares this database. Requires mariadb.
   shared: false
 
+spawn:
+  # How long a player must stand still before /town spawn moves them.
+  #
+  # Without it, travelling home is an escape from every fight on the server: a player who can
+  # teleport out the moment a fight turns has not lost the fight. The warmup makes it a decision -
+  # stand still, in the open, where anybody who objects can do something about it. Moving a whole
+  # block cancels it, and so does being hit.
+  #
+  # 0 teleports immediately, which is worth knowing is a combat decision rather than a convenience
+  # one.
+  warmup-seconds: 5
+
+  # How long before the same player may travel again. 0 disables it.
+  cooldown-seconds: 60
+
 ruins:
   # How long a disbanded town's land stays a ruin before reverting to wilderness.
   #

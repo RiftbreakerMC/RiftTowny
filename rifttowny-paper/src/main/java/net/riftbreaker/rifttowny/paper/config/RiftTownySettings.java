@@ -23,7 +23,9 @@ public record RiftTownySettings(
         boolean townyPermissionAliases,
         java.time.Duration ruinLifetime,
         java.time.Duration ruinReclaimDelay,
-        java.time.Duration ruinSweepInterval
+        java.time.Duration ruinSweepInterval,
+        java.time.Duration spawnWarmup,
+        java.time.Duration spawnCooldown
 ) {
 
     public RiftTownySettings {
@@ -32,6 +34,8 @@ public record RiftTownySettings(
         Objects.requireNonNull(ruinLifetime, "ruinLifetime");
         Objects.requireNonNull(ruinReclaimDelay, "ruinReclaimDelay");
         Objects.requireNonNull(ruinSweepInterval, "ruinSweepInterval");
+        Objects.requireNonNull(spawnWarmup, "spawnWarmup");
+        Objects.requireNonNull(spawnCooldown, "spawnCooldown");
     }
 
     /** Whether a disbanded town leaves a ruin at all. */
@@ -95,7 +99,20 @@ public record RiftTownySettings(
                 config.getBoolean("permissions.towny-aliases", false),
                 java.time.Duration.ofHours(ruinHours),
                 java.time.Duration.ofHours(reclaimHours),
-                java.time.Duration.ofMinutes(sweepMinutes));
+                java.time.Duration.ofMinutes(sweepMinutes),
+                java.time.Duration.ofSeconds(
+                        Math.max(0L, config.getLong("spawn.warmup-seconds", 5L))),
+                java.time.Duration.ofSeconds(
+                        Math.max(0L, config.getLong("spawn.cooldown-seconds", 60L))));
+    }
+
+    /** How spawn travel reads in the startup log. */
+    public String describeSpawnTravel() {
+        if (spawnWarmup.isZero() && spawnCooldown.isZero()) {
+            return "spawn travel is instant and uncapped";
+        }
+        return "spawn warmup " + spawnWarmup.toSeconds() + "s, cooldown "
+                + spawnCooldown.toSeconds() + "s";
     }
 
     /** How ruins read in the startup log. */

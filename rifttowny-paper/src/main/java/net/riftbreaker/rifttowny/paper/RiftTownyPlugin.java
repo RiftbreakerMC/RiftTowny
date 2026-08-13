@@ -66,6 +66,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.territory.RuinIndex ruinIndex;
     private net.riftbreaker.rifttowny.domain.service.RuinService ruinService;
     private net.riftbreaker.rifttowny.domain.service.SpawnService spawnService;
+    private net.riftbreaker.rifttowny.paper.spawn.TeleportService teleportService;
     private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
@@ -170,9 +171,17 @@ public final class RiftTownyPlugin extends JavaPlugin {
             command.setTabCompleter(executor);
         }
 
+        this.teleportService = new net.riftbreaker.rifttowny.paper.spawn.TeleportService(
+                scheduler,
+                settings.spawnWarmup(),
+                new net.riftbreaker.rifttowny.paper.spawn.SpawnCooldown(
+                        settings.spawnCooldown(), System::nanoTime));
+        getServer().getPluginManager().registerEvents(teleportService, this);
+
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
                 townService, townRoleService, territoryService, flagService, ruinService,
-                spawnService, residentRepository, townRepository, messages, denialText).tree());
+                spawnService, teleportService, residentRepository, townRepository, messages,
+                denialText).tree());
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
                 nationService, nationRoleService, residentRepository, townRepository,
@@ -184,7 +193,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
         getLogger().info("RiftTowny enabled on " + platformName() + ". " + schema.describe() + '.');
         getLogger().info("Storage: " + settings.storage().describeForLog()
                 + ", topology: " + settings.describeTopology()
-                + ", " + settings.describeRuins() + '.');
+                + ", " + settings.describeRuins()
+                + ", " + settings.describeSpawnTravel() + '.');
     }
 
     @Override

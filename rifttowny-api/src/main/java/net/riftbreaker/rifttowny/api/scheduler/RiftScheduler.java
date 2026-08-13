@@ -56,6 +56,17 @@ public interface RiftScheduler {
      */
     RiftTask entity(UUID entityId, Runnable task, Runnable retired);
 
+    /**
+     * Runs on the thread owning the entity, after a delay.
+     *
+     * <p>The right primitive for anything that waits and then touches a player — a teleport warmup,
+     * a delayed effect. An asynchronous delay followed by a hop would work on Paper and leave a
+     * window on Folia in which the player changed region between the two.</p>
+     *
+     * @param retired run instead if the entity is gone when the task comes due
+     */
+    RiftTask entityDelayed(UUID entityId, Runnable task, Runnable retired, Duration delay);
+
     /** Runs off any server thread. For database and network work only. */
     RiftTask async(Runnable task);
 

@@ -53,6 +53,7 @@ public final class TownCommands {
     private final net.riftbreaker.rifttowny.domain.service.FlagService flags;
     private final net.riftbreaker.rifttowny.domain.service.RuinService ruins;
     private final net.riftbreaker.rifttowny.domain.service.SpawnService spawns;
+    private final net.riftbreaker.rifttowny.paper.spawn.TeleportService teleports;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
     private final MessageService messages;
@@ -65,6 +66,7 @@ public final class TownCommands {
             final net.riftbreaker.rifttowny.domain.service.FlagService flags,
             final net.riftbreaker.rifttowny.domain.service.RuinService ruins,
             final net.riftbreaker.rifttowny.domain.service.SpawnService spawns,
+            final net.riftbreaker.rifttowny.paper.spawn.TeleportService teleports,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
             final MessageService messages,
@@ -76,6 +78,7 @@ public final class TownCommands {
         this.flags = Objects.requireNonNull(flags, "flags");
         this.ruins = Objects.requireNonNull(ruins, "ruins");
         this.spawns = Objects.requireNonNull(spawns, "spawns");
+        this.teleports = Objects.requireNonNull(teleports, "teleports");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -576,16 +579,47 @@ public final class TownCommands {
      * chunk load and a stale spawn drops the player in somebody else's territory.</p>
      */
     private void spawn(final CommandActor actor, final List<String> args) {
-        withTown(actor, (who, town) ->
-                reply(actor, spawns.travelTo(who, town.id()), destination ->
-                        then(actor, actor.teleport(destination), moved -> {
-                            if (Boolean.TRUE.equals(moved)) {
-                                messages.send(actor::send, MessageKey.TOWN_SPAWN_ARRIVED,
-                                        MessageService.value("town", town.name().display()));
-                            } else {
-                                messages.send(actor::send, MessageKey.TOWN_SPAWN_FAILED);
-                            }
-                        })));
+        player(actor).ifPresent(who -> {
+            // Checked before the lookup: a player on cooldown does not need a database round trip
+            // to be told to wait.
+            final var wait = teleports.cooldownRemaining(who);
+            if (wait.isPresent()) {
+                messages.send(actor::send, MessageKey.TOWN_SPAWN_COOLDOWN,
+                        MessageService.value("remaining",
+                                net.riftbreaker.rifttowny.paper.spawn.SpawnCooldown
+                                        .describe(wait.get())));
+                return;
+            }
+            withTown(actor, (ignored, town) ->
+                    reply(actor, spawns.travelTo(who, town.id()), destination -> {
+                        if (!teleports.warmup().isZero()) {
+                            messages.send(actor::send, MessageKey.TOWN_SPAWN_WARMUP,
+                                    MessageService.value("seconds",
+                                            teleports.warmup().toSeconds()));
+                        }
+                        then(actor, teleports.travel(who, destination),
+                                outcome -> announceArrival(actor, town, outcome));
+                    }));
+        });
+    }
+
+    private void announceArrival(
+            final CommandActor actor,
+            final Town town,
+            final net.riftbreaker.rifttowny.paper.spawn.TeleportService.Outcome outcome
+    ) {
+        switch (outcome) {
+            case ARRIVED -> messages.send(actor::send, MessageKey.TOWN_SPAWN_ARRIVED,
+                    MessageService.value("town", town.name().display()));
+            case CANCELLED_MOVED ->
+                    messages.send(actor::send, MessageKey.TOWN_SPAWN_CANCELLED_MOVED);
+            case CANCELLED_DAMAGED ->
+                    messages.send(actor::send, MessageKey.TOWN_SPAWN_CANCELLED_DAMAGED);
+            // Superseded and gone-offline both mean the player is no longer waiting on this one,
+            // and saying so would be a message about a teleport they have already replaced or left.
+            case SUPERSEDED, NOT_ONLINE -> { }
+            case NO_DESTINATION -> messages.send(actor::send, MessageKey.TOWN_SPAWN_FAILED);
+        }
     }
 
     private void setSpawn(final CommandActor actor, final List<String> args) {

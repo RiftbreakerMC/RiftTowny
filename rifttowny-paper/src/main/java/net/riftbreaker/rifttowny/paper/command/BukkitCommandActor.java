@@ -65,41 +65,6 @@ public final class BukkitCommandActor implements CommandActor {
     }
 
     @Override
-    public java.util.concurrent.CompletableFuture<Boolean> teleport(
-            final net.riftbreaker.rifttowny.domain.territory.SpawnPoint destination) {
-        Objects.requireNonNull(destination, "destination");
-        if (!(sender instanceof Player player)) {
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-        final org.bukkit.World world = org.bukkit.Bukkit.getWorld(destination.worldId());
-        if (world == null) {
-            // The world was unloaded since the spawn was set. Reported as "did not happen" rather
-            // than thrown: it is a server state, not a fault in the command.
-            return java.util.concurrent.CompletableFuture.completedFuture(false);
-        }
-
-        final var target = new org.bukkit.Location(
-                world, destination.x(), destination.y(), destination.z(),
-                destination.yaw(), destination.pitch());
-        final var done = new java.util.concurrent.CompletableFuture<Boolean>();
-        // Hopped onto the player's own thread first, then handed to teleportAsync. The async
-        // teleport is the Folia-safe one - it loads the destination chunk and moves the player to
-        // the region that owns it - but calling it still has to happen from a thread allowed to
-        // touch the player at all.
-        scheduler.entity(
-                player.getUniqueId(),
-                () -> player.teleportAsync(target).whenComplete((moved, failure) -> {
-                    if (failure != null) {
-                        done.completeExceptionally(failure);
-                    } else {
-                        done.complete(Boolean.TRUE.equals(moved));
-                    }
-                }),
-                () -> done.complete(false));
-        return done;
-    }
-
-    @Override
     public boolean hasPermission(final String permission) {
         return sender.hasPermission(permission);
     }

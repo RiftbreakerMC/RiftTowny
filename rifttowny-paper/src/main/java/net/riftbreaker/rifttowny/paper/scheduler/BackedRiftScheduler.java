@@ -80,6 +80,18 @@ public final class BackedRiftScheduler implements RiftScheduler {
     }
 
     @Override
+    public RiftTask entityDelayed(
+            final UUID entityId,
+            final Runnable task,
+            final Runnable retired,
+            final Duration delay
+    ) {
+        Objects.requireNonNull(entityId, "entityId");
+        Objects.requireNonNull(retired, "retired");
+        return backend.runEntity(entityId, required(task), retired, SchedulerTicks.toTicks(delay));
+    }
+
+    @Override
     public RiftTask async(final Runnable task) {
         return backend.runAsync(required(task), IMMEDIATE, NO_REPEAT);
     }

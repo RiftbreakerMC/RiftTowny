@@ -42,17 +42,6 @@ public interface CommandActor {
      */
     Optional<net.riftbreaker.rifttowny.domain.territory.SpawnPoint> position();
 
-    /**
-     * Moves the actor somewhere.
-     *
-     * <p>Returns a future because a teleport is not instant on either platform: Paper has to load
-     * the destination chunk, and Folia has to hand the player to the region that owns it. The
-     * boolean is whether it happened — a player who logged out mid-flight is a false, not a
-     * failure.</p>
-     */
-    java.util.concurrent.CompletableFuture<Boolean> teleport(
-            net.riftbreaker.rifttowny.domain.territory.SpawnPoint destination);
-
     boolean hasPermission(String permission);
 
     void send(Component message);
