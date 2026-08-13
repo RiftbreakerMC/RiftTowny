@@ -66,6 +66,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.territory.RuinIndex ruinIndex;
     private net.riftbreaker.rifttowny.domain.service.RuinService ruinService;
     private net.riftbreaker.rifttowny.domain.service.SpawnService spawnService;
+    private net.riftbreaker.rifttowny.domain.service.PlotService plotService;
     private net.riftbreaker.rifttowny.paper.spawn.TeleportService teleportService;
     private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
@@ -183,6 +184,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 spawnService, teleportService, residentRepository, townRepository, messages,
                 denialText).tree());
 
+        registerTree("plot", new net.riftbreaker.rifttowny.paper.command.PlotCommands(
+                plotService, residentRepository, townRepository, messages, denialText).tree());
+
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
                 nationService, nationRoleService, residentRepository, townRepository,
                 nationRepository, messages, denialText).tree());
@@ -247,6 +251,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
             this.spawnService = new net.riftbreaker.rifttowny.domain.service.SpawnService(
+                    civicStore, clock, territoryIndex);
+            this.plotService = new net.riftbreaker.rifttowny.domain.service.PlotService(
                     civicStore, clock, territoryIndex);
             this.ruinIndex = net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty();
             this.ruinService = new net.riftbreaker.rifttowny.domain.service.RuinService(

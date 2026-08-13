@@ -229,6 +229,20 @@ public enum ChangeDenial {
     /** The town has no spawn set. */
     NO_TOWN_SPAWN,
 
+    // --- plots -------------------------------------------------------------------------------
+
+    /** Somebody else already holds that plot. */
+    PLOT_ALREADY_HELD,
+
+    /** You already hold that plot. */
+    ALREADY_HOLD_THIS_PLOT,
+
+    /** Nobody holds that plot, so there is nothing to give back. */
+    PLOT_NOT_HELD,
+
+    /** The plot is already used for that. */
+    PLOT_ALREADY_THAT_TYPE,
+
     // --- ruins -------------------------------------------------------------------------------
 
     /** There is no fallen town here to take on. */

@@ -310,6 +310,56 @@ public sealed interface DomainEvent {
         }
     }
 
+    /** A resident took a plot inside their town. */
+    record PlotHeld(TownId town, String chunk, ResidentId holder) implements DomainEvent {
+
+        public PlotHeld {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(chunk, "chunk");
+            Objects.requireNonNull(holder, "holder");
+        }
+
+        @Override
+        public String type() {
+            return "plot.held";
+        }
+    }
+
+    /**
+     * A plot went back to the town.
+     *
+     * @param by whoever did it, which is not always the holder — a town may reclaim the plot of a
+     *        member who has stopped playing, and an audit wants to tell those apart
+     */
+    record PlotReleased(TownId town, String chunk, ResidentId formerHolder, ResidentId by)
+            implements DomainEvent {
+
+        public PlotReleased {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(chunk, "chunk");
+        }
+
+        @Override
+        public String type() {
+            return "plot.released";
+        }
+    }
+
+    /** A plot was put to a different use. */
+    record PlotTypeChanged(TownId town, String chunk, String plotType) implements DomainEvent {
+
+        public PlotTypeChanged {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(chunk, "chunk");
+            Objects.requireNonNull(plotType, "plotType");
+        }
+
+        @Override
+        public String type() {
+            return "plot.type-changed";
+        }
+    }
+
     /**
      * A town fell and left a ruin.
      *

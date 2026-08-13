@@ -68,8 +68,7 @@ public final class RelationshipResolver {
      * @param actorTown the actor's town, or null if they have none
      * @param actorNation the actor's nation, or null
      * @param trustedByOwner whether the owning town trusts them
-     * @param ownsPlot whether they own this particular plot. Always false until plots exist; the
-     *        rung is present now so the ladder does not have to change shape later
+     * @param ownsPlot whether they hold this particular plot
      * @param allied whether the two towns are allied. Always false until diplomacy exists —
      *        {@code RT-MOD-DIPLOMACY} supplies it, and until then an ally resolves as a visitor,
      *        which is the safe direction to be wrong in
@@ -98,9 +97,21 @@ public final class RelationshipResolver {
                 final NationId actorNation,
                 final boolean trustedByOwner
         ) {
+            return claim(owningTown, owningNation, actorTown, actorNation, trustedByOwner, false);
+        }
+
+        /** The same, for a chunk the actor may hold as a plot. */
+        public static TerritoryView claim(
+                final TownId owningTown,
+                final NationId owningNation,
+                final TownId actorTown,
+                final NationId actorNation,
+                final boolean trustedByOwner,
+                final boolean holdsPlot
+        ) {
             return new TerritoryView(
                     true, owningTown, owningNation, actorTown, actorNation,
-                    trustedByOwner, false, false);
+                    trustedByOwner, holdsPlot, false);
         }
     }
 }

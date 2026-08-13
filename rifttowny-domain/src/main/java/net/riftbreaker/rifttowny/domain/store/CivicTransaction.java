@@ -149,6 +149,15 @@ public interface CivicTransaction {
                 net.riftbreaker.rifttowny.api.ChunkKey chunk,
                 net.riftbreaker.rifttowny.domain.territory.ClaimKind kind);
 
+        /** Writes what a plot is for and who holds it. Never touches the claim kind. */
+        void updatePlot(net.riftbreaker.rifttowny.domain.territory.Claim claim);
+
+        /** Every plot one resident holds, across every town. */
+        List<net.riftbreaker.rifttowny.domain.territory.Claim> heldBy(ResidentId owner);
+
+        /** Returns every plot a resident holds in one town to the town. How many went back. */
+        int releaseAllHeldBy(ResidentId owner, TownId town);
+
         /** Releases a whole town's territory. Returns how many chunks went. */
         int deleteAllOf(net.riftbreaker.rifttowny.domain.org.TownId town);
     }

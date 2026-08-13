@@ -122,9 +122,12 @@ public final class ProtectionQuery {
         }
 
         final TownFacts owning = facts.get();
-        final Relationship relationship = RelationshipResolver.resolve(viewOf(who, owning));
-        final FlagDecision decision =
-                FlagResolver.resolve(flag, relationship, settings.layersFor(chunk, owner));
+        // Plot ownership comes off the claim that was just found, so the RESIDENT rung costs
+        // nothing beyond the lookup already made.
+        final Relationship relationship = RelationshipResolver.resolve(
+                viewOf(who, owning, claim.get().isHeldBy(who)));
+        final FlagDecision decision = FlagResolver.resolve(
+                flag, relationship, LandState.CLAIMED, settings.layersFor(chunk, owner));
         if (decision.denied()) {
             return ProtectionAnswer.from(decision, owning);
         }
@@ -150,7 +153,8 @@ public final class ProtectionQuery {
             return ruins.isRuin(chunk) ? Relationship.VISITOR : Relationship.WILDERNESS;
         }
         return civic.town(claim.get().town())
-                .map(owning -> RelationshipResolver.resolve(viewOf(who, owning)))
+                .map(owning -> RelationshipResolver.resolve(
+                        viewOf(who, owning, claim.get().isHeldBy(who))))
                 // An unknown town is a stranger's land as far as the player is concerned, which is
                 // the same direction the protection check errs in.
                 .orElse(Relationship.VISITOR);
@@ -199,14 +203,15 @@ public final class ProtectionQuery {
     // --- internals -----------------------------------------------------------------------------
 
     private RelationshipResolver.TerritoryView viewOf(
-            final ResidentId who, final TownFacts owning) {
+            final ResidentId who, final TownFacts owning, final boolean holdsPlot) {
         final Optional<TownFacts> actorTown = civic.townFactsOf(who);
         return RelationshipResolver.TerritoryView.claim(
                 owning.id(),
                 owning.nation().orElse(null),
                 actorTown.map(TownFacts::id).orElse(null),
                 actorTown.flatMap(TownFacts::nation).orElse(null),
-                owning.trusts(who));
+                owning.trusts(who),
+                holdsPlot);
     }
 
     /**

@@ -27,7 +27,8 @@ import java.util.UUID;
 final class ConnectionClaimStore implements CivicTransaction.ClaimStore {
 
     private static final String COLUMNS =
-            "claim_id, world_id, chunk_x, chunk_z, town_id, claim_kind, claimed_at";
+            "claim_id, world_id, chunk_x, chunk_z, town_id, claim_kind, claimed_at, "
+                    + "plot_type, owner_id";
 
     private final Connection connection;
 
@@ -79,7 +80,7 @@ final class ConnectionClaimStore implements CivicTransaction.ClaimStore {
         Objects.requireNonNull(claim, "claim");
         StorageFailure.wrapping(() -> {
             try (PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO rt_claim (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?)")) {
+                    "INSERT INTO rt_claim (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
                 statement.setString(1, claim.id().toString());
                 statement.setString(2, claim.chunk().worldId().toString());
                 statement.setInt(3, claim.chunk().chunkX());
@@ -87,6 +88,12 @@ final class ConnectionClaimStore implements CivicTransaction.ClaimStore {
                 statement.setString(5, claim.town().value().toString());
                 statement.setString(6, claim.kind().storageValue());
                 statement.setLong(7, claim.claimedAt().toEpochMilli());
+                statement.setString(8, claim.type().storageValue());
+                if (claim.owner() == null) {
+                    statement.setNull(9, java.sql.Types.VARCHAR);
+                } else {
+                    statement.setString(9, claim.owner().value().toString());
+                }
                 statement.executeUpdate();
             }
             return null;
@@ -137,6 +144,67 @@ final class ConnectionClaimStore implements CivicTransaction.ClaimStore {
         });
     }
 
+    /**
+     * Updates what a plot is for and who holds it.
+     *
+     * <p>Separate from {@link #updateKind}: a plot's use and the town's shape are different facts
+     * about the chunk, and one statement that wrote both would let a plot type change quietly move
+     * the homeblock.</p>
+     */
+    @Override
+    public void updatePlot(final Claim claim) {
+        Objects.requireNonNull(claim, "claim");
+        StorageFailure.wrapping(() -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE rt_claim SET plot_type = ?, owner_id = ? "
+                            + "WHERE world_id = ? AND chunk_x = ? AND chunk_z = ?")) {
+                statement.setString(1, claim.type().storageValue());
+                if (claim.owner() == null) {
+                    statement.setNull(2, java.sql.Types.VARCHAR);
+                } else {
+                    statement.setString(2, claim.owner().value().toString());
+                }
+                statement.setString(3, claim.chunk().worldId().toString());
+                statement.setInt(4, claim.chunk().chunkX());
+                statement.setInt(5, claim.chunk().chunkZ());
+                statement.executeUpdate();
+            }
+            return null;
+        });
+    }
+
+    @Override
+    public List<Claim> heldBy(final net.riftbreaker.rifttowny.domain.org.ResidentId owner) {
+        Objects.requireNonNull(owner, "owner");
+        return StorageFailure.wrapping(() -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT " + COLUMNS + " FROM rt_claim WHERE owner_id = ? "
+                            + "ORDER BY claimed_at, claim_id")) {
+                statement.setString(1, owner.value().toString());
+                return readAll(statement);
+            }
+        });
+    }
+
+    @Override
+    public int releaseAllHeldBy(
+            final net.riftbreaker.rifttowny.domain.org.ResidentId owner, final TownId town) {
+        Objects.requireNonNull(owner, "owner");
+        Objects.requireNonNull(town, "town");
+        return StorageFailure.wrapping(() -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE rt_claim SET owner_id = NULL WHERE owner_id = ? AND town_id = ?")) {
+                statement.setString(1, owner.value().toString());
+                statement.setString(2, town.value().toString());
+                return statement.executeUpdate();
+            }
+        });
+    }
+
+    private static net.riftbreaker.rifttowny.domain.org.ResidentId owner(final String raw) {
+        return raw == null ? null : net.riftbreaker.rifttowny.domain.org.ResidentId.parse(raw);
+    }
+
     private static List<Claim> readAll(final PreparedStatement statement) throws SQLException {
         final List<Claim> claims = new ArrayList<>();
         try (ResultSet results = statement.executeQuery()) {
@@ -149,6 +217,9 @@ final class ConnectionClaimStore implements CivicTransaction.ClaimStore {
                                 results.getInt("chunk_z")),
                         TownId.parse(results.getString("town_id")),
                         ClaimKind.fromStorage(results.getString("claim_kind")),
+                        net.riftbreaker.rifttowny.domain.territory.PlotType.fromStorage(
+                                results.getString("plot_type")),
+                        owner(results.getString("owner_id")),
                         Instant.ofEpochMilli(results.getLong("claimed_at"))));
             }
         }

@@ -574,6 +574,11 @@ public final class TownService {
                 transaction.publishAll(stripped.events(), correlation("leave", townId));
             });
 
+            // And any plots they held here. A plot is authority over a square inside the town, and
+            // somebody who is no longer a member should not keep it - the same rule as their roles,
+            // for the same reason.
+            PlotService.releaseHeldPlots(transaction, index, townId, who);
+
             // And their nation roles, for the same reason one step out: citizenship of a nation is
             // residency in one of its towns, so leaving the town ends it. Somebody who joins another
             // town in the same nation does not get the role back - it was granted to them, and

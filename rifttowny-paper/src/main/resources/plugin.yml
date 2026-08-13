@@ -41,6 +41,10 @@ commands:
     aliases: [t]
     description: Found and manage a town.
     usage: /town <new|info|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|reclaim|delete|role|flag>
+  plot:
+    aliases: [p]
+    description: Take and manage the plot you are standing on.
+    usage: /plot <info|claim|unclaim|set|list>
   nation:
     aliases: [n]
     description: Found and manage a nation.
@@ -145,6 +149,25 @@ permissions:
     default: true
   rifttowny.role.assign:
     description: Give and take your town's roles.
+    default: true
+
+  # Same shape again. MANAGE_PLOTS decides who may touch somebody else's plot; holding your own is
+  # a right of membership rather than a permission.
+  rifttowny.plot:
+    description: Use the plot commands.
+    default: true
+    children:
+      rifttowny.plot.info: true
+      rifttowny.plot.claim: true
+      rifttowny.plot.set: true
+  rifttowny.plot.info:
+    description: Look at a plot, and list the ones you hold.
+    default: true
+  rifttowny.plot.claim:
+    description: Take and give back plots in your own town.
+    default: true
+  rifttowny.plot.set:
+    description: Say what a plot is for. The MANAGE_PLOTS role permission covers other people's.
     default: true
 
   # Same shape as the town nodes: granted to everyone, with the nation's own role book deciding who

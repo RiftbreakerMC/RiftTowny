@@ -215,6 +215,32 @@ public enum MessageKey {
     NATION_DISBANDED("nation.disbanded",
             "<yellow>Disbanded <white><nation></white>.</yellow>"),
 
+    PLOT_INFO_HEADER("plot.info-header",
+            "<gray>Plot <white><chunk></white></gray>"),
+
+    PLOT_TAKEN("plot.taken",
+            "<green>You now hold the plot at <white><chunk></white>.</green>"),
+
+    PLOT_RELEASED("plot.released",
+            "<yellow>The plot at <white><chunk></white> is back with the town.</yellow>"),
+
+    PLOT_TYPE_SET("plot.type-set",
+            "<green>The plot at <white><chunk></white> is now a "
+                    + "<white><type></white> plot.</green>"),
+
+    PLOT_LIST_HEADER("plot.list-header",
+            "<gray>You hold <white><count></white> plot(s):</gray>"),
+
+    PLOT_LIST_LINE("plot.list-line",
+            "  <aqua><chunk></aqua> <dark_gray>-</dark_gray> <gray><type></gray>"),
+
+    PLOT_NONE_HELD("plot.none-held",
+            "<gray>You hold no plots.</gray>"),
+
+    PLOT_UNKNOWN_TYPE("plot.unknown-type",
+            "<red>Unknown plot type <white><input></white>. "
+                    + "One of: <white><options></white></red>"),
+
     ROLE_CREATED("role.created",
             "<green>Created the role <white><role></white>.</green>"),
 

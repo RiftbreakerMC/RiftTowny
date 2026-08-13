@@ -82,6 +82,16 @@ nation:
   renamed: '<green>Renamed to <white><nation></white>.</green>'
   disbanded: '<yellow>Disbanded <white><nation></white>.</yellow>'
 
+plot:
+  info-header: '<gray>Plot <white><chunk></white></gray>'
+  taken: '<green>You now hold the plot at <white><chunk></white>.</green>'
+  released: '<yellow>The plot at <white><chunk></white> is back with the town.</yellow>'
+  type-set: '<green>The plot at <white><chunk></white> is now a <white><type></white> plot.</green>'
+  list-header: '<gray>You hold <white><count></white> plot(s):</gray>'
+  list-line: '  <aqua><chunk></aqua> <dark_gray>-</dark_gray> <gray><type></gray>'
+  none-held: '<gray>You hold no plots.</gray>'
+  unknown-type: '<red>Unknown plot type <white><input></white>. One of: <white><options></white></red>'
+
 role:
   created: '<green>Created the role <white><role></white>.</green>'
   deleted: '<yellow>Deleted the role <white><role></white>.</yellow>'
@@ -156,6 +166,10 @@ denial:
   chunk-owned-by-another-town: 'Another town already owns that chunk.'
   chunk-not-claimed: 'Your town does not own that chunk.'
   no-town-spawn: 'Your town has no spawn. Someone with the permission can set one with /town setspawn.'
+  plot-already-held: 'Somebody else already holds that plot.'
+  already-hold-this-plot: 'You already hold that plot.'
+  plot-not-held: 'Nobody holds that plot, so there is nothing to give back.'
+  plot-already-that-type: 'That plot is already used for that.'
   not-a-ruin: 'There is no fallen town here to take on.'
   ruin-has-lapsed: 'These ruins have crumbled. The land is wilderness again.'
   ruin-not-yet-reclaimable: 'These ruins are too fresh to rebuild. Come back later.'
