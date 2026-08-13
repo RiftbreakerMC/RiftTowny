@@ -226,6 +226,20 @@ public enum ChangeDenial {
     /** That chunk is not one of this town's claims. */
     CHUNK_NOT_CLAIMED,
 
+    // --- ruins -------------------------------------------------------------------------------
+
+    /** There is no fallen town here to take on. */
+    NOT_A_RUIN,
+
+    /**
+     * The ruin's window has closed.
+     *
+     * <p>Separate from {@link #NOT_A_RUIN} because the two want different answers: one means "look
+     * elsewhere", the other means "you were too late", and telling a player the ruin they are
+     * standing in does not exist would read as a bug.</p>
+     */
+    RUIN_HAS_LAPSED,
+
     // --- flags -------------------------------------------------------------------------------
 
     /**

@@ -150,7 +150,10 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 
 - [x] **`NationRoleService`** — the three escalation guards were **extracted** into a shared `RoleEditor` rather than copied, because a copy is how one of them quietly stops matching the other and only the weaker one is ever tested. `TownRoleService` and `NationRoleService` are typed faces over it, so a nation id cannot reach a method meaning a town's. All that genuinely differs is how standing and membership are answered: a nation has no residents, so both need the actor's town first. `/nation role` wired
 
+- [x] **Ruins** — `V6` adds `rt_ruin` and `rt_ruin_claim`. A disbanded town's land does not become wilderness immediately: it becomes a ruin for a configured window, held by `RuinIndex` beside the territory and civic caches. **The shell is protected and the contents are not** — nobody may build, break, burn or blow it up, but its chests open — and anybody without a town may take the whole thing on with `/town reclaim`. `LandState` replaced the `claimed` boolean, because a ruin is neither claimed nor unclaimed. Lapsed ruins are swept on a schedule; the row survives the sweep, since `RT-MOD-REGEN` and the anti-recreation rule both read it
+
 ### Next
+- [ ] **Ruins are not yet an outcome of anything but disband** — a town that falls to bankruptcy, inactivity or a siege should leave one too. Those systems do not exist; when they do, they call the same `RuinService.recordFall`
 - [ ] **Nation roles outlive citizenship** — a citizen who leaves their town, or whose town leaves the nation, keeps any nation role they hold. Nothing ties `rt_role_member` to citizenship, and unlike a town departure there is no single event that ends it. `Town`'s equivalent was fixed by `RoleBook.unassignAll` on release; the nation case needs the same treatment on `leave`, `expel` and a resident's town change
 - [ ] **Protection gaps to close** — no border-crossing message, no area or plot overrides (`AREA` is a declared layer with no source), no operator command for the world and admin layers (the service supports them; only `/town flag` is wired), and `BlockActions` covers interactive blocks by name so an unlisted one is treated as scenery
 - [ ] `RT-CORE-UI` — Java GUI framework and Floodgate Bedrock forms. **Nothing declares `Surface.GUI` yet**, which is why the parity test passes; it becomes a real constraint with the first menu
@@ -170,7 +173,7 @@ Feature IDs in [FEATURE_CATALOG.md](FEATURE_CATALOG.md) §1.
 - [ ] Taxes, nation taxes, upkeep, bankruptcy
 - [ ] Elections and governance
 - [ ] Diplomacy: allies, enemies, embargoes, treaties
-- [ ] Ruins and land regeneration
+- [x] Ruins — done in Phase 2, because disbanding needed something to hand its land to. Regeneration (`RT-MOD-REGEN`) still outstanding: a lapsed ruin's land reverts to wilderness with its buildings intact
 - [ ] Safe-location engine; wilderness respawn; protected destination zones
 - [ ] Town and nation leaderboards
 

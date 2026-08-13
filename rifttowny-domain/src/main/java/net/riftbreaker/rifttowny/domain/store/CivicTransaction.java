@@ -45,6 +45,8 @@ public interface CivicTransaction {
 
     InvitationStore invitations();
 
+    RuinStore ruins();
+
     /**
      * Queues an event for delivery.
      *
@@ -215,6 +217,53 @@ public interface CivicTransaction {
 
         /** Sweeps lapsed offers. Returns how many went. */
         int deleteExpired(java.time.Instant now);
+    }
+
+    /**
+     * Ruins, inside the transaction.
+     *
+     * <p>The ruin row and the chunks it holds have different lifetimes: the chunks go when the ruin
+     * lapses or is taken on, the row stays for as long as anything might ask what stood there. Both
+     * are here so a fall, a reclaim and an expiry are each one transaction.</p>
+     */
+    interface RuinStore {
+
+        Optional<net.riftbreaker.rifttowny.domain.territory.Ruin> find(java.util.UUID ruinId);
+
+        /** The ruin holding this chunk, if one does. */
+        Optional<net.riftbreaker.rifttowny.domain.territory.Ruin> at(
+                net.riftbreaker.rifttowny.api.ChunkKey chunk);
+
+        /**
+         * Every ruin that still holds land, with the chunks it holds.
+         *
+         * <p>For filling the in-memory index at startup. Lapsed and reclaimed ruins are excluded:
+         * their rows survive as history, but they own nothing.</p>
+         */
+        java.util.Map<net.riftbreaker.rifttowny.domain.territory.Ruin,
+                java.util.Set<net.riftbreaker.rifttowny.api.ChunkKey>> standing();
+
+        /** Every ruin whose window has closed, for the sweep. */
+        List<net.riftbreaker.rifttowny.domain.territory.Ruin> lapsed(java.time.Instant now);
+
+        /** The chunks one ruin holds. */
+        java.util.Set<net.riftbreaker.rifttowny.api.ChunkKey> chunksOf(java.util.UUID ruinId);
+
+        /** Records a fall, with the land it leaves behind. */
+        void save(
+                net.riftbreaker.rifttowny.domain.territory.Ruin ruin,
+                java.util.Collection<net.riftbreaker.rifttowny.api.ChunkKey> chunks);
+
+        /** Updates the row without touching its land, as when it is reclaimed. */
+        void update(net.riftbreaker.rifttowny.domain.territory.Ruin ruin);
+
+        /**
+         * Releases a ruin's land, leaving the row.
+         *
+         * <p>The row is what {@code RT-MOD-REGEN} and the anti-recreation rule read afterwards, so
+         * letting go of the ground is not the same as forgetting the town.</p>
+         */
+        int releaseLand(java.util.UUID ruinId);
     }
 
     /** Nations, inside the transaction. */

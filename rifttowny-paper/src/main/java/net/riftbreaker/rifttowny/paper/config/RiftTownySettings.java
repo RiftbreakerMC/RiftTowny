@@ -20,12 +20,21 @@ import java.util.Objects;
 public record RiftTownySettings(
         StorageSettings storage,
         NetworkTopology topology,
-        boolean townyPermissionAliases
+        boolean townyPermissionAliases,
+        java.time.Duration ruinLifetime,
+        java.time.Duration ruinSweepInterval
 ) {
 
     public RiftTownySettings {
         Objects.requireNonNull(storage, "storage");
         Objects.requireNonNull(topology, "topology");
+        Objects.requireNonNull(ruinLifetime, "ruinLifetime");
+        Objects.requireNonNull(ruinSweepInterval, "ruinSweepInterval");
+    }
+
+    /** Whether a disbanded town leaves a ruin at all. */
+    public boolean ruinsEnabled() {
+        return !ruinLifetime.isZero() && !ruinLifetime.isNegative();
     }
 
     /**
@@ -67,8 +76,27 @@ public record RiftTownySettings(
                 config.getString("network.server-id", NetworkTopology.DEFAULT_SERVER_ID),
                 config.getBoolean("network.shared", false));
 
+        // Clamped at zero rather than rejected. A negative lifetime is nonsense, and the nearest
+        // sensible reading of it is the one the operator can also write on purpose: ruins off.
+        final long ruinHours = Math.max(0L, config.getLong("ruins.lifetime-hours", 72L));
+        // The sweep floor is a minute: a sweep running every few seconds would be a full table scan
+        // in a loop to release land nobody is waiting on.
+        final long sweepMinutes = Math.max(1L, config.getLong("ruins.sweep-minutes", 15L));
+
         return new RiftTownySettings(
-                storage, topology, config.getBoolean("permissions.towny-aliases", false));
+                storage,
+                topology,
+                config.getBoolean("permissions.towny-aliases", false),
+                java.time.Duration.ofHours(ruinHours),
+                java.time.Duration.ofMinutes(sweepMinutes));
+    }
+
+    /** How ruins read in the startup log. */
+    public String describeRuins() {
+        return ruinsEnabled()
+                ? "ruins stand for " + ruinLifetime.toHours() + "h, swept every "
+                        + ruinSweepInterval.toMinutes() + "m"
+                : "ruins disabled";
     }
 
     /** How the topology reads in {@code /rifttowny status}. */

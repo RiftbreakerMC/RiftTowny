@@ -75,6 +75,15 @@ public enum MessageKey {
     TOWN_DISBANDED("town.disbanded",
             "<yellow>Disbanded <white><town></white>.</yellow>"),
 
+    TOWN_RECLAIMED("town.reclaimed",
+            "<green>Founded <white><town></white> on the ruins of "
+                    + "<white><ruin></white>.</green>"),
+
+    /** Shown on entering a ruin. It says how long is left, because that is the whole decision. */
+    RUIN_ENTERED("town.ruin-entered",
+            "<gray>The ruins of <white><ruin></white> <dark_gray>-</dark_gray> "
+                    + "<gray>reclaimable for <white><remaining></white>.</gray>"),
+
     TOWN_NOT_IN_A_TOWN("town.not-in-a-town",
             "<red>You are not in a town.</red>"),
 

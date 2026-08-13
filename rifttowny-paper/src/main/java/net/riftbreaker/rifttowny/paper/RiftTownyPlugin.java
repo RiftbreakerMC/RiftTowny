@@ -63,6 +63,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.CivicCacheService civicCacheService;
     private net.riftbreaker.rifttowny.domain.flag.FlagOverrides flagOverrides;
     private net.riftbreaker.rifttowny.domain.service.FlagService flagService;
+    private net.riftbreaker.rifttowny.domain.territory.RuinIndex ruinIndex;
+    private net.riftbreaker.rifttowny.domain.service.RuinService ruinService;
     private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
 
@@ -168,8 +170,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
         }
 
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
-                townService, townRoleService, territoryService, flagService, residentRepository,
-                townRepository, messages, denialText).tree());
+                townService, townRoleService, territoryService, flagService, ruinService,
+                residentRepository, townRepository, messages, denialText).tree());
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
                 nationService, nationRoleService, residentRepository, townRepository,
@@ -180,7 +182,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         getLogger().info("RiftTowny enabled on " + platformName() + ". " + schema.describe() + '.');
         getLogger().info("Storage: " + settings.storage().describeForLog()
-                + ", topology: " + settings.describeTopology() + '.');
+                + ", topology: " + settings.describeTopology()
+                + ", " + settings.describeRuins() + '.');
     }
 
     @Override
@@ -232,13 +235,24 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.flagOverrides = net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty();
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
+            this.ruinIndex = net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty();
+            this.ruinService = new net.riftbreaker.rifttowny.domain.service.RuinService(
+                    civicStore,
+                    net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
+                    clock,
+                    territoryIndex,
+                    ruinIndex,
+                    civicCacheService,
+                    settings.ruinLifetime());
             this.townService = new net.riftbreaker.rifttowny.domain.service.TownService(
                     civicStore,
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
                     clock,
                     territoryIndex,
                     civicCacheService,
-                    flagOverrides);
+                    flagOverrides,
+                    ruinIndex,
+                    settings.ruinLifetime());
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
@@ -269,6 +283,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
             final int flags = flagService.loadAll()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + flags + " flag override(s) into memory.");
+
+            // Waited on beside the others. A listener that ran first would read a ruin as
+            // wilderness, and the blocks it let through would be gone before the load finished.
+            final int standing = ruinService.loadIndex()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + standing + " standing ruin(s) into memory.");
             return true;
         } catch (final RuntimeException failure) {
             getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "
@@ -294,7 +314,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
         // The loaded overrides are the settings source, so admin, claim, organisation and world
         // layers all answer. Area and war supply their own layers when those modules land.
         final var query = new net.riftbreaker.rifttowny.domain.flag.ProtectionQuery(
-                territoryIndex, civicCache, flagOverrides);
+                territoryIndex, civicCache, flagOverrides, ruinIndex);
         this.protection = new net.riftbreaker.rifttowny.paper.protection.ProtectionService(
                 query, messenger);
 
@@ -312,6 +332,15 @@ public final class RiftTownyPlugin extends JavaPlugin {
         manager.registerEvents(
                 new net.riftbreaker.rifttowny.paper.protection.WorldProtectionListener(protection),
                 this);
+
+        if (settings.ruinsEnabled()) {
+            // Registered only when ruins are on. A movement listener that can never have anything
+            // to say is a cost on every packet for nothing.
+            manager.registerEvents(
+                    new net.riftbreaker.rifttowny.paper.protection.RuinNoticeListener(
+                            ruinIndex, messages, java.time.Clock.systemUTC()),
+                    this);
+        }
     }
 
     /**
@@ -333,6 +362,24 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 }),
                 java.time.Duration.ofMinutes(5),
                 java.time.Duration.ofHours(1));
+
+        if (!settings.ruinsEnabled()) {
+            return;
+        }
+        // Releasing a lapsed ruin's land is the only thing that turns it back into wilderness, so
+        // unlike the invitation sweep this one has a visible effect: until it runs, the ground stays
+        // protected and cannot be reclaimed.
+        scheduler.asyncRepeating(
+                () -> ruinService.sweepLapsed().whenComplete((released, failure) -> {
+                    if (failure != null) {
+                        getLogger().log(java.util.logging.Level.WARNING,
+                                "Could not sweep lapsed ruins", failure);
+                    } else if (released > 0) {
+                        getLogger().info("Released the land of " + released + " lapsed ruin(s).");
+                    }
+                }),
+                java.time.Duration.ofMinutes(1),
+                settings.ruinSweepInterval());
     }
 
     /**

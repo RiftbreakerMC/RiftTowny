@@ -84,6 +84,7 @@ public final class JdbcCivicStore implements CivicStore {
         private final ConnectionClaimStore claims;
         private final ConnectionFlagStore flags;
         private final ConnectionInvitationStore invitations;
+        private final ConnectionRuinStore ruins;
 
         private JdbcCivicTransaction(
                 final Connection connection, final RiftTownyDatabase database, final Clock clock) {
@@ -96,6 +97,7 @@ public final class JdbcCivicStore implements CivicStore {
             this.claims = new ConnectionClaimStore(connection);
             this.flags = new ConnectionFlagStore(connection, database.backend());
             this.invitations = new ConnectionInvitationStore(connection, database.backend());
+            this.ruins = new ConnectionRuinStore(connection);
         }
 
         @Override
@@ -131,6 +133,11 @@ public final class JdbcCivicStore implements CivicStore {
         @Override
         public InvitationStore invitations() {
             return invitations;
+        }
+
+        @Override
+        public RuinStore ruins() {
+            return ruins;
         }
 
         @Override

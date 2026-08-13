@@ -82,7 +82,7 @@ public enum ProtectionFlag {
      * installs RiftTowny and configures nothing should find its towns protected, not find that
      * claiming land changed nothing.</p>
      *
-     * <p><strong>{@code claimed} is a separate argument on purpose.</strong> It cannot be inferred
+     * <p><strong>{@code land} is a separate argument on purpose.</strong> It cannot be inferred
      * from the relationship, because {@link #effectiveRelationship} deliberately reports a world
      * flag at {@link Relationship#WILDERNESS} even inside a town. Reading "wilderness" as "nobody
      * owns this" was exactly that mistake: it made every explosion, fire and piston inside a claim
@@ -90,13 +90,16 @@ public enum ProtectionFlag {
      * below says. One value cannot answer both "whose land is this" and "what standing does the
      * actor have", so it no longer tries.</p>
      *
-     * @param claimed whether a town owns this land, independent of the actor's standing on it
+     * @param land whose land this is, independent of the actor's standing on it
      */
-    public boolean allowedByDefault(final Relationship relationship, final boolean claimed) {
-        if (!claimed) {
+    public boolean allowedByDefault(final Relationship relationship, final LandState land) {
+        if (land == LandState.WILDERNESS) {
             // Unclaimed land behaves like vanilla, except for the two that would let somebody grief
             // across a border from outside it.
             return this != EVENT_ACTION && this != WAR_ACTION;
+        }
+        if (land == LandState.RUIN) {
+            return allowedInRuin();
         }
         return switch (this) {
             // Members build; outsiders do not.
@@ -113,6 +116,38 @@ public enum ProtectionFlag {
             case EXPLOSIONS, FIRE_SPREAD, FLUID_FLOW, PISTONS -> false;
             case REDSTONE, MOB_SPAWNING -> true;
             // Granted only by the subsystem that owns them, never by default.
+            case EVENT_ACTION, WAR_ACTION -> false;
+        };
+    }
+
+    /**
+     * The shipped default on a ruin.
+     *
+     * <p><strong>The shell is protected; the contents are not.</strong> That is a gameplay decision
+     * rather than a technical one, and it is the whole character of the feature, so it is stated
+     * here rather than left implicit in a switch.</p>
+     *
+     * <p>Nobody may build or break: the buildings have to still be standing for reclaiming a ruin to
+     * mean anything, and a town that lost a war would otherwise be dismantled before anyone could
+     * take it on. Nobody has a relationship to a ruin either — there is no town left to have one
+     * with — so this does not vary by actor.</p>
+     *
+     * <p>Chests, however, open. A ruin nobody may loot is a museum, and the plunder is what makes
+     * a fallen town an event rather than an absence. Servers that disagree can say so: a ruin's
+     * chunks keep answering to the admin and world flag layers.</p>
+     *
+     * <p>The world may not touch it at all. Explosions, fire, fluids and pistons are refused for the
+     * same reason building is: whatever stands has to survive long enough to be reclaimed, or to be
+     * restored by {@code RT-MOD-REGEN} when the window closes.</p>
+     */
+    public boolean allowedInRuin() {
+        return switch (this) {
+            case BUILD, BREAK, FLIGHT -> false;
+            case CONTAINER, INTERACT, ENTITY_DAMAGE, VEHICLE, FARMLAND, SHOP_USE, SPAWNER_USE -> true;
+            // Contested ground. A ruin is the one place a fight is the point.
+            case PVP -> true;
+            case EXPLOSIONS, FIRE_SPREAD, FLUID_FLOW, PISTONS -> false;
+            case REDSTONE, MOB_SPAWNING -> true;
             case EVENT_ACTION, WAR_ACTION -> false;
         };
     }

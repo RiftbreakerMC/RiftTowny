@@ -36,6 +36,24 @@ network:
   # True when more than one backend server shares this database. Requires mariadb.
   shared: false
 
+ruins:
+  # How long a disbanded town's land stays a ruin before reverting to wilderness.
+  #
+  # A ruin is the interval between a town ending and its ground becoming unowned. The buildings are
+  # still standing when the last resident goes, and reverting instantly means the first player to
+  # walk past owns everything in them. During the window the shell is protected - nobody may build
+  # or break, and the world may not burn or blow it up - but its chests open, and anybody without a
+  # town may take the whole thing on with /town reclaim.
+  #
+  # 0 switches ruins off entirely: a disbanded town's land goes straight back to wilderness. That is
+  # different from a very short window, which would leave ruins nobody ever sees.
+  lifetime-hours: 72
+
+  # How often lapsed ruins are swept and their land released. Until the sweep runs, a lapsed ruin's
+  # land stays protected and cannot be reclaimed, so this is the delay between "the window closed"
+  # and "the land is free", not a correctness setting.
+  sweep-minutes: 15
+
 roles:
   # Permissions no configurable role may ever hold, whatever a mayor tries to grant. The leader
   # role is unaffected - it always holds everything - so this bounds delegation, not the mayor.

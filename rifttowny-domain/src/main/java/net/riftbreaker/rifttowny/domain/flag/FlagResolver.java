@@ -40,14 +40,33 @@ public final class FlagResolver {
      */
     public static FlagDecision resolve(
             final ProtectionFlag flag, final Relationship actual, final List<FlagLayer> layers) {
+        // Derived rather than demanded, for the two states a relationship can still describe: a
+        // relationship other than wilderness means somebody owns this. A ruin cannot be inferred
+        // that way and has to be passed.
+        return resolve(
+                flag,
+                actual,
+                actual == Relationship.WILDERNESS ? LandState.WILDERNESS : LandState.CLAIMED,
+                layers);
+    }
+
+    /**
+     * Answers one question about land of a known kind.
+     *
+     * @param land whose land this is. Separate from the relationship because a world flag reports
+     *        at {@link Relationship#WILDERNESS} even inside a town, and because a ruin is neither
+     *        claimed nor unclaimed
+     */
+    public static FlagDecision resolve(
+            final ProtectionFlag flag,
+            final Relationship actual,
+            final LandState land,
+            final List<FlagLayer> layers
+    ) {
         Objects.requireNonNull(flag, "flag");
         Objects.requireNonNull(actual, "actual");
+        Objects.requireNonNull(land, "land");
         Objects.requireNonNull(layers, "layers");
-
-        // Whether the land is owned, taken from the actor's real standing before the collapse
-        // below throws that information away. A world flag inside a town still resolves at
-        // wilderness, but it must not inherit wilderness's vanilla defaults while doing so.
-        final boolean claimed = actual != Relationship.WILDERNESS;
 
         // A world flag collapses to wilderness: piston and fluid rules are about the land, not
         // about whoever happens to be standing nearby, and letting a member's relationship widen
@@ -61,7 +80,7 @@ public final class FlagResolver {
             }
         }
         return new FlagDecision(
-                flag, relationship, flag.allowedByDefault(relationship, claimed), FlagSource.BUILT_IN);
+                flag, relationship, flag.allowedByDefault(relationship, land), FlagSource.BUILT_IN);
     }
 
     /**

@@ -22,6 +22,7 @@ import net.riftbreaker.rifttowny.domain.store.CivicStore;
 import net.riftbreaker.rifttowny.domain.store.CivicTransaction;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -54,6 +55,8 @@ public final class TownService {
     private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index;
     private final CivicCacheRefresher civic;
     private final FlagOverrides overrides;
+    private final net.riftbreaker.rifttowny.domain.territory.RuinIndex ruins;
+    private final Duration ruinLifetime;
 
     /**
      * @param index needed only so disbanding can drop the town's chunks from the in-memory cache.
@@ -96,12 +99,33 @@ public final class TownService {
             final CivicCacheRefresher civic,
             final FlagOverrides overrides
     ) {
+        this(store, namePolicy, clock, index, civic, overrides,
+                net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty(), Duration.ZERO);
+    }
+
+    /**
+     * @param ruins the in-memory ruin index, given the chunks a disbanded town gives up
+     * @param ruinLifetime how long those chunks stay a ruin before reverting. {@link Duration#ZERO}
+     *        switches ruins off, and a disbanded town's land goes straight back to wilderness
+     */
+    public TownService(
+            final CivicStore store,
+            final NamePolicy namePolicy,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
+            final CivicCacheRefresher civic,
+            final FlagOverrides overrides,
+            final net.riftbreaker.rifttowny.domain.territory.RuinIndex ruins,
+            final Duration ruinLifetime
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.namePolicy = Objects.requireNonNull(namePolicy, "namePolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.index = Objects.requireNonNull(index, "index");
         this.civic = Objects.requireNonNull(civic, "civic");
         this.overrides = Objects.requireNonNull(overrides, "overrides");
+        this.ruins = Objects.requireNonNull(ruins, "ruins");
+        this.ruinLifetime = Objects.requireNonNull(ruinLifetime, "ruinLifetime");
     }
 
     /**
@@ -298,6 +322,15 @@ public final class TownService {
                     flagTargets.add(FlagTarget.claim(claim.chunk())));
             flagTargets.forEach(target -> transaction.flags().clearAll(target));
 
+            // The land does not become wilderness yet. A town's buildings are still standing when
+            // its last resident goes, and reverting instantly means the first player to walk past
+            // owns everything in them. The claims move to a ruin, which holds them until somebody
+            // takes it on or the window closes. With ruins switched off this is empty and the
+            // behaviour is the old one.
+            final Optional<RuinService.Fallen> fallen = RuinService.recordFall(
+                    transaction, town, transaction.claims().of(townId), clock.instant(),
+                    ruinLifetime);
+
             // Territory is released explicitly: rt_claim cascades from rt_town, but relying on the
             // cascade would make the claim count in the announcement below unknowable, and it would
             // hide the release from anything watching claims rather than towns.
@@ -312,13 +345,18 @@ public final class TownService {
             transaction.publish(
                     new DomainEvent.TownDisbanded(townId, town.name(), released),
                     correlation("disband", townId));
-            return new Disbanded(townId, List.copyOf(flagTargets));
+            return new Disbanded(townId, List.copyOf(flagTargets), fallen.orElse(null));
         }).thenApply(result -> {
             // After the commit, never inside it. A rolled-back disband whose claims had already
             // left the cache would leave the town's land unprotected until the next restart.
             result.value().ifPresent(disbanded -> {
                 index.removeAllOf(disbanded.town());
                 disbanded.flagTargets().forEach(overrides::clearAll);
+                // The ruin takes the chunks the claims just gave up, in that order: a moment with
+                // neither would read as wilderness, and a block broken during it would be gone.
+                if (disbanded.fallen() != null) {
+                    ruins.put(disbanded.fallen().ruin(), disbanded.fallen().chunks());
+                }
             });
             return result;
         }).thenCompose(result -> {
@@ -339,7 +377,8 @@ public final class TownService {
      * <p>Internal: {@link #disband} still answers with the town id, because the targets are a
      * cache-maintenance detail and no caller has a use for them.</p>
      */
-    private record Disbanded(TownId town, List<FlagTarget> flagTargets) {
+    private record Disbanded(
+            TownId town, List<FlagTarget> flagTargets, RuinService.Fallen fallen) {
     }
 
     private static ServiceResult<TownId> map(final ServiceResult<Disbanded> result) {

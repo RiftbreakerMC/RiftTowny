@@ -311,6 +311,68 @@ public sealed interface DomainEvent {
     }
 
     /**
+     * A town fell and left a ruin.
+     *
+     * <p>Distinct from {@link TownDisbanded}, which says the organisation ended. This says its land
+     * did not: the buildings are still standing and can be taken on until the window closes.</p>
+     */
+    record TownRuined(
+            java.util.UUID ruin, TownId formerTown, OrganisationName name, int chunks)
+            implements DomainEvent {
+
+        public TownRuined {
+            Objects.requireNonNull(ruin, "ruin");
+            Objects.requireNonNull(formerTown, "formerTown");
+            Objects.requireNonNull(name, "name");
+        }
+
+        @Override
+        public String type() {
+            return "ruin.created";
+        }
+    }
+
+    /** Somebody took a ruin on, founding a new town on its territory. */
+    record RuinReclaimed(
+            java.util.UUID ruin,
+            TownId formerTown,
+            OrganisationName formerName,
+            TownId newTown,
+            ResidentId by
+    ) implements DomainEvent {
+
+        public RuinReclaimed {
+            Objects.requireNonNull(ruin, "ruin");
+            Objects.requireNonNull(formerTown, "formerTown");
+            Objects.requireNonNull(formerName, "formerName");
+            Objects.requireNonNull(newTown, "newTown");
+            Objects.requireNonNull(by, "by");
+        }
+
+        @Override
+        public String type() {
+            return "ruin.reclaimed";
+        }
+    }
+
+    /** A ruin's window closed and its land reverted to wilderness. */
+    record RuinLapsed(
+            java.util.UUID ruin, TownId formerTown, OrganisationName name, int chunksReleased)
+            implements DomainEvent {
+
+        public RuinLapsed {
+            Objects.requireNonNull(ruin, "ruin");
+            Objects.requireNonNull(formerTown, "formerTown");
+            Objects.requireNonNull(name, "name");
+        }
+
+        @Override
+        public String type() {
+            return "ruin.lapsed";
+        }
+    }
+
+    /**
      * A protection flag was set.
      *
      * <p>Carries the scope and target as strings rather than a typed identifier. The target is a

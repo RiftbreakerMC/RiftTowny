@@ -40,7 +40,7 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|add|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|delete|role|flag>
+    usage: /town <new|info|add|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|reclaim|delete|role|flag>
   nation:
     aliases: [n]
     description: Found and manage a nation.
@@ -81,6 +81,7 @@ permissions:
       rifttowny.town.claim: true
       rifttowny.town.unclaim: true
       rifttowny.town.homeblock: true
+      rifttowny.town.reclaim: true
       rifttowny.town.flag: true
       rifttowny.role.view: true
       rifttowny.role.manage: true
@@ -117,6 +118,9 @@ permissions:
     default: true
   rifttowny.town.homeblock:
     description: Move your town's home chunk.
+    default: true
+  rifttowny.town.reclaim:
+    description: Found a town on the ruins of a fallen one.
     default: true
   rifttowny.town.flag:
     description: Change what your town allows. The MANAGE_FLAGS role permission decides who really can.

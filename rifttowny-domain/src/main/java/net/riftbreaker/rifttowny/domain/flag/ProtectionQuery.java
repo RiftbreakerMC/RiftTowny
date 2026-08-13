@@ -8,6 +8,8 @@ import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.role.Permission;
 import net.riftbreaker.rifttowny.domain.territory.Claim;
+import net.riftbreaker.rifttowny.domain.territory.Ruin;
+import net.riftbreaker.rifttowny.domain.territory.RuinIndex;
 import net.riftbreaker.rifttowny.domain.territory.TerritoryIndex;
 
 import java.util.Objects;
@@ -34,10 +36,11 @@ public final class ProtectionQuery {
     private final TerritoryIndex territory;
     private final CivicCache civic;
     private final FlagSettingsSource settings;
+    private final RuinIndex ruins;
 
-    /** Uses built-in flag defaults, because nothing persists overrides yet. */
+    /** Uses built-in flag defaults and knows of no ruins. */
     public ProtectionQuery(final TerritoryIndex territory, final CivicCache civic) {
-        this(territory, civic, FlagSettingsSource.builtInOnly());
+        this(territory, civic, FlagSettingsSource.builtInOnly(), RuinIndex.empty());
     }
 
     public ProtectionQuery(
@@ -45,9 +48,23 @@ public final class ProtectionQuery {
             final CivicCache civic,
             final FlagSettingsSource settings
     ) {
+        this(territory, civic, settings, RuinIndex.empty());
+    }
+
+    /**
+     * @param ruins consulted when no town owns the chunk. A fallen town's land is not wilderness
+     *        yet, and answering as though it were would let the first passer-by dismantle it
+     */
+    public ProtectionQuery(
+            final TerritoryIndex territory,
+            final CivicCache civic,
+            final FlagSettingsSource settings,
+            final RuinIndex ruins
+    ) {
         this.territory = Objects.requireNonNull(territory, "territory");
         this.civic = Objects.requireNonNull(civic, "civic");
         this.settings = Objects.requireNonNull(settings, "settings");
+        this.ruins = Objects.requireNonNull(ruins, "ruins");
     }
 
     // --- asking --------------------------------------------------------------------------------
@@ -78,10 +95,20 @@ public final class ProtectionQuery {
 
         final Optional<Claim> claim = territory.at(chunk);
         if (claim.isEmpty()) {
+            final Optional<Ruin> ruin = ruins.at(chunk);
+            if (ruin.isPresent()) {
+                // A fallen town's land. Resolved at VISITOR whoever is standing there: there is no
+                // town left to have a relationship with, and a ruin that answered differently for
+                // the mayor who disbanded it would be a way to keep the land quietly.
+                return ProtectionAnswer.ruin(
+                        FlagResolver.resolve(flag, Relationship.VISITOR, LandState.RUIN,
+                                settings.layersFor(chunk, null)),
+                        ruin.get());
+            }
             // Wilderness. Nobody owns it, so there is no role book to consult and the flag layer
             // alone decides.
             return ProtectionAnswer.from(
-                    FlagResolver.resolve(flag, Relationship.WILDERNESS,
+                    FlagResolver.resolve(flag, Relationship.WILDERNESS, LandState.WILDERNESS,
                             settings.layersFor(chunk, null)),
                     null);
         }
@@ -110,11 +137,17 @@ public final class ProtectionQuery {
         return ProtectionAnswer.from(decision, owning);
     }
 
+    /** The ruin standing on a chunk, if one is. */
+    public Optional<Ruin> ruinAt(final ChunkKey chunk) {
+        return territory.at(chunk).isPresent() ? Optional.empty() : ruins.at(chunk);
+    }
+
     /** The relationship alone, for a border message or a map overlay. */
     public Relationship relationshipAt(final ResidentId who, final ChunkKey chunk) {
         final Optional<Claim> claim = territory.at(chunk);
         if (claim.isEmpty()) {
-            return Relationship.WILDERNESS;
+            // A ruin has no members, so everyone standing in one is a visitor to it.
+            return ruins.isRuin(chunk) ? Relationship.VISITOR : Relationship.WILDERNESS;
         }
         return civic.town(claim.get().town())
                 .map(owning -> RelationshipResolver.resolve(viewOf(who, owning)))
@@ -183,6 +216,7 @@ public final class ProtectionQuery {
      * @param ownerName its display name, carried so a message does not need a second lookup
      * @param cacheFault the refusal came from missing cached state rather than from a rule
      * @param missingPermission the role permission the actor lacked, when that is what refused them
+     * @param ruin the fallen town whose land this is, or null when it is not a ruin
      */
     public record ProtectionAnswer(
             boolean allowed,
@@ -192,7 +226,8 @@ public final class ProtectionQuery {
             TownId owner,
             String ownerName,
             boolean cacheFault,
-            Permission missingPermission
+            Permission missingPermission,
+            Ruin ruin
     ) {
 
         public ProtectionAnswer {
@@ -206,23 +241,39 @@ public final class ProtectionQuery {
                     decision.allowed(), decision.flag(), decision.relationship(), decision.source(),
                     owning == null ? null : owning.id(),
                     owning == null ? null : owning.displayName(),
-                    false, null);
+                    false, null, null);
+        }
+
+        static ProtectionAnswer ruin(final FlagDecision decision, final Ruin ruin) {
+            return new ProtectionAnswer(
+                    decision.allowed(), decision.flag(), decision.relationship(), decision.source(),
+                    ruin.formerTown(), ruin.name().display(), false, null, ruin);
         }
 
         static ProtectionAnswer roleRefusal(
                 final FlagDecision decision, final TownFacts owning, final Permission missing) {
             return new ProtectionAnswer(
                     false, decision.flag(), decision.relationship(), decision.source(),
-                    owning.id(), owning.displayName(), false, missing);
+                    owning.id(), owning.displayName(), false, missing, null);
         }
 
         static ProtectionAnswer cacheFault(final ProtectionFlag flag, final TownId owner) {
             return new ProtectionAnswer(
-                    false, flag, Relationship.VISITOR, FlagSource.BUILT_IN, owner, null, true, null);
+                    false, flag, Relationship.VISITOR, FlagSource.BUILT_IN, owner, null, true,
+                    null, null);
         }
 
         public boolean denied() {
             return !allowed;
+        }
+
+        /** Whether this land is a fallen town's rather than a standing one's. */
+        public boolean isRuin() {
+            return ruin != null;
+        }
+
+        public Optional<Ruin> fallenTown() {
+            return Optional.ofNullable(ruin);
         }
 
         /** Whether the refusal came from the actor's roles rather than from the territory. */
@@ -238,6 +289,10 @@ public final class ProtectionQuery {
         public String explain() {
             if (cacheFault) {
                 return flag + " denied: town " + owner + " is not loaded";
+            }
+            if (isRuin()) {
+                return flag + " in the ruins of " + ownerName + " is "
+                        + (allowed ? "allowed" : "denied") + " by " + source;
             }
             if (refusedByRole()) {
                 return flag + " denied: no " + missingPermission + " in " + ownerName;

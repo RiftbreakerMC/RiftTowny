@@ -51,6 +51,7 @@ public final class TownCommands {
     private final TownRoleService roles;
     private final net.riftbreaker.rifttowny.domain.service.TerritoryService territory;
     private final net.riftbreaker.rifttowny.domain.service.FlagService flags;
+    private final net.riftbreaker.rifttowny.domain.service.RuinService ruins;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
     private final MessageService messages;
@@ -61,6 +62,7 @@ public final class TownCommands {
             final TownRoleService roles,
             final net.riftbreaker.rifttowny.domain.service.TerritoryService territory,
             final net.riftbreaker.rifttowny.domain.service.FlagService flags,
+            final net.riftbreaker.rifttowny.domain.service.RuinService ruins,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
             final MessageService messages,
@@ -70,6 +72,7 @@ public final class TownCommands {
         this.roles = Objects.requireNonNull(roles, "roles");
         this.territory = Objects.requireNonNull(territory, "territory");
         this.flags = Objects.requireNonNull(flags, "flags");
+        this.ruins = Objects.requireNonNull(ruins, "ruins");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -148,6 +151,11 @@ public final class TownCommands {
                         .usage("town homeblock")
                         .describedAs("Move your home chunk here")
                         .runs(this::homeblock, Surface.CHAT))
+                .child(CommandNode.action("reclaim")
+                        .permission("rifttowny.town.reclaim")
+                        .usage("town reclaim <name>")
+                        .describedAs("Found a town on the ruin you are standing in")
+                        .runs(this::reclaim, Surface.CHAT))
                 .child(roleTree())
                 .child(flagTree())
                 .build();
@@ -445,6 +453,31 @@ public final class TownCommands {
                                 messages.send(actor::send, MessageKey.ROLE_UNASSIGNED,
                                         MessageService.value("resident", args.getFirst()),
                                         MessageService.value("role", role.name()))));
+    }
+
+    /**
+     * Takes on the ruin the player is standing in.
+     *
+     * <p>Founds a new town on the old one's ground. Deliberately not a restoration: the residents,
+     * roles and treasury are gone, and handing a stranger a membership list would be a different
+     * feature entirely. What carries over is the land, which is the part that took work.</p>
+     */
+    private void reclaim(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "town reclaim <name>");
+            return;
+        }
+        player(actor).ifPresent(who -> whereTheyStand(actor, chunk -> {
+            final var ruin = ruins.at(chunk);
+            if (ruin.isEmpty()) {
+                denied(actor, ChangeDenial.NOT_A_RUIN);
+                return;
+            }
+            reply(actor, ruins.reclaim(who, actor.name(), chunk, args.getFirst()), town ->
+                    messages.send(actor::send, MessageKey.TOWN_RECLAIMED,
+                            MessageService.value("town", town.name().display()),
+                            MessageService.value("ruin", ruin.get().name().display())));
+        }));
     }
 
     // --- flag actions --------------------------------------------------------------------------
