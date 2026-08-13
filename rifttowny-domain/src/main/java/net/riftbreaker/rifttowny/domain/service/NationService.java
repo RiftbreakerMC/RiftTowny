@@ -385,6 +385,16 @@ public final class NationService {
             final Outcome<Town> left = town.leaveNation(dissolves);
             final Town updatedTown = require(left);
 
+            // The town's residents stop being citizens the moment it leaves, so their nation roles
+            // go with it. Skipped when the nation dissolves, because its whole role book is about
+            // to be deleted and stripping assignments out of a book nobody will read again is work
+            // for its own sake.
+            if (!dissolves) {
+                transaction.publishAll(
+                        CitizenRoles.revoke(transaction, nationId, List.copyOf(town.residents())),
+                        correlation("leave", nationId));
+            }
+
             transaction.towns().save(updatedTown);
             if (dissolves) {
                 transaction.invitations().deleteAllFor(nationId);

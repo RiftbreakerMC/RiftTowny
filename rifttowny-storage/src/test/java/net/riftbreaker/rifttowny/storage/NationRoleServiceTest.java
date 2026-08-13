@@ -258,6 +258,142 @@ class NationRoleServiceTest extends SqliteFixture {
         }
     }
 
+    @Nested
+    @DisplayName("a role does not outlive the citizenship that justified it")
+    class LosingCitizenship {
+
+        @Test
+        @DisplayName("leaving your town takes your nation role with it")
+        void leavingATown() {
+            final Nation nation = valen();
+            final RoleId envoy = envoy(nation, Permission.MANAGE_ALLEGIANCE);
+            residents.save(Resident.newcomer(CITIZEN, "Citizen", NOW)).join();
+            final TownId ashford = ashfordOf(nation);
+            towns.join(MAYOR, CITIZEN, ashford).join();
+            roles.assign(KING, nation.id(), CITIZEN, envoy).join();
+            assertThat(heldRoles(nation, CITIZEN)).contains(envoy);
+
+            towns.leave(CITIZEN, ashford).join();
+
+            assertThat(heldRoles(nation, CITIZEN))
+                    .as("otherwise a stranger keeps an office in a nation they left")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("being kicked from your town takes it too")
+        void beingKicked() {
+            final Nation nation = valen();
+            final RoleId envoy = envoy(nation, Permission.MANAGE_ALLEGIANCE);
+            residents.save(Resident.newcomer(CITIZEN, "Citizen", NOW)).join();
+            final TownId ashford = ashfordOf(nation);
+            towns.join(MAYOR, CITIZEN, ashford).join();
+            roles.assign(KING, nation.id(), CITIZEN, envoy).join();
+
+            towns.kick(MAYOR, CITIZEN, ashford).join();
+
+            assertThat(heldRoles(nation, CITIZEN)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a town leaving the nation strips every one of its residents")
+        void theirTownLeaving() {
+            final Nation nation = valen();
+            final RoleId envoy = envoy(nation, Permission.MANAGE_ALLEGIANCE);
+            roles.assign(KING, nation.id(), MAYOR, envoy).join();
+
+            nations.leave(MAYOR, townOf(MAYOR)).join();
+
+            assertThat(heldRoles(nation, MAYOR))
+                    .as("their town is not in the nation any more, so neither are they")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("a town expelled from the nation loses them as well")
+        void theirTownExpelled() {
+            final Nation nation = valen();
+            final RoleId envoy = envoy(nation, Permission.MANAGE_ALLEGIANCE);
+            roles.assign(KING, nation.id(), MAYOR, envoy).join();
+
+            nations.expel(KING, nation.id(), townOf(MAYOR)).join();
+
+            assertThat(heldRoles(nation, MAYOR)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a disbanded town's residents lose them")
+        void theirTownDisbanded() {
+            final Nation nation = valen();
+            final RoleId envoy = envoy(nation, Permission.MANAGE_ALLEGIANCE);
+            roles.assign(KING, nation.id(), MAYOR, envoy).join();
+
+            towns.disband(MAYOR, townOf(MAYOR)).join();
+
+            assertThat(heldRoles(nation, MAYOR)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("rejoining does not hand the role back")
+        void rejoiningDoesNotRestoreIt() {
+            final Nation nation = valen();
+            final RoleId envoy = envoy(nation, Permission.MANAGE_ALLEGIANCE);
+            residents.save(Resident.newcomer(CITIZEN, "Citizen", NOW)).join();
+            final TownId ashford = ashfordOf(nation);
+            towns.join(MAYOR, CITIZEN, ashford).join();
+            roles.assign(KING, nation.id(), CITIZEN, envoy).join();
+            towns.leave(CITIZEN, ashford).join();
+
+            towns.join(MAYOR, CITIZEN, ashford).join();
+
+            assertThat(heldRoles(nation, CITIZEN))
+                    .as("granting it again is the nation's decision to make")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("somebody else's departure leaves your role alone")
+        void othersAreUnaffected() {
+            final Nation nation = valen();
+            final RoleId envoy = envoy(nation, Permission.MANAGE_ALLEGIANCE);
+            residents.save(Resident.newcomer(CITIZEN, "Citizen", NOW)).join();
+            final TownId ashford = ashfordOf(nation);
+            towns.join(MAYOR, CITIZEN, ashford).join();
+            roles.assign(KING, nation.id(), MAYOR, envoy).join();
+
+            towns.leave(CITIZEN, ashford).join();
+
+            assertThat(heldRoles(nation, MAYOR)).contains(envoy);
+        }
+    }
+
+    /**
+     * Ashford's id, which valen() admitted.
+     *
+     * <p>Re-read rather than taken from the returned aggregate: {@code valen()} hands back the
+     * nation as it was at founding, before it admitted anybody.</p>
+     */
+    private TownId ashfordOf(final Nation nation) {
+        final Nation current =
+                store.inTransaction(t -> t.nations().find(nation.id()).orElseThrow()).join();
+        return current.towns().stream()
+                .filter(town -> !town.equals(current.capital()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private TownId townOf(final ResidentId who) {
+        return store.inTransaction(t -> t.residents().find(who).orElseThrow().town().orElseThrow())
+                .join();
+    }
+
+    private Set<RoleId> heldRoles(final Nation nation, final ResidentId who) {
+        return store.inTransaction(transaction -> transaction.roles()
+                .find(OrganisationScope.NATION, nation.id().value())
+                .map(book -> book.rolesOf(who))
+                .orElse(Set.of())).join();
+    }
+
     @Test
     @DisplayName("a nation's roles and a town's do not see each other")
     void scopesAreSeparate() {

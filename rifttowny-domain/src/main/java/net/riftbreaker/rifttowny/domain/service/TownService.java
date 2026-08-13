@@ -434,11 +434,19 @@ public final class TownService {
             final Town town = town(transaction, townId);
             requirePermission(transaction, town, actor, Permission.DISBAND);
 
-            int released = 0;
+            final List<ResidentId> departing = new java.util.ArrayList<>();
             for (final Resident resident : transaction.residents().findByTown(townId)) {
                 transaction.residents().save(require(resident.leaveTown()));
-                released++;
+                departing.add(resident.id());
             }
+            final int released = departing.size();
+
+            // Everybody here stops being a citizen of the town's nation at the same moment, so any
+            // nation role they held goes too. Nothing ties rt_role_member to citizenship, and a
+            // nation officer whose town has just ceased to exist would otherwise keep the office.
+            town.nation().ifPresent(nation -> transaction.publishAll(
+                    CitizenRoles.revoke(transaction, nation, departing),
+                    correlation("disband", townId)));
 
             // Flag overrides are swept before the claims go, because the claim rows are where the
             // chunk list comes from. They have no foreign key to sweep them - the target column
@@ -565,6 +573,14 @@ public final class TownService {
                 stripped.value().ifPresent(transaction.roles()::save);
                 transaction.publishAll(stripped.events(), correlation("leave", townId));
             });
+
+            // And their nation roles, for the same reason one step out: citizenship of a nation is
+            // residency in one of its towns, so leaving the town ends it. Somebody who joins another
+            // town in the same nation does not get the role back - it was granted to them, and
+            // granting it again is the nation's decision to make.
+            town.nation().ifPresent(nation -> transaction.publishAll(
+                    CitizenRoles.revoke(transaction, nation, List.of(who)),
+                    correlation("leave", townId)));
             return updated;
         }), Town::id);
     }
