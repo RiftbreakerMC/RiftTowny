@@ -25,7 +25,9 @@ public record RiftTownySettings(
         java.time.Duration ruinReclaimDelay,
         java.time.Duration ruinSweepInterval,
         java.time.Duration spawnWarmup,
-        java.time.Duration spawnCooldown
+        java.time.Duration spawnCooldown,
+        boolean territoryNotices,
+        boolean territoryNoticesOnActionBar
 ) {
 
     public RiftTownySettings {
@@ -103,7 +105,9 @@ public record RiftTownySettings(
                 java.time.Duration.ofSeconds(
                         Math.max(0L, config.getLong("spawn.warmup-seconds", 5L))),
                 java.time.Duration.ofSeconds(
-                        Math.max(0L, config.getLong("spawn.cooldown-seconds", 60L))));
+                        Math.max(0L, config.getLong("spawn.cooldown-seconds", 60L))),
+                config.getBoolean("notices.territory", true),
+                config.getBoolean("notices.action-bar", true));
     }
 
     /** How spawn travel reads in the startup log. */

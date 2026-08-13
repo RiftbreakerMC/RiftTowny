@@ -357,12 +357,16 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 new net.riftbreaker.rifttowny.paper.protection.WorldProtectionListener(protection),
                 this);
 
-        if (settings.ruinsEnabled()) {
-            // Registered only when ruins are on. A movement listener that can never have anything
-            // to say is a cost on every packet for nothing.
+        if (settings.territoryNotices()) {
+            // Territory is invisible until it refuses somebody something, and finding a town by
+            // failing to break a block in it is a worse introduction than a line above the hotbar.
             manager.registerEvents(
-                    new net.riftbreaker.rifttowny.paper.protection.RuinNoticeListener(
-                            ruinIndex, messages, java.time.Clock.systemUTC()),
+                    new net.riftbreaker.rifttowny.paper.protection.TerritoryNoticeListener(
+                            new net.riftbreaker.rifttowny.paper.protection.TerritoryNotice(
+                                    territoryIndex, ruinIndex, civicCache),
+                            messages,
+                            java.time.Clock.systemUTC(),
+                            settings.territoryNoticesOnActionBar()),
                     this);
         }
     }

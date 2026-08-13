@@ -36,6 +36,19 @@ network:
   # True when more than one backend server shares this database. Requires mariadb.
   shared: false
 
+notices:
+  # Tell a player whose land they have walked onto, as they cross the border.
+  #
+  # Without it territory is invisible until it refuses somebody something: a player finds a town by
+  # failing to break a block in it, and cannot tell a ruin from a town whose owner is away. Nothing
+  # is said while walking inside one town - a town is many chunks, and crossing its middle is not
+  # arriving anywhere.
+  territory: true
+
+  # Above the hotbar rather than in chat. A border crossing is ambient information, and putting it
+  # in chat pushes conversation off the screen on a busy server.
+  action-bar: true
+
 spawn:
   # How long a player must stand still before /town spawn moves them.
   #

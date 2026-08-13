@@ -99,19 +99,25 @@ public enum MessageKey {
             "<green><white><town></white> stands again. You are its mayor.</green>"),
 
     /**
-     * Shown on entering a ruin.
+     * Crossing into a town.
      *
-     * <p>Says both timers, because they are two different decisions: how long there is to loot the
-     * place, and how long until anybody can rebuild it.</p>
+     * <p>Short on purpose. These are shown above the hotbar on every border crossing, and a sentence
+     * there is read once and resented afterwards.</p>
      */
-    RUIN_ENTERED("town.ruin-entered",
-            "<gray>The ruins of <white><ruin></white> <dark_gray>-</dark_gray> "
-                    + "<gray>unprotected, crumbling in <white><remaining></white>.</gray>"),
+    NOTICE_TOWN("notice.town",
+            "<gold>« <white><town></white> »</gold>"),
 
-    RUIN_ENTERED_RECLAIMABLE("town.ruin-entered-reclaimable",
-            "<gray>The ruins of <white><ruin></white> <dark_gray>-</dark_gray> "
-                    + "<gray>unprotected, crumbling in <white><remaining></white>. "
-                    + "<white>/town reclaim</white> to rebuild it.</gray>"),
+    /** The same, on a plot somebody holds — which is what changes what you may do there. */
+    NOTICE_TOWN_PLOT("notice.town-plot",
+            "<gold>« <white><town></white> »</gold> <dark_gray>-</dark_gray> "
+                    + "<gray>plot: <white><holder></white></gray>"),
+
+    NOTICE_WILDERNESS("notice.wilderness",
+            "<dark_gray>« <gray>Wilderness</gray> »</dark_gray>"),
+
+    NOTICE_RUIN("notice.ruin",
+            "<dark_red>« <white><ruin></white> in ruins »</dark_red> "
+                    + "<dark_gray>-</dark_gray> <gray>unprotected, <remaining> left</gray>"),
 
     TOWN_NOT_IN_A_TOWN("town.not-in-a-town",
             "<red>You are not in a town.</red>"),
