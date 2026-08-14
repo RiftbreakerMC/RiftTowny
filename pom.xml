@@ -34,6 +34,10 @@
     <mariadb.version>3.5.8</mariadb.version>
     <sqlite.version>3.51.1.0</sqlite.version>
     <snakeyaml.version>2.5</snakeyaml.version>
+    <!-- Pinned for the same reason as Paper. An expansion compiled against a version the
+         server does not have is a NoSuchMethodError at registration, which on PlaceholderAPI
+         reads as "the expansion silently did not load". -->
+    <placeholderapi.version>2.12.3</placeholderapi.version>
     <junit.version>5.13.4</junit.version>
     <assertj.version>3.27.3</assertj.version>
   </properties>
@@ -63,6 +67,20 @@
         <groupId>io.papermc.paper</groupId>
         <artifactId>paper-api</artifactId>
         <version>${paper.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!--
+        PlaceholderAPI, compiled against and never shaded. provided on purpose, and for a sharper
+        reason than usual: an expansion class shipped inside our jar would be loaded by our
+        classloader while PlaceholderAPI loads its own, and the server would end up with two
+        unrelated PlaceholderExpansion types - the registration would fail with a
+        ClassCastException naming a class that looks identical to the one it wanted.
+      -->
+      <dependency>
+        <groupId>me.clip</groupId>
+        <artifactId>placeholderapi</artifactId>
+        <version>${placeholderapi.version}</version>
         <scope>provided</scope>
       </dependency>
 

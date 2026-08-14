@@ -200,6 +200,72 @@ class SpawnServiceTest extends SqliteFixture {
         }
 
         @Test
+        @DisplayName("a stranger cannot travel to a town that has not opened its spawn")
+        void privateSpawnsRefuseVisitors() {
+            final Town town = riftholm();
+            spawns.set(MAYOR, town.id(), IN_HOME).join();
+            residents.save(Resident.newcomer(STRANGER, "Stranger", NOW)).join();
+
+            assertThat(spawns.travelToPublicSpawn(STRANGER, town.id()).join().denial())
+                    .contains(ChangeDenial.TOWN_SPAWN_IS_NOT_PUBLIC);
+        }
+
+        @Test
+        @DisplayName("a stranger may travel to a public one")
+        void publicSpawnsAdmitVisitors() {
+            final Town town = riftholm();
+            spawns.set(MAYOR, town.id(), IN_HOME).join();
+            residents.save(Resident.newcomer(STRANGER, "Stranger", NOW)).join();
+            towns.setProfile(MAYOR, town.id(), profile -> profile.withPublicSpawn(true)).join();
+
+            assertThat(spawns.travelToPublicSpawn(STRANGER, town.id()).join().value())
+                    .contains(IN_HOME);
+        }
+
+        @Test
+        @DisplayName("a resident is judged by their role, not by whether the spawn is public")
+        void residentsAreNotLockedOutOfTheirOwnTown() {
+            // The direction people forget: closing a spawn to visitors says nothing about members,
+            // and reading "public: off" as "nobody may travel" locks a town out of its own home.
+            final Town town = riftholm();
+            spawns.set(MAYOR, town.id(), IN_HOME).join();
+            citizenOf(town);
+
+            assertThat(spawns.travelToPublicSpawn(CITIZEN, town.id()).join().value())
+                    .contains(IN_HOME);
+        }
+
+        @Test
+        @DisplayName("a resident whose role cannot teleport is still refused on the public path")
+        void publicSpawnIsNotARoleBypass() {
+            // Otherwise a town that opened its spawn to the world would have handed its own
+            // probationary members the permission it deliberately took away from them.
+            final Town town = riftholm();
+            spawns.set(MAYOR, town.id(), IN_HOME).join();
+            citizenOf(town);
+            revokeMemberPermission(town, Permission.TOWN_SPAWN);
+            towns.setProfile(MAYOR, town.id(), profile -> profile.withPublicSpawn(true)).join();
+
+            assertThat(spawns.travelToPublicSpawn(CITIZEN, town.id()).join().denial())
+                    .contains(ChangeDenial.MISSING_PERMISSION);
+        }
+
+        @Test
+        @DisplayName("a public spawn on land the town released is still refused")
+        void publicSpawnStillChecksTheLand() {
+            // The land check lives in one shared helper precisely so it cannot be applied to
+            // residents and forgotten for visitors.
+            final Town town = riftholm();
+            spawns.set(MAYOR, town.id(), IN_MARKET).join();
+            residents.save(Resident.newcomer(STRANGER, "Stranger", NOW)).join();
+            towns.setProfile(MAYOR, town.id(), profile -> profile.withPublicSpawn(true)).join();
+            territory.unclaim(MAYOR, town.id(), MARKET).join();
+
+            assertThat(spawns.travelToPublicSpawn(STRANGER, town.id()).join().denial())
+                    .contains(ChangeDenial.NO_TOWN_SPAWN);
+        }
+
+        @Test
         @DisplayName("a spawn whose land the town released is refused, and forgotten")
         void spawnOnReleasedLand() {
             final Town town = riftholm();

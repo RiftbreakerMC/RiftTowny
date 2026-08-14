@@ -90,17 +90,7 @@ public final class SpawnService {
 
         return transaction(transaction -> {
             requirePermission(transaction, townId, actor, Permission.TOWN_SPAWN);
-            final SpawnPoint spawn = transaction.spawns().of(townId)
-                    .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.NO_TOWN_SPAWN));
-
-            final var owner = transaction.claims().at(spawn.chunk());
-            if (owner.isEmpty() || !owner.get().town().equals(townId)) {
-                // The land went and the spawn did not. Refused as "no spawn", because that is what
-                // it now is; the tidy-up happens below rather than here, since this throw rolls the
-                // transaction back and would take a clear with it.
-                throw new ChangeRefusedException(ChangeDenial.NO_TOWN_SPAWN);
-            }
-            return spawn;
+            return standingSpawn(transaction, townId);
         }).thenCompose(result -> {
             if (result.denial().filter(ChangeDenial.NO_TOWN_SPAWN::equals).isEmpty()) {
                 return CompletableFuture.completedFuture(result);
@@ -109,6 +99,64 @@ public final class SpawnService {
             // town simply never had a spawn.
             return clearIfOutsideTerritory(townId).thenApply(ignored -> result);
         });
+    }
+
+    /**
+     * Where a visitor may travel to, if the town has opened its spawn.
+     *
+     * <p>The outsider's counterpart to {@link #travelTo}, and it deliberately does <em>not</em> ask
+     * for {@link Permission#TOWN_SPAWN}: a visitor has no role in the town they are visiting, so a
+     * role check there would refuse everybody and the setting would do nothing.</p>
+     *
+     * <p>A resident of the town falls through to the ordinary rules instead of the public ones.
+     * That matters in the direction people forget: a town that closes its spawn to visitors has not
+     * said anything about its own members, and reading {@code public: off} as "nobody may travel"
+     * would lock a town out of its own home.</p>
+     */
+    public CompletableFuture<ServiceResult<SpawnPoint>> travelToPublicSpawn(
+            final ResidentId actor, final TownId townId) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(townId, "townId");
+
+        return transaction(transaction -> {
+            final net.riftbreaker.rifttowny.domain.org.Town town = transaction.towns().find(townId)
+                    .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.TOWN_NOT_FOUND));
+
+            if (town.hasResident(actor)) {
+                requirePermission(transaction, townId, actor, Permission.TOWN_SPAWN);
+            } else if (!town.profile().publicSpawn()) {
+                throw new ChangeRefusedException(ChangeDenial.TOWN_SPAWN_IS_NOT_PUBLIC);
+            }
+            return standingSpawn(transaction, townId);
+        }).thenCompose(result -> {
+            if (result.denial().filter(ChangeDenial.NO_TOWN_SPAWN::equals).isEmpty()) {
+                return CompletableFuture.completedFuture(result);
+            }
+            return clearIfOutsideTerritory(townId).thenApply(ignored -> result);
+        });
+    }
+
+    /**
+     * A town's spawn, if it has one and still owns the ground under it.
+     *
+     * <p>Shared by both travel paths so the land check cannot be applied to residents and forgotten
+     * for visitors — which would make a public spawn the one way to be teleported into land the
+     * town no longer owns.</p>
+     */
+    private static SpawnPoint standingSpawn(
+            final net.riftbreaker.rifttowny.domain.store.CivicTransaction transaction,
+            final TownId townId) {
+        final SpawnPoint spawn = transaction.spawns().of(townId)
+                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.NO_TOWN_SPAWN));
+
+        final var owner = transaction.claims().at(spawn.chunk());
+        if (owner.isEmpty() || !owner.get().town().equals(townId)) {
+            // The land went and the spawn did not. Refused as "no spawn", because that is what it
+            // now is; the tidy-up happens in the caller rather than here, since this throw rolls the
+            // transaction back and would take a clear with it.
+            throw new ChangeRefusedException(ChangeDenial.NO_TOWN_SPAWN);
+        }
+        return spawn;
     }
 
     /**

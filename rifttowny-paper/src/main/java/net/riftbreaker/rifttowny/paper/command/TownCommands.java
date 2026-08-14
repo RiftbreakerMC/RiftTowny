@@ -17,6 +17,7 @@ import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
+import net.riftbreaker.rifttowny.domain.org.TownProfile;
 import net.riftbreaker.rifttowny.domain.role.Role;
 import net.riftbreaker.rifttowny.domain.service.ServiceResult;
 import net.riftbreaker.rifttowny.domain.service.TownRoleService;
@@ -242,8 +243,9 @@ public final class TownCommands {
                         .runs(this::withdraw, Surface.CHAT))
                 .child(CommandNode.action("spawn")
                         .permission("rifttowny.town.spawn")
-                        .usage("town spawn")
-                        .describedAs("Travel to your town's spawn")
+                        .usage("town spawn [town]")
+                        .describedAs("Travel to a town's spawn, or your own")
+                        .completer((actor, args) -> args.size() <= 1 ? publicSpawnTownNames() : List.of())
                         .runs(this::spawn, Surface.CHAT))
                 .child(CommandNode.action("setspawn")
                         .permission("rifttowny.town.setspawn")
@@ -261,8 +263,74 @@ public final class TownCommands {
                         .usage("town reclaim")
                         .describedAs("Rebuild the fallen town you are standing in")
                         .runs(this::reclaim, Surface.CHAT))
+                .child(CommandNode.action("join")
+                        .permission("rifttowny.town.invites")
+                        .usage("town join <town>")
+                        .describedAs("Walk into a town that has declared itself open")
+                        .completer((actor, args) -> args.size() <= 1 ? openTownNames() : List.of())
+                        .runs(this::joinOpen, Surface.CHAT))
                 .child(roleTree())
                 .child(flagTree())
+                .child(settingsTree())
+                .build();
+    }
+
+    /**
+     * The {@code /town set} tree.
+     *
+     * <p>Grouped rather than six flat subcommands, because that is how a Towny player already
+     * expects to type them and because a flat {@code /town board} sitting beside {@code /town bank}
+     * reads as an action rather than as a setting.</p>
+     *
+     * <p>All six go through one service call taking a transform, so two co-mayors changing two
+     * different settings in the same second cannot overwrite each other.</p>
+     */
+    private CommandNode settingsTree() {
+        return CommandNode.group("set")
+                .permission("rifttowny.town.set")
+                .usage("town set")
+                .describedAs("Change what your town says about itself")
+                .child(CommandNode.action("board")
+                        .permission("rifttowny.town.set")
+                        .usage("town set board <text|clear>")
+                        .describedAs("A message for your residents")
+                        .runs((actor, args) -> setText(actor, args, "town set board <text|clear>",
+                                MessageKey.TOWN_SET_BOARD, TownProfile::withBoard), Surface.CHAT))
+                .child(CommandNode.action("tag")
+                        .permission("rifttowny.town.set")
+                        .usage("town set tag <text|clear>")
+                        .describedAs("A short abbreviation for your town")
+                        .runs((actor, args) -> setText(actor, args, "town set tag <text|clear>",
+                                MessageKey.TOWN_SET_TAG, TownProfile::withTag), Surface.CHAT))
+                .child(CommandNode.action("colour")
+                        .aliases("color", "mapcolor", "mapcolour")
+                        .permission("rifttowny.town.set")
+                        .usage("town set colour <#a1b2c3|clear>")
+                        .describedAs("How your town is drawn on a map")
+                        .completer((actor, args) -> List.of("clear"))
+                        .runs(this::setColour, Surface.CHAT))
+                .child(CommandNode.action("open")
+                        .permission("rifttowny.town.set")
+                        .usage("town set open <on|off>")
+                        .describedAs("Whether anybody may join without an invitation")
+                        .completer((actor, args) -> List.of("on", "off"))
+                        .runs((actor, args) -> setSwitch(actor, args, "town set open <on|off>",
+                                MessageKey.TOWN_SET_OPEN, TownProfile::withOpen), Surface.CHAT))
+                .child(CommandNode.action("public")
+                        .permission("rifttowny.town.set")
+                        .usage("town set public <on|off>")
+                        .describedAs("Whether outsiders may travel to your spawn")
+                        .completer((actor, args) -> List.of("on", "off"))
+                        .runs((actor, args) -> setSwitch(actor, args, "town set public <on|off>",
+                                MessageKey.TOWN_SET_PUBLIC, TownProfile::withPublicSpawn), Surface.CHAT))
+                .child(CommandNode.action("neutral")
+                        .aliases("peaceful")
+                        .permission("rifttowny.town.set")
+                        .usage("town set neutral <on|off>")
+                        .describedAs("Declare your town neutral in war")
+                        .completer((actor, args) -> List.of("on", "off"))
+                        .runs((actor, args) -> setSwitch(actor, args, "town set neutral <on|off>",
+                                MessageKey.TOWN_SET_NEUTRAL, TownProfile::withNeutral), Surface.CHAT))
                 .build();
     }
 
@@ -408,12 +476,46 @@ public final class TownCommands {
                     : screen.nation().name().display());
             line(actor, "Trusted", String.valueOf(town.trustedOutsiders().size()));
 
+            final TownProfile profile = town.profile();
+            if (profile.hasTag()) {
+                line(actor, "Tag", profile.tag());
+            }
+            // Only shown when it is not the default. A row reading "Open: no" on every town on the
+            // server is three characters of information spread over a whole line.
+            if (profile.open() || profile.publicSpawn() || profile.neutral()) {
+                line(actor, "Declared", describeDeclarations(profile));
+            }
+            if (profile.hasBoard()) {
+                messages.sendRaw(actor::send, MessageKey.TOWN_BOARD_LINE,
+                        MessageService.value("board", profile.board()));
+            }
+
             messages.sendRaw(actor::send, MessageKey.TOWN_RESIDENTS_HEADER,
                     MessageService.value("town", town.name().display()),
                     MessageService.value("count", town.residentCount()));
             messages.sendRaw(actor::send, MessageKey.TOWN_RESIDENTS_LINE,
                     MessageService.value("residents", residentNames(town.id())));
         });
+    }
+
+    /**
+     * The settings a town has actually turned on.
+     *
+     * <p>Only the true ones, joined. A town that has declared nothing gets no line at all, which is
+     * why the caller checks before calling.</p>
+     */
+    private static String describeDeclarations(final TownProfile profile) {
+        final List<String> declared = new ArrayList<>(3);
+        if (profile.open()) {
+            declared.add("open to newcomers");
+        }
+        if (profile.publicSpawn()) {
+            declared.add("public spawn");
+        }
+        if (profile.neutral()) {
+            declared.add("neutral");
+        }
+        return String.join(", ", declared);
     }
 
     /** Everybody in a town, mayor first, as one comma-separated line. */
@@ -548,6 +650,134 @@ public final class TownCommands {
         MapRenderer.render(view).forEach(actor::send);
         messages.sendRaw(actor::send, MessageKey.MAP_LEGEND);
         messages.sendRaw(actor::send, MessageKey.MAP_LEGEND_SHAPES);
+    }
+
+    // --- settings ------------------------------------------------------------------------------
+
+    /**
+     * Sets a piece of text, or clears it.
+     *
+     * <p>The rest of the line, not one word: a board is a sentence, and a player who types one
+     * should not have to quote it. {@code clear} is the way to empty it, because typing nothing
+     * after {@code /town set board} is far more often a half-finished command than an intention to
+     * erase what is there.</p>
+     */
+    private void setText(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final MessageKey confirmation,
+            final java.util.function.BiFunction<TownProfile, String, TownProfile> change
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        final String joined = String.join(" ", args);
+        final boolean clearing = args.size() == 1 && "clear".equalsIgnoreCase(args.getFirst());
+        final String value = clearing ? "" : joined;
+
+        withTown(actor, (who, town) -> reply(actor,
+                towns.setProfile(who, town.id(), profile -> change.apply(profile, value)),
+                updated -> messages.send(actor::send, confirmation,
+                        MessageService.value("town", updated.name().display()),
+                        MessageService.value("value", value.isEmpty() ? "nothing" : value))));
+    }
+
+    /** Sets one of the three on/off settings. */
+    private void setSwitch(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final MessageKey confirmation,
+            final java.util.function.BiFunction<TownProfile, Boolean, TownProfile> change
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        final Optional<Boolean> decision = parseSwitch(args.getFirst());
+        if (decision.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        withTown(actor, (who, town) -> reply(actor,
+                towns.setProfile(who, town.id(), profile -> change.apply(profile, decision.get())),
+                updated -> messages.send(actor::send, confirmation,
+                        MessageService.value("town", updated.name().display()),
+                        MessageService.value("state", decision.get() ? "on" : "off"))));
+    }
+
+    private void setColour(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "town set colour <#a1b2c3|clear>");
+            return;
+        }
+        final String raw = args.getFirst();
+        final boolean clearing = "clear".equalsIgnoreCase(raw) || "none".equalsIgnoreCase(raw);
+        final Optional<net.riftbreaker.rifttowny.domain.org.MapColour> colour =
+                clearing
+                        ? Optional.empty()
+                        : net.riftbreaker.rifttowny.domain.org.MapColour.parse(raw);
+        if (!clearing && colour.isEmpty()) {
+            denied(actor, ChangeDenial.NOT_A_COLOUR);
+            return;
+        }
+        withTown(actor, (who, town) -> reply(actor,
+                towns.setProfile(who, town.id(), profile -> profile.withColour(colour.orElse(null))),
+                updated -> messages.send(actor::send, MessageKey.TOWN_SET_COLOUR,
+                        MessageService.value("town", updated.name().display()),
+                        MessageService.value("value", updated.profile().mapColour()
+                                .map(net.riftbreaker.rifttowny.domain.org.MapColour::hashHex)
+                                .orElse("the default")))));
+    }
+
+    /** Walks into a town that has declared itself open. */
+    private void joinOpen(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "town join <town>");
+            return;
+        }
+        player(actor).ifPresent(who -> directory.factsNamed(args.getFirst()).ifPresentOrElse(
+                facts -> reply(actor, towns.joinOpenTown(who, facts.id()), updated ->
+                        messages.send(actor::send, MessageKey.TOWN_JOINED,
+                                MessageService.value("resident", actor.name()),
+                                MessageService.value("town", updated.name().display()))),
+                () -> denied(actor, ChangeDenial.TOWN_NOT_FOUND)));
+    }
+
+    /**
+     * Only the towns somebody could actually walk into.
+     *
+     * <p>Completing every town here would offer a list where all but a handful answer "that town is
+     * not open" — a suggestion that is wrong for most of what it suggests is worse than none.</p>
+     */
+    private List<String> openTownNames() {
+        return townNamesWhere(profile -> profile.open());
+    }
+
+    /** Only the towns whose spawn an outsider could actually reach. */
+    private List<String> publicSpawnTownNames() {
+        return townNamesWhere(profile -> profile.publicSpawn());
+    }
+
+    private List<String> townNamesWhere(final java.util.function.Predicate<TownProfile> wanted) {
+        final List<String> named = new ArrayList<>();
+        for (final TownSummary summary : directory.allTowns()) {
+            directory.facts(summary.id())
+                    .filter(facts -> wanted.test(facts.town().profile()))
+                    .ifPresent(facts -> named.add(summary.name()));
+        }
+        return named;
+    }
+
+    /** {@code on} or {@code off}, generously. Anything else is a usage error rather than a guess. */
+    private static Optional<Boolean> parseSwitch(final String raw) {
+        return switch (raw.toLowerCase(Locale.ROOT)) {
+            case "on", "true", "yes", "open", "enable", "enabled" -> Optional.of(true);
+            case "off", "false", "no", "closed", "disable", "disabled" -> Optional.of(false);
+            default -> Optional.empty();
+        };
     }
 
     /** Resolves the town named in the arguments, or the actor's own when there are none. */
@@ -915,29 +1145,53 @@ public final class TownCommands {
                                         .describe(wait.get())));
                 return;
             }
+            // A named town travels to that town's spawn, which needs it to be public unless the
+            // traveller lives there. No name means their own, which is the common case and stays
+            // one command.
+            if (!args.isEmpty()) {
+                directory.factsNamed(args.getFirst()).ifPresentOrElse(
+                        facts -> travelTo(actor, who, facts.town(),
+                                spawns.travelToPublicSpawn(who, facts.id())),
+                        () -> denied(actor, ChangeDenial.TOWN_NOT_FOUND));
+                return;
+            }
             withTown(actor, (ignored, town) ->
-                    reply(actor, spawns.travelTo(who, town.id()), destination -> {
-                        if (!teleports.warmup().isZero()) {
-                            messages.send(actor::send, MessageKey.TOWN_SPAWN_WARMUP,
-                                    MessageService.value("seconds",
-                                            teleports.warmup().toSeconds()));
-                        }
-                        then(actor, teleports.travel(who, destination), outcome -> {
-                            announceArrival(actor, town, outcome);
-                            if (outcome == net.riftbreaker.rifttowny.paper.spawn.TeleportService
-                                    .Outcome.ARRIVED) {
-                                // The fare is taken for a journey that happened. A warmup cancelled
-                                // by a punch costs nothing, exactly as it costs no cooldown.
-                                then(actor, spawns.chargeForTravel(who, town.id()), charged ->
-                                        charged.value()
-                                                .filter(fare -> !fare.isZero())
-                                                .ifPresent(fare -> messages.send(actor::send,
-                                                        MessageKey.TOWN_SPAWN_FARE,
-                                                        MessageService.value("amount",
-                                                                fare.describe()))));
-                            }
-                        });
-                    }));
+                    travelTo(actor, who, town, spawns.travelTo(who, town.id())));
+        });
+    }
+
+    /**
+     * The journey itself, once somewhere to go has been resolved.
+     *
+     * <p>Shared by the two spawn paths so the warmup, the arrival notice and the fare cannot be
+     * applied to one and forgotten for the other.</p>
+     */
+    private void travelTo(
+            final CommandActor actor,
+            final ResidentId who,
+            final Town town,
+            final CompletableFuture<ServiceResult<
+                    net.riftbreaker.rifttowny.domain.territory.SpawnPoint>> pending
+    ) {
+        reply(actor, pending, destination -> {
+            if (!teleports.warmup().isZero()) {
+                messages.send(actor::send, MessageKey.TOWN_SPAWN_WARMUP,
+                        MessageService.value("seconds", teleports.warmup().toSeconds()));
+            }
+            then(actor, teleports.travel(who, destination), outcome -> {
+                announceArrival(actor, town, outcome);
+                if (outcome == net.riftbreaker.rifttowny.paper.spawn.TeleportService
+                        .Outcome.ARRIVED) {
+                    // The fare is taken for a journey that happened. A warmup cancelled by a punch
+                    // costs nothing, exactly as it costs no cooldown.
+                    then(actor, spawns.chargeForTravel(who, town.id()), charged ->
+                            charged.value()
+                                    .filter(fare -> !fare.isZero())
+                                    .ifPresent(fare -> messages.send(actor::send,
+                                            MessageKey.TOWN_SPAWN_FARE,
+                                            MessageService.value("amount", fare.describe()))));
+                }
+            });
         });
     }
 

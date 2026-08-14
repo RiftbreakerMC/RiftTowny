@@ -247,12 +247,36 @@ Component render(ChatPresentationRequest request);
 void send(Player viewer, ChatPresentationRequest request);
 ```
 
-RiftChat owns formatting, moderation and routing. **RiftTowny does not build a second
-chat formatter.** It supplies membership, role, diplomacy and location context through
-`PresentationContextKeys`, and registers the `/tc`, `/nc`, `/ac` channels.
+Read at `0.1.0-rc.1` and installed locally, so the adapter compiles against the real API.
 
-`net.riftbreaker.chat.integration.TownyPresentationService` currently sources that context
-from Towny — this is the PR target for RiftChat.
+**The division is settled by RiftChat's own javadoc**, not inferred:
+
+> Immutable message presentation input supplied by RiftCore **after it has selected the
+> channel and recipients**. RiftChat uses this data for rendering only. […] callers must
+> never rely on RiftChat to validate routing or privacy.
+
+So RiftTowny selects recipients — it is the only thing that knows who is in a town — and
+RiftChat renders. RiftTowny does **not** build a second chat formatter.
+
+Three findings that change what has to be built, all verified by reading the source:
+
+1. **`RiftChatService.Channel` already declares `TOWN` and `NATION`.** Routing town and
+   nation chat needs no upstream change at all. `/tc` and `/nc` are ours to write today.
+2. **There is no `ALLY` constant.** `/ac` therefore needs either a RiftChat enum addition or
+   a deliberate reuse of `PARTY`. It is blocked twice over regardless, because
+   `RT-MOD-DIPLOMACY` does not exist and RiftTowny has no allies to send to. Not built, and
+   not faked.
+3. **`TownyPresentationService` is unreachable on a RiftTowny server**, and the previously
+   recorded PR target is unnecessary. It reflects on
+   `com.palmergames.bukkit.towny.TownyAPI` and its factory returns `null` unless
+   `Bukkit.getPluginManager().isPluginEnabled("Towny")` — and RiftTowny refuses to start
+   beside Towny. Nothing in the `api` package offers a provider seam to replace it.
+
+   It does not need one. `PlaceholderPresentationService` resolves operator-configured
+   `%…%` expressions through PlaceholderAPI on a timer, so once RiftTowny's expansion is
+   registered (§2.13), RiftChat shows town and nation context in **any** channel with no
+   RiftChat code change — an operator configures the expression and it works. The
+   placeholder surface *is* the chat integration.
 
 ### 2.6 VelocitySrv — network and Discord — `PARTIAL` / `BLOCKED`
 
@@ -442,11 +466,57 @@ is in the safe direction, and the ledger records what did commit.
 **VaultUnlocked** is the intended fallback and is still unbuilt — the same interface, a second
 implementation, chosen only when RiftEco is absent.
 
+### 2.13 PlaceholderAPI — placeholders — `VERIFIED` (2026-08-13)
+
+`me.clip:placeholderapi:2.12.3` from `https://repo.helpch.at/releases/`, `provided` scope,
+never shaded. Verified by `javap` against the resolved artifact, not from memory.
+
+```java
+public abstract class me.clip.placeholderapi.expansion.PlaceholderExpansion
+        extends me.clip.placeholderapi.PlaceholderHook {
+    public abstract String getIdentifier();
+    public abstract String getAuthor();
+    public abstract String getVersion();
+    public boolean persist();
+    public List<String> getPlaceholders();
+    public boolean register();
+}
+
+public abstract class me.clip.placeholderapi.PlaceholderHook {
+    public String onRequest(org.bukkit.OfflinePlayer player, String params);
+    public String onPlaceholderRequest(org.bukkit.entity.Player player, String params);
+}
+
+public interface me.clip.placeholderapi.expansion.Relational {
+    String onPlaceholderRequest(Player viewer, Player viewed, String params);
+}
+```
+
+Four consequences that decide how the expansion is written:
+
+- **`onRequest` is the override**, taking an `OfflinePlayer`. `onPlaceholderRequest` is the
+  older `Player` form on the shared superclass. Taking an `OfflinePlayer` is the useful
+  shape anyway: a scoreboard may ask about somebody who has logged out.
+- **`null` and `""` mean different things.** Returning `null` means "not my placeholder" and
+  PlaceholderAPI leaves the literal `%townyadvanced_foo%` in the output for a player to see.
+  Returning `""` means "handled, and the answer is blank". Every name in the manifest must
+  therefore return a string — *never* `null` — or an unimplemented placeholder appears in
+  chat as raw markup. This is the assertion the golden test exists to make.
+- **`persist()` must return `true`.** It defaults to false, which unregisters the expansion
+  on `/papi reload` — the failure mode being placeholders that work until an operator
+  touches PlaceholderAPI and then silently stop.
+- **Relational is a separate registration**, a second expansion object implementing
+  `Relational`, which is how `%rel_townyadvanced_color%` is served.
+
+`provided` scope matters more here than usual: an expansion class shipped inside our own jar
+would be loaded by our classloader while PlaceholderAPI loads its own, and registration would
+fail with a `ClassCastException` naming two classes that print identically.
+
 ### 2.12 Third-party — `NOT INSPECTED`
 
 | Plugin | Use | Note |
 |---|---|---|
-| PlaceholderAPI | `%townyadvanced_*%`, `%townychat_*%`, `%rifttowny_*%` | Resolves from immutable snapshot caches only; never blocks on storage |
+| ~~PlaceholderAPI~~ | — | **Inspected 2026-08-13.** Promoted to §2.13 |
 | LuckPerms | Contexts for town, nation, role, relationship, war state | Contexts must be computed from cache |
 | ~~CoreProtect~~ | — | **Dropped 2026-08-10.** RiftLogger owns permanent audit records, and two audit systems means two places to look and two retention policies. See §2.2 for what that costs |
 | Floodgate / Geyser (Cumulus) | Bedrock forms | Absence disables forms, never a Java feature |

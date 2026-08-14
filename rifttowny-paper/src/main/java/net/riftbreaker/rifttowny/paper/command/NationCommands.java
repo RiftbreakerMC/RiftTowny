@@ -7,6 +7,7 @@ import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
 import net.riftbreaker.rifttowny.domain.org.Invitation;
 import net.riftbreaker.rifttowny.domain.org.Nation;
 import net.riftbreaker.rifttowny.domain.org.NationId;
+import net.riftbreaker.rifttowny.domain.org.NationProfile;
 import net.riftbreaker.rifttowny.domain.org.NationRepository;
 import net.riftbreaker.rifttowny.domain.org.Resident;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
@@ -158,7 +159,121 @@ public final class NationCommands {
                         .describedAs("Disband your nation")
                         .runs(this::disband, Surface.CHAT))
                 .child(roleTree())
+                .child(settingsTree())
                 .build();
+    }
+
+    /**
+     * The {@code /nation set} tree.
+     *
+     * <p>The same four settings a town has minus the two that mean nothing here. A nation cannot be
+     * open — towns join by invitation on both sides, so there is no door to leave unlocked — and it
+     * has no spawn to make public.</p>
+     */
+    private CommandNode settingsTree() {
+        return CommandNode.group("set")
+                .permission("rifttowny.nation.set")
+                .usage("nation set")
+                .describedAs("Change what your nation says about itself")
+                .child(CommandNode.action("board")
+                        .permission("rifttowny.nation.set")
+                        .usage("nation set board <text|clear>")
+                        .describedAs("A message for your member towns")
+                        .runs((actor, args) -> setText(actor, args, "nation set board <text|clear>",
+                                MessageKey.NATION_SET_BOARD, NationProfile::withBoard), Surface.CHAT))
+                .child(CommandNode.action("tag")
+                        .permission("rifttowny.nation.set")
+                        .usage("nation set tag <text|clear>")
+                        .describedAs("A short abbreviation for your nation")
+                        .runs((actor, args) -> setText(actor, args, "nation set tag <text|clear>",
+                                MessageKey.NATION_SET_TAG, NationProfile::withTag), Surface.CHAT))
+                .child(CommandNode.action("colour")
+                        .aliases("color", "mapcolor", "mapcolour")
+                        .permission("rifttowny.nation.set")
+                        .usage("nation set colour <#a1b2c3|clear>")
+                        .describedAs("How your nation is drawn on a map")
+                        .completer((actor, args) -> List.of("clear"))
+                        .runs(this::setColour, Surface.CHAT))
+                .child(CommandNode.action("neutral")
+                        .aliases("peaceful")
+                        .permission("rifttowny.nation.set")
+                        .usage("nation set neutral <on|off>")
+                        .describedAs("Declare your nation neutral in war")
+                        .completer((actor, args) -> List.of("on", "off"))
+                        .runs(this::setNeutral, Surface.CHAT))
+                .build();
+    }
+
+    // --- settings ------------------------------------------------------------------------------
+
+    private void setText(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final MessageKey confirmation,
+            final java.util.function.BiFunction<NationProfile, String, NationProfile> change
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        final boolean clearing = args.size() == 1 && "clear".equalsIgnoreCase(args.getFirst());
+        final String value = clearing ? "" : String.join(" ", args);
+
+        withNation(actor, (who, nation) -> reply(actor,
+                nations.setProfile(who, nation.id(), profile -> change.apply(profile, value)),
+                updated -> messages.send(actor::send, confirmation,
+                        MessageService.value("nation", updated.name().display()),
+                        MessageService.value("value", value.isEmpty() ? "nothing" : value))));
+    }
+
+    private void setColour(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "nation set colour <#a1b2c3|clear>");
+            return;
+        }
+        final String raw = args.getFirst();
+        final boolean clearing = "clear".equalsIgnoreCase(raw) || "none".equalsIgnoreCase(raw);
+        final Optional<net.riftbreaker.rifttowny.domain.org.MapColour> colour = clearing
+                ? Optional.empty()
+                : net.riftbreaker.rifttowny.domain.org.MapColour.parse(raw);
+        if (!clearing && colour.isEmpty()) {
+            denied(actor, ChangeDenial.NOT_A_COLOUR);
+            return;
+        }
+        withNation(actor, (who, nation) -> reply(actor,
+                nations.setProfile(who, nation.id(), profile -> profile.withColour(colour.orElse(null))),
+                updated -> messages.send(actor::send, MessageKey.NATION_SET_COLOUR,
+                        MessageService.value("nation", updated.name().display()),
+                        MessageService.value("value", updated.profile().mapColour()
+                                .map(net.riftbreaker.rifttowny.domain.org.MapColour::hashHex)
+                                .orElse("the default")))));
+    }
+
+    private void setNeutral(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "nation set neutral <on|off>");
+            return;
+        }
+        final Optional<Boolean> decision = parseSwitch(args.getFirst());
+        if (decision.isEmpty()) {
+            usage(actor, "nation set neutral <on|off>");
+            return;
+        }
+        withNation(actor, (who, nation) -> reply(actor,
+                nations.setProfile(who, nation.id(), profile -> profile.withNeutral(decision.get())),
+                updated -> messages.send(actor::send, MessageKey.NATION_SET_NEUTRAL,
+                        MessageService.value("nation", updated.name().display()),
+                        MessageService.value("state", decision.get() ? "on" : "off"))));
+    }
+
+    /** {@code on} or {@code off}, generously. Anything else is a usage error rather than a guess. */
+    private static Optional<Boolean> parseSwitch(final String raw) {
+        return switch (raw.toLowerCase(java.util.Locale.ROOT)) {
+            case "on", "true", "yes", "enable", "enabled" -> Optional.of(true);
+            case "off", "false", "no", "disable", "disabled" -> Optional.of(false);
+            default -> Optional.empty();
+        };
     }
 
     /**
@@ -254,6 +369,18 @@ public final class NationCommands {
                 .map(facts -> facts.displayName())
                 .orElse("unknown"));
         line(actor, "Members", memberNames(nation));
+
+        final NationProfile profile = nation.profile();
+        if (profile.hasTag()) {
+            line(actor, "Tag", profile.tag());
+        }
+        if (profile.neutral()) {
+            line(actor, "Declared", "neutral");
+        }
+        if (profile.hasBoard()) {
+            messages.sendRaw(actor::send, MessageKey.TOWN_BOARD_LINE,
+                    MessageService.value("board", profile.board()));
+        }
     }
 
     /** Every member town, named from the cache. */

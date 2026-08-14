@@ -71,6 +71,38 @@ public sealed interface DomainEvent {
         }
     }
 
+    /**
+     * A town changed what it says about itself, or who it lets in.
+     *
+     * <p>Carries only the town. Which of the six settings moved is deliberately not on the event:
+     * a board and a tag are player-written text, and putting them on an event puts them in the
+     * outbox, in a Discord relay and in a log line, which is three more places a moderator has to
+     * go to erase something somebody wrote. A subscriber that needs the new value reads the
+     * town.</p>
+     */
+    record TownProfileChanged(TownId town) implements DomainEvent {
+        public TownProfileChanged {
+            Objects.requireNonNull(town, "town");
+        }
+
+        @Override
+        public String type() {
+            return "town.profile-changed";
+        }
+    }
+
+    /** The same, one level up. */
+    record NationProfileChanged(NationId nation) implements DomainEvent {
+        public NationProfileChanged {
+            Objects.requireNonNull(nation, "nation");
+        }
+
+        @Override
+        public String type() {
+            return "nation.profile-changed";
+        }
+    }
+
     record TownFounded(TownId town, OrganisationName name, ResidentId founder) implements DomainEvent {
         public TownFounded {
             Objects.requireNonNull(town, "town");

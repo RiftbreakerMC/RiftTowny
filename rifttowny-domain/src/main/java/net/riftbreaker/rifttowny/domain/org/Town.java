@@ -35,6 +35,7 @@ public final class Town {
     private final UUID bankAccountId;
     private final Set<ResidentId> residents;
     private final Set<ResidentId> trusted;
+    private final TownProfile profile;
     private final Instant createdAt;
 
     private Town(
@@ -45,6 +46,7 @@ public final class Town {
             final UUID bankAccountId,
             final Set<ResidentId> residents,
             final Set<ResidentId> trusted,
+            final TownProfile profile,
             final Instant createdAt
     ) {
         this.id = id;
@@ -52,6 +54,7 @@ public final class Town {
         this.mayor = mayor;
         this.nation = nation;
         this.bankAccountId = bankAccountId;
+        this.profile = profile == null ? TownProfile.empty() : profile;
         // Not Set.copyOf: that returns a set with unspecified iteration order, which would throw
         // away the insertion order the callers below deliberately preserve. An unmodifiable view
         // over a defensive LinkedHashSet copy is immutable and ordered.
@@ -79,10 +82,16 @@ public final class Town {
         Objects.requireNonNull(founder, "founder");
         Objects.requireNonNull(bankAccountId, "bankAccountId");
         Objects.requireNonNull(now, "now");
-        return new Town(id, name, founder, null, bankAccountId, Set.of(founder), Set.of(), now);
+        return new Town(id, name, founder, null, bankAccountId, Set.of(founder), Set.of(),
+                TownProfile.empty(), now);
     }
 
-    /** Rebuilds a town from storage. */
+    /**
+     * Rebuilds a town from storage.
+     *
+     * <p>Keeps the profile-free signature so the many callers that do not care about presentation
+     * are not made to pass {@code TownProfile.empty()} to say nothing.</p>
+     */
     public static Town restore(
             final TownId id,
             final OrganisationName name,
@@ -91,6 +100,22 @@ public final class Town {
             final UUID bankAccountId,
             final Set<ResidentId> residents,
             final Set<ResidentId> trusted,
+            final Instant createdAt
+    ) {
+        return restore(id, name, mayor, nation, bankAccountId, residents, trusted,
+                TownProfile.empty(), createdAt);
+    }
+
+    /** Rebuilds a town from storage, profile included. */
+    public static Town restore(
+            final TownId id,
+            final OrganisationName name,
+            final ResidentId mayor,
+            final NationId nation,
+            final UUID bankAccountId,
+            final Set<ResidentId> residents,
+            final Set<ResidentId> trusted,
+            final TownProfile profile,
             final Instant createdAt
     ) {
         Objects.requireNonNull(mayor, "mayor");
@@ -102,7 +127,7 @@ public final class Town {
                     "Town " + id + " was restored with a mayor who is not one of its residents");
         }
         return new Town(id, name, mayor, nation, bankAccountId,
-                residents, Objects.requireNonNullElse(trusted, Set.of()), createdAt);
+                residents, Objects.requireNonNullElse(trusted, Set.of()), profile, createdAt);
     }
 
     /** Admits a resident. The caller must also apply {@link Resident#joinTown(TownId)}. */
@@ -154,7 +179,7 @@ public final class Town {
             return Outcome.denied(ChangeDenial.ALREADY_THE_LEADER);
         }
         final Town updated = new Town(
-                id, name, candidate, nation, bankAccountId, residents, trusted, createdAt);
+                id, name, candidate, nation, bankAccountId, residents, trusted, profile, createdAt);
         return Outcome.applied(updated, new DomainEvent.LeadershipTransferred(id, mayor, candidate));
     }
 
@@ -171,7 +196,7 @@ public final class Town {
             return Outcome.denied(ChangeDenial.NAME_UNCHANGED);
         }
         final Town updated = new Town(
-                id, newName, mayor, nation, bankAccountId, residents, trusted, createdAt);
+                id, newName, mayor, nation, bankAccountId, residents, trusted, profile, createdAt);
         return Outcome.applied(updated, new DomainEvent.TownRenamed(id, name, newName));
     }
 
@@ -184,7 +209,7 @@ public final class Town {
                     : ChangeDenial.TOWN_ALREADY_IN_ANOTHER_NATION);
         }
         final Town updated = new Town(
-                id, name, mayor, target, bankAccountId, residents, trusted, createdAt);
+                id, name, mayor, target, bankAccountId, residents, trusted, profile, createdAt);
         return Outcome.applied(updated, new DomainEvent.TownJoinedNation(id, target));
     }
 
@@ -200,7 +225,7 @@ public final class Town {
             return Outcome.denied(ChangeDenial.TOWN_NOT_IN_THIS_NATION);
         }
         final Town updated = new Town(
-                id, name, mayor, null, bankAccountId, residents, trusted, createdAt);
+                id, name, mayor, null, bankAccountId, residents, trusted, profile, createdAt);
         return Outcome.applied(updated, new DomainEvent.TownLeftNation(id, nation, dissolvesNation));
     }
 
@@ -301,8 +326,36 @@ public final class Town {
         return createdAt;
     }
 
+    /** What the town says about itself, and who it lets in. Never null. */
+    public TownProfile profile() {
+        return profile;
+    }
+
+    /**
+     * Replaces the profile.
+     *
+     * <p>One method for all six settings rather than six, because none of them can be refused:
+     * a board is whatever its mayor typed and a colour is whatever parsed. There is no rule for
+     * this aggregate to enforce, and inventing {@code setBoard} / {@code setTag} / {@code setOpen}
+     * here would be six methods that all do the same nothing.</p>
+     *
+     * <p>Refused only when it would change nothing, matching {@link #renameTo}. A no-op write is
+     * a transaction, an event and a cache refresh for a value that already had that value.</p>
+     */
+    public Outcome<Town> withProfile(final TownProfile updated) {
+        Objects.requireNonNull(updated, "updated");
+        if (updated.equals(profile)) {
+            return Outcome.denied(ChangeDenial.NOTHING_TO_CHANGE);
+        }
+        return Outcome.applied(
+                new Town(id, name, mayor, nation, bankAccountId, residents, trusted,
+                        updated, createdAt),
+                new DomainEvent.TownProfileChanged(id));
+    }
+
     private Town withMembers(final Set<ResidentId> newResidents, final Set<ResidentId> newTrusted) {
-        return new Town(id, name, mayor, nation, bankAccountId, newResidents, newTrusted, createdAt);
+        return new Town(id, name, mayor, nation, bankAccountId, newResidents, newTrusted,
+                profile, createdAt);
     }
 
     private static Set<ResidentId> plus(final Set<ResidentId> source, final ResidentId added) {

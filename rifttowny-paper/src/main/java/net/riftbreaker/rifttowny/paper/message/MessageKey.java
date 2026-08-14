@@ -337,6 +337,50 @@ public enum MessageKey {
             "<red>Unknown relationship <white><input></white>. "
                     + "One of: <white><options></white></red>"),
 
+    // --- what a town says about itself -----------------------------------------------------------
+
+    TOWN_SET_BOARD("town.set-board",
+            "<green>The board of <white><town></white> is now: <white><value></white></green>"),
+
+    TOWN_SET_TAG("town.set-tag",
+            "<green>The tag of <white><town></white> is now <white><value></white>.</green>"),
+
+    TOWN_SET_COLOUR("town.set-colour",
+            "<green><white><town></white> is drawn in <white><value></white> on maps.</green>"),
+
+    /**
+     * Openness, with the consequence spelled out.
+     *
+     * <p>A mayor who turns this on has removed the only thing standing between their town and
+     * anybody who types the command. Saying so at the moment they do it is worth the extra line.</p>
+     */
+    TOWN_SET_OPEN("town.set-open",
+            "<green><white><town></white> is now <white><state></white> to anybody joining without "
+                    + "an invitation.</green>"),
+
+    TOWN_SET_PUBLIC("town.set-public",
+            "<green>Travel to <white><town></white>'s spawn by outsiders is now "
+                    + "<white><state></white>.</green>"),
+
+    TOWN_SET_NEUTRAL("town.set-neutral",
+            "<green><white><town></white> has declared neutrality <white><state></white>.</green>"),
+
+    NATION_SET_BOARD("nation.set-board",
+            "<green>The board of <white><nation></white> is now: <white><value></white></green>"),
+
+    NATION_SET_TAG("nation.set-tag",
+            "<green>The tag of <white><nation></white> is now <white><value></white>.</green>"),
+
+    NATION_SET_COLOUR("nation.set-colour",
+            "<green><white><nation></white> is drawn in <white><value></white> on maps.</green>"),
+
+    NATION_SET_NEUTRAL("nation.set-neutral",
+            "<green><white><nation></white> has declared neutrality <white><state></white>.</green>"),
+
+    /** The board itself, shown to a resident on arrival and on {@code /town info}. */
+    TOWN_BOARD_LINE("town.board-line",
+            "<gray>« <white><board></white> »</gray>"),
+
     // --- listings ------------------------------------------------------------------------------
     // Every listing that can run to more than one screen shares this footer. It names the command to
     // type rather than only being clickable: a click event is invisible to anybody reading on

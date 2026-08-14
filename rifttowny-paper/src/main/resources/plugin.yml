@@ -95,6 +95,7 @@ permissions:
       rifttowny.town.setspawn: true
       rifttowny.town.reclaim: true
       rifttowny.town.flag: true
+      rifttowny.town.set: true
       rifttowny.role.view: true
       rifttowny.role.manage: true
       rifttowny.role.assign: true
@@ -155,6 +156,9 @@ permissions:
   rifttowny.town.flag:
     description: Change what your town allows. The MANAGE_FLAGS role permission decides who really can.
     default: true
+  rifttowny.town.set:
+    description: Set your town's board, tag, map colour, openness and neutrality. The MANAGE_SETTINGS role permission decides who really can.
+    default: true
   rifttowny.role.view:
     description: View your town's roles.
     default: true
@@ -200,6 +204,7 @@ permissions:
       rifttowny.nation.king: true
       rifttowny.nation.rename: true
       rifttowny.nation.delete: true
+      rifttowny.nation.set: true
       rifttowny.nation.role.view: true
       rifttowny.nation.role.manage: true
       rifttowny.nation.role.assign: true
@@ -232,6 +237,9 @@ permissions:
     default: true
   rifttowny.nation.delete:
     description: Disband your nation.
+    default: true
+  rifttowny.nation.set:
+    description: Set your nation's board, tag, map colour and neutrality. The MANAGE_SETTINGS role permission decides who really can.
     default: true
   rifttowny.nation.role.view:
     description: View your nation's roles.

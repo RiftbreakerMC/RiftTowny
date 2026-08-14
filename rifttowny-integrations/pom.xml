@@ -46,5 +46,15 @@
       <version>0.1.0-SNAPSHOT</version>
       <scope>provided</scope>
     </dependency>
+    <!--
+      PlaceholderAPI. Same rule as RiftEco: compiled against, never shaded, and the expansion is
+      constructed inside a guard so a server without PlaceholderAPI loses placeholders and nothing
+      else.
+    -->
+    <dependency>
+      <groupId>me.clip</groupId>
+      <artifactId>placeholderapi</artifactId>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
 </project>

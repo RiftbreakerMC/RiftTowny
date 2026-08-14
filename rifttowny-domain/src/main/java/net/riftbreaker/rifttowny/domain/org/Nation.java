@@ -25,6 +25,7 @@ public final class Nation {
     private final TownId capital;
     private final UUID bankAccountId;
     private final Set<TownId> towns;
+    private final NationProfile profile;
     private final Instant createdAt;
 
     private Nation(
@@ -34,6 +35,7 @@ public final class Nation {
             final TownId capital,
             final UUID bankAccountId,
             final Set<TownId> towns,
+            final NationProfile profile,
             final Instant createdAt
     ) {
         this.id = id;
@@ -41,6 +43,7 @@ public final class Nation {
         this.leader = leader;
         this.capital = capital;
         this.bankAccountId = bankAccountId;
+        this.profile = profile == null ? NationProfile.empty() : profile;
         // Not Set.copyOf: it returns a set with unspecified iteration order, discarding the
         // insertion order the callers below preserve.
         this.towns = Collections.unmodifiableSet(new LinkedHashSet<>(towns));
@@ -62,10 +65,11 @@ public final class Nation {
         Objects.requireNonNull(capital, "capital");
         Objects.requireNonNull(bankAccountId, "bankAccountId");
         Objects.requireNonNull(now, "now");
-        return new Nation(id, name, leader, capital, bankAccountId, Set.of(capital), now);
+        return new Nation(id, name, leader, capital, bankAccountId, Set.of(capital),
+                NationProfile.empty(), now);
     }
 
-    /** Rebuilds a nation from storage. */
+    /** Rebuilds a nation from storage, for the callers that do not care about presentation. */
     public static Nation restore(
             final NationId id,
             final OrganisationName name,
@@ -75,13 +79,28 @@ public final class Nation {
             final Set<TownId> towns,
             final Instant createdAt
     ) {
+        return restore(id, name, leader, capital, bankAccountId, towns,
+                NationProfile.empty(), createdAt);
+    }
+
+    /** Rebuilds a nation from storage, profile included. */
+    public static Nation restore(
+            final NationId id,
+            final OrganisationName name,
+            final ResidentId leader,
+            final TownId capital,
+            final UUID bankAccountId,
+            final Set<TownId> towns,
+            final NationProfile profile,
+            final Instant createdAt
+    ) {
         Objects.requireNonNull(towns, "towns");
         Objects.requireNonNull(capital, "capital");
         if (!towns.contains(capital)) {
             throw new IllegalArgumentException(
                     "Nation " + id + " was restored with a capital that is not one of its towns");
         }
-        return new Nation(id, name, leader, capital, bankAccountId, towns, createdAt);
+        return new Nation(id, name, leader, capital, bankAccountId, towns, profile, createdAt);
     }
 
     /** Admits a town. {@link Town#joinNation(NationId)} must be applied in the same transaction. */
@@ -152,7 +171,7 @@ public final class Nation {
             return Outcome.denied(ChangeDenial.ALREADY_THE_LEADER);
         }
         final Nation updated =
-                new Nation(id, name, candidate, capital, bankAccountId, towns, createdAt);
+                new Nation(id, name, candidate, capital, bankAccountId, towns, profile, createdAt);
         return Outcome.applied(
                 updated, new DomainEvent.NationLeadershipTransferred(id, leader, candidate));
     }
@@ -165,7 +184,7 @@ public final class Nation {
             return Outcome.denied(ChangeDenial.NAME_UNCHANGED);
         }
         final Nation updated =
-                new Nation(id, newName, leader, capital, bankAccountId, towns, createdAt);
+                new Nation(id, newName, leader, capital, bankAccountId, towns, profile, createdAt);
         return Outcome.applied(updated, new DomainEvent.NationRenamed(id, name, newName));
     }
 
@@ -231,8 +250,24 @@ public final class Nation {
         return createdAt;
     }
 
+    /** What the nation says about itself. Never null. */
+    public NationProfile profile() {
+        return profile;
+    }
+
+    /** Replaces the profile. Refused only when it would change nothing — see {@link Town#withProfile}. */
+    public Outcome<Nation> withProfile(final NationProfile updated) {
+        Objects.requireNonNull(updated, "updated");
+        if (updated.equals(profile)) {
+            return Outcome.denied(ChangeDenial.NOTHING_TO_CHANGE);
+        }
+        return Outcome.applied(
+                new Nation(id, name, leader, capital, bankAccountId, towns, updated, createdAt),
+                new DomainEvent.NationProfileChanged(id));
+    }
+
     private Nation withTowns(final Set<TownId> newTowns, final TownId newCapital) {
-        return new Nation(id, name, leader, newCapital, bankAccountId, newTowns, createdAt);
+        return new Nation(id, name, leader, newCapital, bankAccountId, newTowns, profile, createdAt);
     }
 
     private static Set<TownId> plus(final Set<TownId> source, final TownId added) {

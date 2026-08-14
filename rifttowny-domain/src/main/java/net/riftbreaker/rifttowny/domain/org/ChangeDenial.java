@@ -108,6 +108,25 @@ public enum ChangeDenial {
     /** Not trusted by this town. */
     NOT_TRUSTED,
 
+    // --- presentation ---------------------------------------------------------------------------
+
+    /**
+     * The setting already holds that value.
+     *
+     * <p>Refused rather than accepted quietly: applying it would be a transaction, an event, an
+     * outbox row and a cache refresh to store what was already stored.</p>
+     */
+    NOTHING_TO_CHANGE,
+
+    /** The colour was not six hex digits. */
+    NOT_A_COLOUR,
+
+    /** The town has not declared itself open, so joining it needs an invitation. */
+    TOWN_IS_NOT_OPEN,
+
+    /** The town's spawn is not public, so only its own residents may travel to it. */
+    TOWN_SPAWN_IS_NOT_PUBLIC,
+
     // --- naming ------------------------------------------------------------------------------
 
     /** The new name is identical to the current one, so there is nothing to change. */

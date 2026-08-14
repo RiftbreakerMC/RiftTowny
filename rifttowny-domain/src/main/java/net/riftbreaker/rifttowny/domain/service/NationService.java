@@ -272,6 +272,33 @@ public final class NationService {
         });
     }
 
+    /**
+     * Changes what a nation says about itself. Requires {@link Permission#MANAGE_SETTINGS} in it.
+     *
+     * <p>Takes a transform and applies it inside the transaction, for the same reason as
+     * {@link TownService#setProfile}: read-edit-write from outside is a lost update whenever two
+     * people in the same leadership change two different settings at once.</p>
+     */
+    public CompletableFuture<ServiceResult<Nation>> setProfile(
+            final ResidentId actor,
+            final NationId nationId,
+            final java.util.function.UnaryOperator<net.riftbreaker.rifttowny.domain.org.NationProfile> change
+    ) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(nationId, "nationId");
+        Objects.requireNonNull(change, "change");
+
+        return transaction(transaction -> {
+            final Nation nation = requireNationPermission(
+                    transaction, nationId, actor, Permission.MANAGE_SETTINGS);
+            final Outcome<Nation> changed = nation.withProfile(change.apply(nation.profile()));
+            final Nation updated = require(changed);
+            transaction.nations().save(updated);
+            transaction.publishAll(changed.events(), correlation("profile", nationId));
+            return updated;
+        });
+    }
+
     /** Renames a nation. Requires {@link Permission#RENAME_ORGANISATION} in the nation. */
     public CompletableFuture<ServiceResult<Nation>> rename(
             final ResidentId actor, final NationId nationId, final String rawName) {

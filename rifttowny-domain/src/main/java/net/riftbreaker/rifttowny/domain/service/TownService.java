@@ -294,6 +294,37 @@ public final class TownService {
         }), Town::id);
     }
 
+    /**
+     * Joins a town that has declared itself open, with no invitation.
+     *
+     * <p>The one way into a town that nobody in it agreed to individually — which is exactly what
+     * {@code /town set open} means, and why it is a setting a town has to turn on rather than the
+     * default.</p>
+     *
+     * <p>Openness is read from the town <em>inside</em> the transaction, not from the cache. A town
+     * that closed a moment ago must refuse the join that was already in flight, and a cache is by
+     * construction a little behind.</p>
+     *
+     * <p>Any outstanding invitation is cleared on the way through. Somebody who was invited and
+     * then walked in through the open door should not be left with an offer they can accept
+     * again.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> joinOpenTown(
+            final ResidentId who, final TownId townId) {
+        Objects.requireNonNull(who, "who");
+        Objects.requireNonNull(townId, "townId");
+
+        return refreshing(transaction(transaction -> {
+            final Town town = town(transaction, townId);
+            if (!town.profile().open()) {
+                throw new ChangeRefusedException(ChangeDenial.TOWN_IS_NOT_OPEN);
+            }
+            final Town updated = admit(transaction, townId, who);
+            transaction.invitations().delete(townId, Invitation.Invitee.of(who));
+            return updated;
+        }), Town::id);
+    }
+
     /** Turns an offer down, so it stops appearing in the player's list. */
     public CompletableFuture<ServiceResult<TownId>> declineInvitation(
             final ResidentId who, final TownId townId) {
@@ -417,6 +448,38 @@ public final class TownService {
             final Town updated = require(transferred);
             transaction.towns().save(updated);
             transaction.publishAll(transferred.events(), correlation("leadership", townId));
+            return updated;
+        }), Town::id);
+    }
+
+    /**
+     * Changes what a town says about itself, and who it lets in.
+     * Requires {@link Permission#MANAGE_SETTINGS}.
+     *
+     * <p>Takes a transform rather than a finished {@link net.riftbreaker.rifttowny.domain.org.TownProfile},
+     * and applies it to the town as loaded <em>inside</em> the transaction. The obvious alternative —
+     * the caller reads the town, edits its profile and hands the result back — is a lost update: two
+     * co-mayors setting the board and the tag in the same second would each write a profile built
+     * from the state before the other's change, and one of the two edits would vanish with nothing
+     * to show it ever happened.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> setProfile(
+            final ResidentId actor,
+            final TownId townId,
+            final java.util.function.UnaryOperator<net.riftbreaker.rifttowny.domain.org.TownProfile> change
+    ) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(townId, "townId");
+        Objects.requireNonNull(change, "change");
+
+        return refreshing(transaction(transaction -> {
+            final Town town = town(transaction, townId);
+            requirePermission(transaction, town, actor, Permission.MANAGE_SETTINGS);
+
+            final Outcome<Town> changed = town.withProfile(change.apply(town.profile()));
+            final Town updated = require(changed);
+            transaction.towns().save(updated);
+            transaction.publishAll(changed.events(), correlation("profile", townId));
             return updated;
         }), Town::id);
     }

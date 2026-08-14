@@ -32,7 +32,11 @@ import java.util.UUID;
 final class ConnectionNationStore implements CivicTransaction.NationStore {
 
     private static final String COLUMNS =
-            "nation_id, name, name_normalised, leader_id, capital_town_id, bank_account_id, created_at";
+            "nation_id, name, name_normalised, leader_id, capital_town_id, bank_account_id, "
+                    + "created_at, board, tag, map_colour, neutral";
+
+    /** One {@code ?} per column in {@link #COLUMNS}, so the two cannot drift apart by hand. */
+    private static final String PLACEHOLDERS = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
 
     private final Connection connection;
     private final StorageBackend backend;
@@ -75,14 +79,18 @@ final class ConnectionNationStore implements CivicTransaction.NationStore {
         Objects.requireNonNull(nation, "nation");
         StorageFailure.wrapping(() -> {
             final String sql = switch (backend) {
-                case SQLITE -> "INSERT INTO rt_nation (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?) "
+                case SQLITE -> "INSERT INTO rt_nation (" + COLUMNS + ") VALUES (" + PLACEHOLDERS + ") "
                         + "ON CONFLICT(nation_id) DO UPDATE SET name = excluded.name, "
                         + "name_normalised = excluded.name_normalised, leader_id = excluded.leader_id, "
-                        + "capital_town_id = excluded.capital_town_id";
-                case MARIADB -> "INSERT INTO rt_nation (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?) "
+                        + "capital_town_id = excluded.capital_town_id, board = excluded.board, "
+                        + "tag = excluded.tag, map_colour = excluded.map_colour, "
+                        + "neutral = excluded.neutral";
+                case MARIADB -> "INSERT INTO rt_nation (" + COLUMNS + ") VALUES (" + PLACEHOLDERS + ") "
                         + "ON DUPLICATE KEY UPDATE name = VALUES(name), "
                         + "name_normalised = VALUES(name_normalised), leader_id = VALUES(leader_id), "
-                        + "capital_town_id = VALUES(capital_town_id)";
+                        + "capital_town_id = VALUES(capital_town_id), board = VALUES(board), "
+                        + "tag = VALUES(tag), map_colour = VALUES(map_colour), "
+                        + "neutral = VALUES(neutral)";
             };
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, nation.id().value().toString());
@@ -92,6 +100,12 @@ final class ConnectionNationStore implements CivicTransaction.NationStore {
                 statement.setString(5, nation.capital().value().toString());
                 statement.setString(6, nation.bankAccountId().toString());
                 statement.setLong(7, nation.createdAt().toEpochMilli());
+
+                final net.riftbreaker.rifttowny.domain.org.NationProfile profile = nation.profile();
+                setTextOrNull(statement, 8, profile.board());
+                setTextOrNull(statement, 9, profile.tag());
+                setTextOrNull(statement, 10, profile.colourForStorage());
+                statement.setBoolean(11, profile.neutral());
                 statement.executeUpdate();
             }
             return null;
@@ -120,9 +134,21 @@ final class ConnectionNationStore implements CivicTransaction.NationStore {
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
     }
 
+    /** Writes text, or NULL when it is empty, so "nothing set" has one representation. */
+    private static void setTextOrNull(
+            final PreparedStatement statement, final int index, final String value)
+            throws SQLException {
+        if (value == null || value.isEmpty()) {
+            statement.setNull(index, java.sql.Types.VARCHAR);
+        } else {
+            statement.setString(index, value);
+        }
+    }
+
     private List<Nation> load(final String where, final String... parameters) throws SQLException {
         record Row(NationId id, OrganisationName name, ResidentId leader, TownId capital,
-                   UUID bankAccountId, Instant createdAt) {
+                   UUID bankAccountId, Instant createdAt,
+                   net.riftbreaker.rifttowny.domain.org.NationProfile profile) {
         }
 
         final List<Row> rows = new ArrayList<>();
@@ -142,7 +168,12 @@ final class ConnectionNationStore implements CivicTransaction.NationStore {
                             ResidentId.parse(results.getString("leader_id")),
                             TownId.parse(results.getString("capital_town_id")),
                             UUID.fromString(results.getString("bank_account_id")),
-                            Instant.ofEpochMilli(results.getLong("created_at"))));
+                            Instant.ofEpochMilli(results.getLong("created_at")),
+                            net.riftbreaker.rifttowny.domain.org.NationProfile.restore(
+                                    results.getString("board"),
+                                    results.getString("tag"),
+                                    results.getString("map_colour"),
+                                    results.getBoolean("neutral"))));
                 }
             }
         }
@@ -151,7 +182,7 @@ final class ConnectionNationStore implements CivicTransaction.NationStore {
         for (final Row row : rows) {
             nations.add(Nation.restore(
                     row.id(), row.name(), row.leader(), row.capital(), row.bankAccountId(),
-                    townsOf(row.id()), row.createdAt()));
+                    townsOf(row.id()), row.profile(), row.createdAt()));
         }
         return List.copyOf(nations);
     }

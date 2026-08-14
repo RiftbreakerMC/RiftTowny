@@ -81,6 +81,13 @@ town:
   online-line: '  <green><resident></green><roles>'
   online-roles: ' <dark_gray>-</dark_gray> <gray><roles></gray>'
   online-none: '<gray>Nobody from <white><town></white> is online.</gray>'
+  set-board: '<green>The board of <white><town></white> is now: <white><value></white></green>'
+  set-tag: '<green>The tag of <white><town></white> is now <white><value></white>.</green>'
+  set-colour: '<green><white><town></white> is drawn in <white><value></white> on maps.</green>'
+  set-open: '<green><white><town></white> is now <white><state></white> to anybody joining without an invitation.</green>'
+  set-public: '<green>Travel to <white><town></white>''s spawn by outsiders is now <white><state></white>.</green>'
+  set-neutral: '<green><white><town></white> has declared neutrality <white><state></white>.</green>'
+  board-line: '<gray>« <white><board></white> »</gray>'
 
 # Shared by every listing that can run past one screen.
 listing:
@@ -105,6 +112,10 @@ nation:
   list-header: '<dark_gray>---</dark_gray> <white>Nations</white> <gray>(<count>)</gray> <dark_gray>-</dark_gray> <gray>page <page> of <pages>, by <sort></gray>'
   list-line: '  <dark_gray><index>.</dark_gray> <aqua><nation></aqua> <dark_gray>-</dark_gray> <gray><towns> town(s), <residents> resident(s), <chunks> chunk(s)</gray>'
   list-empty: '<gray>No nations have been founded yet.</gray>'
+  set-board: '<green>The board of <white><nation></white> is now: <white><value></white></green>'
+  set-tag: '<green>The tag of <white><nation></white> is now <white><value></white>.</green>'
+  set-colour: '<green><white><nation></white> is drawn in <white><value></white> on maps.</green>'
+  set-neutral: '<green><white><nation></white> has declared neutrality <white><state></white>.</green>'
 
 # One player's record.
 resident:
@@ -236,6 +247,10 @@ denial:
   first-claim-must-be-the-homeblock: 'Your first claim becomes your home chunk.'
   already-the-homeblock: 'That is already your home chunk.'
   name-unchanged: 'That is already the name.'
+  nothing-to-change: 'That is already set to exactly that.'
+  not-a-colour: 'A colour is six hex digits, like #a1b2c3.'
+  town-is-not-open: 'That town is not open, so you need an invitation.'
+  town-spawn-is-not-public: 'That town''s spawn is not public.'
   name-taken: 'That name is already taken.'
   town-not-found: 'No such town.'
   nation-not-found: 'No such nation.'

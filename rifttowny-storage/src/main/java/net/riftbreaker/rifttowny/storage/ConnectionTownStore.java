@@ -36,7 +36,11 @@ import java.util.UUID;
 final class ConnectionTownStore implements CivicTransaction.TownStore {
 
     private static final String COLUMNS =
-            "town_id, name, name_normalised, nation_id, leader_id, bank_account_id, created_at";
+            "town_id, name, name_normalised, nation_id, leader_id, bank_account_id, created_at, "
+                    + "board, tag, map_colour, neutral, is_open, public_spawn";
+
+    /** One {@code ?} per column in {@link #COLUMNS}, so the two cannot drift apart by hand. */
+    private static final String PLACEHOLDERS = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
 
     private final Connection connection;
     private final StorageBackend backend;
@@ -93,14 +97,20 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
             // civic account must survive every rename and leadership transfer, and letting a save
             // move it is precisely how a treasury gets orphaned.
             final String sql = switch (backend) {
-                case SQLITE -> "INSERT INTO rt_town (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?) "
+                case SQLITE -> "INSERT INTO rt_town (" + COLUMNS + ") VALUES (" + PLACEHOLDERS + ") "
                         + "ON CONFLICT(town_id) DO UPDATE SET name = excluded.name, "
                         + "name_normalised = excluded.name_normalised, nation_id = excluded.nation_id, "
-                        + "leader_id = excluded.leader_id";
-                case MARIADB -> "INSERT INTO rt_town (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?) "
+                        + "leader_id = excluded.leader_id, board = excluded.board, "
+                        + "tag = excluded.tag, map_colour = excluded.map_colour, "
+                        + "neutral = excluded.neutral, is_open = excluded.is_open, "
+                        + "public_spawn = excluded.public_spawn";
+                case MARIADB -> "INSERT INTO rt_town (" + COLUMNS + ") VALUES (" + PLACEHOLDERS + ") "
                         + "ON DUPLICATE KEY UPDATE name = VALUES(name), "
                         + "name_normalised = VALUES(name_normalised), nation_id = VALUES(nation_id), "
-                        + "leader_id = VALUES(leader_id)";
+                        + "leader_id = VALUES(leader_id), board = VALUES(board), "
+                        + "tag = VALUES(tag), map_colour = VALUES(map_colour), "
+                        + "neutral = VALUES(neutral), is_open = VALUES(is_open), "
+                        + "public_spawn = VALUES(public_spawn)";
             };
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, town.id().value().toString());
@@ -115,6 +125,16 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
                 statement.setString(5, town.mayor().value().toString());
                 statement.setString(6, town.bankAccountId().toString());
                 statement.setLong(7, town.createdAt().toEpochMilli());
+
+                final net.riftbreaker.rifttowny.domain.org.TownProfile profile = town.profile();
+                // Empty text is stored as NULL rather than as "". Both read back as "no board", and
+                // one of them makes "WHERE board IS NOT NULL" mean what it looks like it means.
+                setTextOrNull(statement, 8, profile.board());
+                setTextOrNull(statement, 9, profile.tag());
+                setTextOrNull(statement, 10, profile.colourForStorage());
+                statement.setBoolean(11, profile.neutral());
+                statement.setBoolean(12, profile.open());
+                statement.setBoolean(13, profile.publicSpawn());
                 statement.executeUpdate();
             }
             replaceTrust(town);
@@ -145,9 +165,21 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.getFirst());
     }
 
+    /** Writes text, or NULL when it is empty, so "nothing set" has one representation. */
+    private static void setTextOrNull(
+            final PreparedStatement statement, final int index, final String value)
+            throws SQLException {
+        if (value == null || value.isEmpty()) {
+            statement.setNull(index, Types.VARCHAR);
+        } else {
+            statement.setString(index, value);
+        }
+    }
+
     private List<Town> load(final String where, final String... parameters) throws SQLException {
         record Row(TownId id, OrganisationName name, ResidentId mayor, NationId nation,
-                   UUID bankAccountId, Instant createdAt) {
+                   UUID bankAccountId, Instant createdAt,
+                   net.riftbreaker.rifttowny.domain.org.TownProfile profile) {
         }
 
         final List<Row> rows = new ArrayList<>();
@@ -168,7 +200,14 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
                             ResidentId.parse(results.getString("leader_id")),
                             nationId == null ? null : NationId.parse(nationId),
                             UUID.fromString(results.getString("bank_account_id")),
-                            Instant.ofEpochMilli(results.getLong("created_at"))));
+                            Instant.ofEpochMilli(results.getLong("created_at")),
+                            net.riftbreaker.rifttowny.domain.org.TownProfile.restore(
+                                    results.getString("board"),
+                                    results.getString("tag"),
+                                    results.getString("map_colour"),
+                                    results.getBoolean("neutral"),
+                                    results.getBoolean("is_open"),
+                                    results.getBoolean("public_spawn"))));
                 }
             }
         }
@@ -177,7 +216,7 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
         for (final Row row : rows) {
             towns.add(Town.restore(
                     row.id(), row.name(), row.mayor(), row.nation(), row.bankAccountId(),
-                    residentsOf(row.id()), trustedBy(row.id()), row.createdAt()));
+                    residentsOf(row.id()), trustedBy(row.id()), row.profile(), row.createdAt()));
         }
         return List.copyOf(towns);
     }
