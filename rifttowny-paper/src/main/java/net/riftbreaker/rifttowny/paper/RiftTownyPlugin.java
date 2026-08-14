@@ -75,6 +75,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.paper.spawn.TeleportService teleportService;
     private net.riftbreaker.rifttowny.paper.protection.ProtectionService protection;
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
+    private net.riftbreaker.rifttowny.domain.directory.CivicDirectory directory;
+    private net.riftbreaker.rifttowny.domain.directory.TerritoryMap territoryMap;
+    private java.time.Clock clock;
 
     /**
      * Published here rather than in the constructor.
@@ -194,7 +197,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
                 townService, townRoleService, territoryService, flagService, ruinService,
                 spawnService, teleportService, bankService, residentNames, residentRepository,
-                townRepository, messages, denialText).tree());
+                townRepository, nationRepository, directory, territoryMap, messages,
+                denialText).tree());
 
         registerTree("plot", new net.riftbreaker.rifttowny.paper.command.PlotCommands(
                 plotService, residentNames, residentRepository, townRepository, messages,
@@ -202,7 +206,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
                 nationService, nationRoleService, residentNames, residentRepository, townRepository,
-                nationRepository, messages, denialText).tree());
+                nationRepository, directory, messages, denialText).tree());
+
+        registerTree("resident", new net.riftbreaker.rifttowny.paper.command.ResidentCommands(
+                residentRepository, plotService, directory, residentNames, messages, clock).tree());
 
         registerProtection();
         scheduleHousekeeping();
@@ -257,6 +264,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     new net.riftbreaker.rifttowny.storage.JdbcCivicStore(database, storageExecutor);
 
             final java.time.Clock clock = java.time.Clock.systemUTC();
+            this.clock = clock;
             this.territoryIndex =
                     net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
             this.civicCache = net.riftbreaker.rifttowny.domain.civic.CivicCache.empty();
@@ -325,6 +333,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
                     clock,
                     civicCacheService);
+            // Read-only views over the same caches protection reads. They hold no state of their
+            // own, so nothing has to keep them current and there is nothing for them to get wrong.
+            this.directory = new net.riftbreaker.rifttowny.domain.directory.CivicDirectory(
+                    civicCache, territoryIndex);
+            this.territoryMap = new net.riftbreaker.rifttowny.domain.directory.TerritoryMap(
+                    territoryIndex, ruinIndex, civicCache);
 
             // Both loaded before enable returns, and waited on. A protection listener answers from
             // these and cannot wait for a database, so a partially loaded index would read as

@@ -1,6 +1,10 @@
 package net.riftbreaker.rifttowny.paper.command;
 
 import net.riftbreaker.rifttowny.api.ChunkKey;
+import net.riftbreaker.rifttowny.domain.directory.CivicDirectory;
+import net.riftbreaker.rifttowny.domain.directory.Page;
+import net.riftbreaker.rifttowny.domain.directory.TerritoryMap;
+import net.riftbreaker.rifttowny.domain.directory.TownSummary;
 import net.riftbreaker.rifttowny.domain.flag.FlagOverride;
 import net.riftbreaker.rifttowny.domain.flag.FlagSource;
 import net.riftbreaker.rifttowny.domain.flag.FlagTarget;
@@ -23,6 +27,7 @@ import net.riftbreaker.rifttowny.paper.command.tree.Surface;
 import net.riftbreaker.rifttowny.paper.message.DenialText;
 import net.riftbreaker.rifttowny.paper.message.MessageKey;
 import net.riftbreaker.rifttowny.paper.message.MessageService;
+import net.riftbreaker.rifttowny.paper.message.Times;
 import org.bukkit.Bukkit;
 
 import java.util.ArrayList;
@@ -58,6 +63,10 @@ public final class TownCommands {
     private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final ResidentRepository residents;
     private final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository;
+    private final net.riftbreaker.rifttowny.domain.org.NationRepository nations;
+    private final CivicDirectory directory;
+    private final TerritoryMap maps;
+    private final Listings listings;
     private final MessageService messages;
     private final DenialText denials;
 
@@ -73,6 +82,9 @@ public final class TownCommands {
             final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
+            final net.riftbreaker.rifttowny.domain.org.NationRepository nations,
+            final CivicDirectory directory,
+            final TerritoryMap maps,
             final MessageService messages,
             final DenialText denials
     ) {
@@ -87,8 +99,12 @@ public final class TownCommands {
         this.names = Objects.requireNonNull(names, "names");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
+        this.nations = Objects.requireNonNull(nations, "nations");
+        this.directory = Objects.requireNonNull(directory, "directory");
+        this.maps = Objects.requireNonNull(maps, "maps");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.denials = Objects.requireNonNull(denials, "denials");
+        this.listings = new Listings(messages);
     }
 
     /** Builds the tree. Called once at enable. */
@@ -101,10 +117,32 @@ public final class TownCommands {
                         .describedAs("Found a town")
                         .runs(this::found, Surface.CHAT))
                 .child(CommandNode.action("info")
+                        .aliases("who")
                         .permission("rifttowny.town.info")
-                        .usage("town info")
-                        .describedAs("Show your town")
+                        .usage("town info [town]")
+                        .describedAs("Show a town, or your own")
+                        .completer((actor, args) -> args.size() <= 1 ? townNames() : List.of())
                         .runs(this::info, Surface.CHAT))
+                .child(CommandNode.action("list")
+                        .permission("rifttowny.town.info")
+                        .usage("town list [page] [name|residents|land|age]")
+                        .describedAs("List every town")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of("1", "name", "residents", "land", "age")
+                                : List.of("name", "residents", "land", "age"))
+                        .runs(this::list, Surface.CHAT))
+                .child(CommandNode.action("online")
+                        .permission("rifttowny.town.info")
+                        .usage("town online [town]")
+                        .describedAs("Who from a town is here now")
+                        .completer((actor, args) -> args.size() <= 1 ? townNames() : List.of())
+                        .runs(this::online, Surface.CHAT))
+                .child(CommandNode.action("map")
+                        .permission("rifttowny.town.info")
+                        .usage("town map [size]")
+                        .describedAs("Draw the land around you")
+                        .completer((actor, args) -> args.size() <= 1 ? List.of("small", "big") : List.of())
+                        .runs(this::map, Surface.CHAT))
                 .child(CommandNode.action("add")
                         .aliases("invite")
                         .permission("rifttowny.town.add")
@@ -325,17 +363,206 @@ public final class TownCommands {
         });
     }
 
+    /**
+     * One town, named or your own.
+     *
+     * <p>The town itself comes from the caches, so looking at one costs no query. The two lines that
+     * cannot — the treasury, and the nation's name rather than its id — are read together and the
+     * whole screen is printed in their callback. Printing the cached lines first and letting the
+     * read land afterwards would put the treasury below the resident list on a fast database and
+     * above it on a slow one, which is the sort of thing players report as a rendering bug.</p>
+     */
     private void info(final CommandActor actor, final List<String> args) {
-        withTown(actor, (who, town) -> {
+        if (!args.isEmpty()) {
+            directory.factsNamed(args.getFirst()).ifPresentOrElse(
+                    facts -> showTown(actor, facts),
+                    () -> denied(actor, ChangeDenial.TOWN_NOT_FOUND));
+            return;
+        }
+        player(actor).ifPresent(who -> directory.factsOf(who).ifPresentOrElse(
+                facts -> showTown(actor, facts),
+                () -> messages.send(actor::send, MessageKey.TOWN_NOT_IN_A_TOWN)));
+    }
+
+    private void showTown(
+            final CommandActor actor,
+            final net.riftbreaker.rifttowny.domain.civic.TownFacts facts
+    ) {
+        final Town town = facts.town();
+        final CompletableFuture<net.riftbreaker.rifttowny.domain.org.Nation> nation =
+                town.nation()
+                        .map(id -> nations.find(id).thenApply(found -> found.orElse(null)))
+                        .orElseGet(() -> CompletableFuture.completedFuture(null));
+
+        then(actor, banks.balanceOf(town.id()).thenCombine(nation, TownScreen::new), screen -> {
             messages.send(actor::send, MessageKey.TOWN_INFO_HEADER,
                     MessageService.value("town", town.name().display()));
             line(actor, "Mayor", names.describe(town.mayor()));
-            then(actor, banks.balanceOf(town.id()),
-                    balance -> line(actor, "Treasury", balance.describe()));
-            line(actor, "Residents", String.valueOf(town.residentCount()));
-            line(actor, "Nation", town.nation().map(Object::toString).orElse("none"));
+            line(actor, "Founded", Times.date(town.createdAt()));
+            line(actor, "Treasury", screen.balance().describe());
+            line(actor, "Land", directory.town(town.id())
+                    .map(summary -> summary.chunks() + " chunk(s)")
+                    .orElse("0 chunk(s)"));
+            line(actor, "Nation", screen.nation() == null
+                    ? "none"
+                    : screen.nation().name().display());
             line(actor, "Trusted", String.valueOf(town.trustedOutsiders().size()));
+
+            messages.sendRaw(actor::send, MessageKey.TOWN_RESIDENTS_HEADER,
+                    MessageService.value("town", town.name().display()),
+                    MessageService.value("count", town.residentCount()));
+            messages.sendRaw(actor::send, MessageKey.TOWN_RESIDENTS_LINE,
+                    MessageService.value("residents", residentNames(town.id())));
         });
+    }
+
+    /** Everybody in a town, mayor first, as one comma-separated line. */
+    private String residentNames(final TownId town) {
+        final List<String> named = new ArrayList<>();
+        directory.residentsOf(town).forEach(resident -> named.add(names.describe(resident)));
+        return named.isEmpty() ? "nobody" : String.join(", ", named);
+    }
+
+    /** The two facts about a town that a cache cannot answer, fetched together. */
+    private record TownScreen(
+            net.riftbreaker.rifttowny.domain.bank.Money balance,
+            net.riftbreaker.rifttowny.domain.org.Nation nation) {
+    }
+
+    /**
+     * Every town on the server.
+     *
+     * <p>Sorted and paged from memory. The one read is the nation list, taken once for the whole
+     * page rather than once per row — a listing that queried per row would be the reason a curious
+     * player could stall a server, and the number of nations is small enough that fetching all of
+     * them costs less than fetching the handful shown.</p>
+     */
+    private void list(final CommandActor actor, final List<String> args) {
+        listings.parse(actor, args).ifPresent(request -> {
+            final Page<TownSummary> page =
+                    directory.towns(request.sort(), request.page(), Listings.PAGE_SIZE);
+            if (page.isEmpty()) {
+                messages.send(actor::send, MessageKey.TOWN_LIST_EMPTY);
+                return;
+            }
+            then(actor, nations.all(), allNations -> {
+                final java.util.Map<Object, String> nationNames = new java.util.HashMap<>();
+                allNations.forEach(found -> nationNames.put(found.id(), found.name().display()));
+
+                messages.sendRaw(actor::send, MessageKey.TOWN_LIST_HEADER,
+                        MessageService.value("count", page.total()),
+                        MessageService.value("page", page.number()),
+                        MessageService.value("pages", page.pages()),
+                        MessageService.value("sort", request.sort().name().toLowerCase(Locale.ROOT)));
+
+                int index = page.firstIndex();
+                for (final TownSummary summary : page.items()) {
+                    messages.sendRaw(actor::send, MessageKey.TOWN_LIST_LINE,
+                            MessageService.value("index", index++),
+                            MessageService.value("town", summary.name()),
+                            MessageService.value("residents", summary.residents()),
+                            MessageService.value("chunks", summary.chunks()),
+                            nationTag(summary, nationNames));
+                }
+                listings.more(actor, page,
+                        "/town list " + (page.number() + 1) + ' ' + request.sortName());
+            });
+        });
+    }
+
+    /**
+     * The nation part of a listing line.
+     *
+     * <p>Empty for a town in no nation, which is most of them. A literal "none" on every row would
+     * be the widest column on the screen and would say nothing.</p>
+     */
+    private net.kyori.adventure.text.minimessage.tag.resolver.TagResolver nationTag(
+            final TownSummary summary, final java.util.Map<Object, String> nationNames) {
+        final String name = summary.nationId().map(nationNames::get).orElse(null);
+        return net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component(
+                "nation",
+                name == null
+                        ? net.kyori.adventure.text.Component.empty()
+                        : messages.render(MessageKey.TOWN_LIST_NATION,
+                                MessageService.value("nation", name)));
+    }
+
+    /** Who from a town is on the server now. */
+    private void online(final CommandActor actor, final List<String> args) {
+        withNamedOrOwnTown(actor, args, facts -> {
+            final List<ResidentId> here = new ArrayList<>();
+            for (final ResidentId resident : directory.residentsOf(facts.id())) {
+                if (Bukkit.getPlayer(resident.value()) != null) {
+                    here.add(resident);
+                }
+            }
+            if (here.isEmpty()) {
+                messages.send(actor::send, MessageKey.TOWN_ONLINE_NONE,
+                        MessageService.value("town", facts.displayName()));
+                return;
+            }
+            messages.sendRaw(actor::send, MessageKey.TOWN_ONLINE_HEADER,
+                    MessageService.value("town", facts.displayName()),
+                    MessageService.value("count", here.size()),
+                    MessageService.value("residents", facts.town().residentCount()));
+            for (final ResidentId resident : here) {
+                final List<String> roleNames = directory.roleNamesOf(facts.id(), resident);
+                messages.sendRaw(actor::send, MessageKey.TOWN_ONLINE_LINE,
+                        MessageService.value("resident", names.describe(resident)),
+                        net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component(
+                                "roles",
+                                roleNames.isEmpty()
+                                        ? net.kyori.adventure.text.Component.empty()
+                                        : messages.render(MessageKey.TOWN_ONLINE_ROLES,
+                                                MessageService.value("roles",
+                                                        String.join(", ", roleNames)))));
+            }
+        });
+    }
+
+    /**
+     * The land around the player.
+     *
+     * <p>Drawn from the caches on the thread the command arrived on, which on Folia is the only
+     * thread allowed to know where the player is standing at all.</p>
+     */
+    private void map(final CommandActor actor, final List<String> args) {
+        final Optional<ChunkKey> centre = actor.chunk();
+        if (centre.isEmpty()) {
+            messages.send(actor::send, MessageKey.TOWN_CONSOLE_HAS_NO_CHUNK);
+            return;
+        }
+        final boolean big = !args.isEmpty() && args.getFirst().toLowerCase(Locale.ROOT).startsWith("b");
+        final boolean small = !args.isEmpty() && args.getFirst().toLowerCase(Locale.ROOT).startsWith("s");
+        final int radiusX = big ? 11 : small ? 4 : TerritoryMap.DEFAULT_RADIUS_X;
+        final int radiusZ = big ? 7 : small ? 2 : TerritoryMap.DEFAULT_RADIUS_Z;
+
+        final TerritoryMap.MapView view =
+                maps.around(centre.get(), actor.resident().orElse(null), radiusX, radiusZ);
+
+        final org.bukkit.World world = Bukkit.getWorld(centre.get().worldId());
+        messages.sendRaw(actor::send, MessageKey.MAP_HEADER,
+                MessageService.value("world", world == null ? "world" : world.getName()),
+                MessageService.value("x", centre.get().chunkX()),
+                MessageService.value("z", centre.get().chunkZ()));
+        MapRenderer.render(view).forEach(actor::send);
+        messages.sendRaw(actor::send, MessageKey.MAP_LEGEND);
+        messages.sendRaw(actor::send, MessageKey.MAP_LEGEND_SHAPES);
+    }
+
+    /** Resolves the town named in the arguments, or the actor's own when there are none. */
+    private void withNamedOrOwnTown(
+            final CommandActor actor,
+            final List<String> args,
+            final Consumer<net.riftbreaker.rifttowny.domain.civic.TownFacts> work
+    ) {
+        if (!args.isEmpty()) {
+            directory.factsNamed(args.getFirst())
+                    .ifPresentOrElse(work, () -> denied(actor, ChangeDenial.TOWN_NOT_FOUND));
+            return;
+        }
+        player(actor).ifPresent(who -> directory.factsOf(who).ifPresentOrElse(
+                work, () -> messages.send(actor::send, MessageKey.TOWN_NOT_IN_A_TOWN)));
     }
 
     private void add(final CommandActor actor, final List<String> args) {
@@ -1087,6 +1314,11 @@ public final class TownCommands {
         } catch (final NumberFormatException notANumber) {
             return Optional.empty();
         }
+    }
+
+    /** Every town's name, answered from the cache for the same reason as {@link #onlinePlayerNames()}. */
+    private List<String> townNames() {
+        return directory.townNames();
     }
 
     /**

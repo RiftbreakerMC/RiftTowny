@@ -4,6 +4,7 @@ import net.riftbreaker.rifttowny.api.ChunkKey;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -131,6 +132,36 @@ public final class TerritoryIndex {
     public int countForTownScanning(final TownId town) {
         Objects.requireNonNull(town, "town");
         return (int) claims.values().stream().filter(claim -> claim.town().equals(town)).count();
+    }
+
+    /**
+     * How many chunks every town holds, in one pass.
+     *
+     * <p>The listing counterpart to {@link #countForTownScanning(TownId)}. Calling that once per
+     * town would walk the whole index once per town — quadratic in exactly the case that makes a
+     * listing worth having, which is a server with a lot of both. One pass answers for all of
+     * them.</p>
+     *
+     * <p>Towns with no land are absent rather than zero. A caller rendering a listing wants a
+     * default anyway, and inventing rows here for towns this index has never heard of would put
+     * them in the caller's way.</p>
+     */
+    public Map<TownId, Integer> countsByTown() {
+        final Map<TownId, Integer> counts = new java.util.HashMap<>();
+        for (final Claim claim : claims.values()) {
+            counts.merge(claim.town(), 1, Integer::sum);
+        }
+        return Map.copyOf(counts);
+    }
+
+    /**
+     * Every claim, for a listing or a map.
+     *
+     * <p>A copy, so a caller can sort it without racing the writers. Never called from a listener:
+     * the hot path is {@link #at(ChunkKey)} and nothing else.</p>
+     */
+    public Collection<Claim> all() {
+        return List.copyOf(claims.values());
     }
 
     /**

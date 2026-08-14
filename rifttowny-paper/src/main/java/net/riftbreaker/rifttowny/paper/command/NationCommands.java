@@ -1,5 +1,8 @@
 package net.riftbreaker.rifttowny.paper.command;
 
+import net.riftbreaker.rifttowny.domain.directory.CivicDirectory;
+import net.riftbreaker.rifttowny.domain.directory.NationSummary;
+import net.riftbreaker.rifttowny.domain.directory.Page;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
 import net.riftbreaker.rifttowny.domain.org.Invitation;
 import net.riftbreaker.rifttowny.domain.org.Nation;
@@ -48,6 +51,8 @@ public final class NationCommands {
     private final ResidentRepository residents;
     private final TownRepository towns;
     private final NationRepository nationRepository;
+    private final CivicDirectory directory;
+    private final Listings listings;
     private final MessageService messages;
     private final DenialText denials;
 
@@ -58,6 +63,7 @@ public final class NationCommands {
             final ResidentRepository residents,
             final TownRepository towns,
             final NationRepository nationRepository,
+            final CivicDirectory directory,
             final MessageService messages,
             final DenialText denials
     ) {
@@ -67,8 +73,10 @@ public final class NationCommands {
         this.residents = Objects.requireNonNull(residents, "residents");
         this.towns = Objects.requireNonNull(towns, "towns");
         this.nationRepository = Objects.requireNonNull(nationRepository, "nationRepository");
+        this.directory = Objects.requireNonNull(directory, "directory");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.denials = Objects.requireNonNull(denials, "denials");
+        this.listings = new Listings(messages);
     }
 
     /** Builds the tree. Called once at enable. */
@@ -82,9 +90,17 @@ public final class NationCommands {
                         .runs(this::found, Surface.CHAT))
                 .child(CommandNode.action("info")
                         .permission("rifttowny.nation.info")
-                        .usage("nation info")
-                        .describedAs("Show your nation")
+                        .usage("nation info [nation]")
+                        .describedAs("Show a nation, or your own")
                         .runs(this::info, Surface.CHAT))
+                .child(CommandNode.action("list")
+                        .permission("rifttowny.nation.info")
+                        .usage("nation list [page] [name|residents|land|age]")
+                        .describedAs("List every nation")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of("1", "name", "residents", "land", "age")
+                                : List.of("name", "residents", "land", "age"))
+                        .runs(this::list, Surface.CHAT))
                 .child(CommandNode.action("invite")
                         .permission("rifttowny.nation.invite")
                         .usage("nation invite <town>")
@@ -205,14 +221,81 @@ public final class NationCommands {
     }
 
     private void info(final CommandActor actor, final List<String> args) {
-        withNation(actor, (who, nation) -> {
-            messages.send(actor::send, MessageKey.NATION_INFO_HEADER,
-                    MessageService.value("nation", nation.name().display()));
-            line(actor, "Leader", names.describe(nation.leader()));
-            line(actor, "Towns", String.valueOf(nation.townCount()));
-            then(actor, towns.find(nation.capital()), capital -> line(actor, "Capital",
-                    capital.map(found -> found.name().display()).orElse("unknown")));
-        });
+        if (!args.isEmpty()) {
+            then(actor, nationRepository.findByName(args.getFirst()), found -> found.ifPresentOrElse(
+                    nation -> show(actor, nation),
+                    () -> denied(actor, ChangeDenial.NATION_NOT_FOUND)));
+            return;
+        }
+        withNation(actor, (who, nation) -> show(actor, nation));
+    }
+
+    /**
+     * One nation.
+     *
+     * <p>Its people and land are summed through its member towns from the caches, because the nation
+     * itself owns neither — a stored total would be a second copy of a number that changes every
+     * time anybody in it claims a chunk.</p>
+     */
+    private void show(final CommandActor actor, final Nation nation) {
+        messages.send(actor::send, MessageKey.NATION_INFO_HEADER,
+                MessageService.value("nation", nation.name().display()));
+        line(actor, "Leader", names.describe(nation.leader()));
+        line(actor, "Founded", net.riftbreaker.rifttowny.paper.message.Times.date(nation.createdAt()));
+        line(actor, "Towns", String.valueOf(nation.townCount()));
+
+        final List<NationSummary> summarised = directory.nations(List.of(nation));
+        if (!summarised.isEmpty()) {
+            final NationSummary summary = summarised.getFirst();
+            line(actor, "Residents", String.valueOf(summary.residents()));
+            line(actor, "Land", summary.chunks() + " chunk(s)");
+        }
+        line(actor, "Capital", directory.facts(nation.capital())
+                .map(facts -> facts.displayName())
+                .orElse("unknown"));
+        line(actor, "Members", memberNames(nation));
+    }
+
+    /** Every member town, named from the cache. */
+    private String memberNames(final Nation nation) {
+        final List<String> named = new java.util.ArrayList<>();
+        nation.towns().forEach(town ->
+                named.add(directory.facts(town).map(facts -> facts.displayName()).orElse("a town")));
+        return named.isEmpty() ? "none" : String.join(", ", named);
+    }
+
+    /**
+     * Every nation on the server.
+     *
+     * <p>One read for the whole listing rather than one per row. Nations are not cached — nothing on
+     * a movement path asks about one — so this is the query that pays for the whole screen.</p>
+     */
+    private void list(final CommandActor actor, final List<String> args) {
+        listings.parse(actor, args).ifPresent(request -> then(actor, nationRepository.all(), all -> {
+            final Page<NationSummary> page =
+                    directory.nations(all, request.sort(), request.page(), Listings.PAGE_SIZE);
+            if (page.isEmpty()) {
+                messages.send(actor::send, MessageKey.NATION_LIST_EMPTY);
+                return;
+            }
+            messages.sendRaw(actor::send, MessageKey.NATION_LIST_HEADER,
+                    MessageService.value("count", page.total()),
+                    MessageService.value("page", page.number()),
+                    MessageService.value("pages", page.pages()),
+                    MessageService.value("sort", request.sortName()));
+
+            int index = page.firstIndex();
+            for (final NationSummary summary : page.items()) {
+                messages.sendRaw(actor::send, MessageKey.NATION_LIST_LINE,
+                        MessageService.value("index", index++),
+                        MessageService.value("nation", summary.name()),
+                        MessageService.value("towns", summary.towns()),
+                        MessageService.value("residents", summary.residents()),
+                        MessageService.value("chunks", summary.chunks()));
+            }
+            listings.more(actor, page,
+                    "/nation list " + (page.number() + 1) + ' ' + request.sortName());
+        }));
     }
 
     private void invite(final CommandActor actor, final List<String> args) {

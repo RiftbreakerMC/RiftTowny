@@ -40,7 +40,11 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|bank|deposit|withdraw|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|spawn|setspawn|reclaim|delete|role|flag>
+    usage: /town <new|info|list|online|map|bank|deposit|withdraw|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|spawn|setspawn|reclaim|delete|role|flag>
+  resident:
+    aliases: [res]
+    description: Look at a player's town record.
+    usage: /resident [player]
   plot:
     aliases: [p]
     description: Take and manage the plot you are standing on.
@@ -48,7 +52,7 @@ commands:
   nation:
     aliases: [n]
     description: Found and manage a nation.
-    usage: /nation <new|info|invite|withdraw|invites|join|leave|expel|capital|king|rename|delete>
+    usage: /nation <new|info|list|invite|withdraw|invites|join|leave|expel|capital|king|rename|delete>
 
 permissions:
   rifttowny.admin:
@@ -98,7 +102,13 @@ permissions:
     description: Found a town.
     default: true
   rifttowny.town.info:
-    description: View a town.
+    description: View a town, list every town, see who is online in one, and draw the map.
+    default: true
+
+  # Looking at somebody's town record. Separate from rifttowny.town.info because it is about a
+  # person rather than a place, and a server that wants to hide one may not want to hide the other.
+  rifttowny.resident.info:
+    description: View a player's town record.
     default: true
   rifttowny.town.add:
     description: Invite a player to your town, and withdraw the invitation.

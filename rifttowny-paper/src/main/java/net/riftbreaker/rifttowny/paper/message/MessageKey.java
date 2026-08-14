@@ -337,6 +337,105 @@ public enum MessageKey {
             "<red>Unknown relationship <white><input></white>. "
                     + "One of: <white><options></white></red>"),
 
+    // --- listings ------------------------------------------------------------------------------
+    // Every listing that can run to more than one screen shares this footer. It names the command to
+    // type rather than only being clickable: a click event is invisible to anybody reading on
+    // Bedrock through Geyser, and a page two nobody can reach is the same as no page two.
+
+    LISTING_MORE("listing.more",
+            "<gray>More: <white><command></white></gray>"),
+
+    LISTING_UNKNOWN_SORT("listing.unknown-sort",
+            "<red>Unknown order <white><input></white>. One of: <white><options></white></red>"),
+
+    TOWN_LIST_HEADER("town.list-header",
+            "<dark_gray>---</dark_gray> <white>Towns</white> <gray>(<count>)</gray> "
+                    + "<dark_gray>-</dark_gray> <gray>page <page> of <pages>, by <sort></gray>"),
+
+    TOWN_LIST_LINE("town.list-line",
+            "  <dark_gray><index>.</dark_gray> <aqua><town></aqua> <dark_gray>-</dark_gray> "
+                    + "<gray><residents> resident(s), <chunks> chunk(s)</gray><nation>"),
+
+    /** Appended to a listing line, and empty for a town in no nation rather than saying "none". */
+    TOWN_LIST_NATION("town.list-nation",
+            " <dark_gray>|</dark_gray> <gray><nation></gray>"),
+
+    TOWN_LIST_EMPTY("town.list-empty",
+            "<gray>No towns have been founded yet.</gray>"),
+
+    TOWN_RESIDENTS_HEADER("town.residents-header",
+            "<gray>Residents of <white><town></white> <dark_gray>(<count>)</dark_gray></gray>"),
+
+    TOWN_RESIDENTS_LINE("town.residents-line",
+            "  <gray><residents></gray>"),
+
+    TOWN_ONLINE_HEADER("town.online-header",
+            "<gray>Online in <white><town></white>: <white><count></white> of "
+                    + "<white><residents></white></gray>"),
+
+    TOWN_ONLINE_LINE("town.online-line",
+            "  <green><resident></green><roles>"),
+
+    /** Appended to an online line when the town has given them roles. */
+    TOWN_ONLINE_ROLES("town.online-roles",
+            " <dark_gray>-</dark_gray> <gray><roles></gray>"),
+
+    TOWN_ONLINE_NONE("town.online-none",
+            "<gray>Nobody from <white><town></white> is online.</gray>"),
+
+    NATION_LIST_HEADER("nation.list-header",
+            "<dark_gray>---</dark_gray> <white>Nations</white> <gray>(<count>)</gray> "
+                    + "<dark_gray>-</dark_gray> <gray>page <page> of <pages>, by <sort></gray>"),
+
+    NATION_LIST_LINE("nation.list-line",
+            "  <dark_gray><index>.</dark_gray> <aqua><nation></aqua> <dark_gray>-</dark_gray> "
+                    + "<gray><towns> town(s), <residents> resident(s), <chunks> chunk(s)</gray>"),
+
+    NATION_LIST_EMPTY("nation.list-empty",
+            "<gray>No nations have been founded yet.</gray>"),
+
+    // --- one player ----------------------------------------------------------------------------
+
+    RESIDENT_HEADER("resident.header",
+            "<dark_gray>---</dark_gray> <white><resident></white> <dark_gray>---</dark_gray>"),
+
+    RESIDENT_LINE("resident.line",
+            "  <gray><label></gray> <white><value></white>"),
+
+    RESIDENT_UNKNOWN("resident.unknown",
+            "<red>RiftTowny has never seen a player called <white><name></white>.</red>"),
+
+    /** What {@code Last seen} says for somebody who is here now. */
+    RESIDENT_ONLINE_NOW("resident.online-now",
+            "online now"),
+
+    RESIDENT_TOWNLESS("resident.townless",
+            "no town"),
+
+    // --- the map -------------------------------------------------------------------------------
+
+    MAP_HEADER("map.header",
+            "<dark_gray>---</dark_gray> <white><world></white> <gray><x>, <z></gray> "
+                    + "<dark_gray>-</dark_gray> <gray>north is up</gray>"),
+
+    /**
+     * The legend.
+     *
+     * <p>Long, and shown every time on purpose: a map whose symbols have to be remembered is a map
+     * that gets read wrongly, and being told which square is you is the whole point of the screen.</p>
+     */
+    MAP_LEGEND("map.legend",
+            "<gray><gold>gold</gold> you <dark_gray>|</dark_gray> <green>your town</green> "
+                    + "<dark_gray>|</dark_gray> <aqua>your nation</aqua> <dark_gray>|</dark_gray> "
+                    + "<red>elsewhere</red> <dark_gray>|</dark_gray> <dark_red>ruins</dark_red> "
+                    + "<dark_gray>|</dark_gray> <dark_gray>wilderness</dark_gray></gray>"),
+
+    MAP_LEGEND_SHAPES("map.legend-shapes",
+            "<gray><white>{}</white> home <dark_gray>|</dark_gray> <white>()</white> outpost "
+                    + "<dark_gray>|</dark_gray> <white>##</white> your plot "
+                    + "<dark_gray>|</dark_gray> <white>[]</white> claimed "
+                    + "<dark_gray>|</dark_gray> <white>--</white> wilderness</gray>"),
+
     STATUS_HEADER("status.header",
             "<gray>RiftTowny <white><version></white></gray>"),
 

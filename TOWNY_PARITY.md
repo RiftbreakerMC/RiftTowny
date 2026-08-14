@@ -39,21 +39,21 @@ rows as the truth.
 |---|---|---|
 | Player is registered on first join | Registered on first action, not on login | **DIFFERENT** — a row per login fills the table with people who never join anything. Names are still cached on join |
 | `last_known_name` follows renames | `ResidentPresenceListener` updates it on join | DONE |
-| `/resident` — view your own record | — | **MISSING** |
-| `/resident <name>` — view another | — | **MISSING** |
-| `/resident list` | — | **MISSING** |
+| `/resident` — view your own record | `/resident`, `/res` | DONE |
+| `/resident <name>` — view another | `/resident <name>` | DONE |
+| `/resident list` | — | **MISSING** — a list of every account is a different screen from a list of towns, and rarely the one somebody wants |
 | `/resident set mode …` — chat modes, map modes, spy | — | **MISSING** |
 | `/resident friend add|remove` | — | **MISSING** — the town trust list exists, personal friends do not |
 | `/resident toggle` — bordertitles, plotborder, etc. | — | **MISSING** |
 | `/resident jail …` | — | **MISSING** — `RT-MOD-JUSTICE` |
-| Resident tax charged per day | — | **MISSING** — `RT-MOD-TAX` |
+| Resident tax charged per day | `taxes.resident`, on the configured interval | DONE |
 
 ## 2. Towns
 
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
 | `/town new <name>` | `/town new` | DONE |
-| `/town` / `/town <name>` — info screen | `/town info` | PARTIAL — no residents list, no bank balance, no board, no per-flag summary |
+| `/town` / `/town <name>` — info screen | `/town info [town]` | PARTIAL — mayor, founding date, treasury, land, nation, trusted and the resident list are all there; no board and no per-flag summary |
 | `/town add <player>` sends an invite; `/accept` | `/town add`, `/town accept`, `/town deny`, `/town invites` | DONE — answered with `/town accept` rather than a global `/accept` |
 | `/town kick <player>` | `/town kick` | DONE |
 | `/town leave` | `/town leave` | DONE |
@@ -78,8 +78,8 @@ rows as the truth.
 | Resident tax, and eviction of residents who cannot pay | Resident tax charged; **no eviction** | **DIFFERENT** — eviction is a punishment applied by a timer to somebody who may simply have been away. A town that wants somebody gone has `/town kick` and a person to decide it |
 | `/town outlaw add|remove` | — | **MISSING** |
 | `/town merge` | — | **MISSING** |
-| `/town online` | — | **MISSING** |
-| `/town list` with sorting | — | **MISSING** |
+| `/town online` | `/town online [town]` | DONE — with each person's roles beside them |
+| `/town list` with sorting | `/town list [page] [name\|residents\|land\|age]` | DONE — page and order in either order, since players type both |
 | `/town trust add|remove` | Trust exists in the domain and has no command | PARTIAL |
 | `/town purge` | — | **MISSING** |
 
@@ -88,7 +88,7 @@ rows as the truth.
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
 | `/nation new <name>` | `/nation new` | DONE |
-| `/nation` — info screen | `/nation info` | PARTIAL — no town list, no bank balance |
+| `/nation` — info screen | `/nation info [nation]` | PARTIAL — leader, founding date, towns, residents, land, capital and the member list; no bank balance until the nation account can be spent |
 | `/nation add <town>` invites; town accepts | `/nation invite`, `/nation join`, `/nation withdraw`, `/nation invites` | DONE |
 | `/nation kick <town>` | `/nation expel` | DONE |
 | `/nation leave` (town side) | `/nation leave` | DONE |
@@ -101,7 +101,8 @@ rows as the truth.
 | Nation tax collected from member towns | `taxes.nation-per-town` | DONE |
 | `/nation deposit`, `/nation withdraw` | — | **MISSING** — the nation account exists and is credited; nothing can spend it |
 | `/nation set spawn`, `/nation spawn` | — | **MISSING** |
-| `/nation online`, `/nation list` | — | **MISSING** |
+| `/nation list` | `/nation list [page] [order]` | DONE |
+| `/nation online` | — | **MISSING** |
 | `/nation set board`, `/nation set tag` | — | **MISSING** |
 
 ## 4. Plots
@@ -129,7 +130,7 @@ rows as the truth.
 | Wilderness is unprotected by default | Same | DONE |
 | Explosions, fire, mob spawning, piston protection in towns | Same, plus fluid flow across borders | DONE |
 | Border title on entering a town | Action-bar notice on entering a town, wilderness, ruin or plot | DONE |
-| `/towny map` | — | **MISSING** |
+| `/towny map` | `/town map [small\|big]` | DONE — colour says whose (yours, your nation's, elsewhere, ruins, nobody's), shape says what (home, outpost, your plot, claimed). Hover names the town, click opens it, and the text is complete without either, so it reads the same through Geyser |
 | Outposts | `/town claim outpost` | DONE |
 | Claim contiguity | Breadth-first sweep from anchors | DONE |
 | Ruined towns: unprotected, reclaimable, then deleted | Same | DONE |
@@ -174,11 +175,17 @@ Counted by row: roughly **half** of Towny's observable surface is DONE, a quarte
 MISSING. The missing quarter is not evenly spread — it is concentrated in four blocks, and three of
 them are one dependency:
 
-1. **Economy** (`RT-MOD-BANK`) blocks taxes, upkeep, plot sales, claim costs, spawn costs and the
-   reclaim price. It is the single highest-value thing left.
-2. **`/resident`, `/town list`, `/nation list`, `/towny map`** — the read-only surface. Cheap, and
-   the most visible absence for a player who knows Towny.
-3. **Placeholders and chat** — what makes a server's existing scoreboards and channels keep working.
-4. **Migration** — no server can switch to RiftTowny without importing its Towny database.
+1. **Placeholders and chat** (`RT-MOD-PAPI`, `RT-MOD-CHAT`) — what makes a server's existing
+   scoreboards and channels keep working, and the reason a server that switched would look broken to
+   its own players on day one.
+2. **Migration** (`RT-MOD-MIGRATE`) — no server can switch to RiftTowny without importing its Towny
+   database.
+3. **Justice and diplomacy** (`RT-MOD-JUSTICE`, `RT-MOD-DIPLOMACY`) — jails, outlaws, allies and
+   enemies. The largest remaining block by row count, and the one with no dependency left in its way.
+4. **The GUI** (`RT-CORE-UI`) — nothing declares `Surface.GUI` yet, which is what the parity test
+   wants to see while there is no menu, and will stop being true the moment there is one.
+
+Economy and the read-only surface have both come off this list: they were the two highest-value
+things left, and both are built.
 
 A server could not replace Towny with RiftTowny today. It could run a new world on it.
