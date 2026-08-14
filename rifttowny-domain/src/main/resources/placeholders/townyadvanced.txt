@@ -1,0 +1,178 @@
+# The %townyadvanced_*% manifest, baseline towny-papi/2026-08-09.
+#
+# Captured from the official Towny placeholder reference and recorded in COMPATIBILITY_MATRIX.md
+# section 3. This file is the machine-readable copy, and it exists so "complete" can be measured
+# against a real list rather than a vague goal.
+#
+# A test asserts that TownyPlaceholders returns a string - never null - for every name here.
+# That is not a formality. Returning null makes PlaceholderAPI leave the literal
+# %townyadvanced_whatever% on a player's screen, so an unimplemented placeholder would reach them
+# as raw markup rather than as a blank. Blank is a fine answer; markup is a bug report.
+#
+# Names ending in <n> are parameterised and are tested with several values.
+#
+# When Towny adds placeholders, the baseline is re-captured, the diff reviewed, and new entries
+# added as a new manifest version rather than appended silently.
+
+# --- 3.1 Town and nation prefixes and tags (23) ---
+town
+town_formatted
+town_formatted_with_town_minimessage_colour
+town_unformatted
+town_tag
+town_tag_override
+town_tag_unformatted
+town_tag_override_unformatted
+nation_or_town_name
+nation
+nation_formatted
+nation_formatted_with_nation_minimessage_colour
+nation_unformatted
+nation_tag
+nation_tag_override
+nation_tag_town_formatted
+nation_tag_town_name
+nation_tag_unformatted
+nation_tag_override_unformatted
+towny_tag
+towny_tag_override
+towny_tag_override_with_minimessage_colour
+towny_tag_formatted
+
+# --- 3.2 Resident (18) ---
+title
+surname
+towny_name_prefix
+towny_name_postfix
+towny_prefix
+towny_postfix
+town_ranks
+nation_ranks
+resident_primary_rank
+resident_primary_rank_spaced
+player_status
+towny_colour
+resident_join_date_unformatted
+resident_join_date_formatted
+resident_friends_amount
+has_town
+has_nation
+player_jailed
+
+# --- 3.3 Town (19) ---
+town_residents_amount
+town_residents_online
+town_townblocks_used
+town_townblocks_bought
+town_townblocks_bonus
+town_townblocks_maximum
+town_townblocks_natural_maximum
+town_outposts_claimed
+town_mayor
+town_prefix
+town_postfix
+is_town_peaceful
+is_town_public
+is_town_open
+town_map_color_hex
+town_map_color_minimessage_hex
+town_board
+town_reclaim_max_duration_hours
+town_reclaim_min_duration_hours
+
+# --- 3.4 Nation (10) ---
+nation_residents_amount
+nation_residents_online
+nation_king
+nation_capital
+nation_prefix
+nation_postfix
+nation_map_color_hex
+nation_map_color_minimessage_hex
+is_nation_peaceful
+nation_board
+
+# --- 3.5 New-day timers (7) ---
+time_until_new_day_hours_raw
+time_until_new_day_minutes_raw
+time_until_new_day_seconds_raw
+time_until_new_day_formatted
+time_until_new_day_hours_formatted
+time_until_new_day_minutes_formatted
+time_until_new_day_seconds_formatted
+
+# --- 3.6 Money (28) ---
+town_balance
+nation_balance
+town_balance_unformatted
+nation_balance_unformatted
+daily_town_upkeep
+daily_town_upkeep_unformatted
+daily_nation_upkeep
+daily_nation_upkeep_unformatted
+daily_town_tax
+daily_nation_tax
+daily_town_per_plot_upkeep
+daily_town_overclaimed_per_plot_upkeep_penalty
+daily_town_upkeep_reduction_from_town_level
+daily_town_upkeep_reduction_from_nation_level
+daily_nation_per_town_upkeep
+daily_nation_upkeep_reduction_from_nation_level
+town_creation_cost
+nation_creation_cost
+townblock_buy_bonus_price
+townblock_claim_price
+townblock_unclaim_price
+outpost_claim_price
+townblock_next_claim_price
+town_merge_cost
+town_merge_per_plot_percentage
+town_reclaim_cost
+daily_resident_tax
+daily_resident_tax_unformatted
+
+# --- 3.7 Leaderboard (4, parameterised) ---
+top_town_balance_<n>
+top_town_residents_<n>
+top_town_land_<n>
+top_town_residents_and_open_<n>
+
+# --- 3.8 Location (33) ---
+player_plot_type
+player_plot_owner
+player_location_town_or_wildname
+player_location_formattedtown_or_wildname
+player_location_town_prefix
+player_location_town_postfix
+player_location_pvp
+player_location_plot_name
+player_location_plot_owner_name
+player_location_town_resident_count
+player_location_town_mayor_name
+player_location_town_nation_name
+player_location_town_board
+player_location_nation_board
+player_location_plotgroup_name
+player_location_plot_forsale
+player_location_town_forsale_cost
+player_location_in_homeblock
+player_location_in_homeblock_owntown
+player_location_in_homeblock_ownnation
+player_location_in_homeblock_enemy
+player_location_in_homeblock_ally
+player_location_district_name
+player_location_town_map_color_hex
+player_location_town_map_color_minimessage_hex
+player_location_nation_map_color_hex
+player_location_nation_map_color_minimessage_hex
+player_town_is_trusted
+player_plot_is_trusted
+number_of_towns_in_server
+number_of_neutral_towns_in_server
+number_of_towns_in_world
+number_of_neutral_towns_in_world
+
+# --- 3.9 Relational (1) ---
+# Served through a second expansion implementing me.clip.placeholderapi.expansion.Relational,
+# as %rel_townyadvanced_color%. Listed here so the coverage test reaches it too.
+rel_color

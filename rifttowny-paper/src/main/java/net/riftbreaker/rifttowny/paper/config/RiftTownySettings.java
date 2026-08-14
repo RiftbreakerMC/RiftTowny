@@ -29,8 +29,28 @@ public record RiftTownySettings(
         boolean territoryNotices,
         boolean territoryNoticesOnActionBar,
         net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
-        net.riftbreaker.rifttowny.domain.bank.TaxPolicy taxes
+        net.riftbreaker.rifttowny.domain.bank.TaxPolicy taxes,
+        TruthWords truthWords
 ) {
+
+    /**
+     * The words a boolean placeholder renders as.
+     *
+     * <p>Configurable because they are configurable in Towny, and a server that customised them
+     * there has scoreboards written against the customised words. Blank entries fall back rather
+     * than producing a boolean that renders as nothing.</p>
+     */
+    public record TruthWords(String yes, String no) {
+
+        public TruthWords {
+            yes = yes == null || yes.isBlank() ? "true" : yes;
+            no = no == null || no.isBlank() ? "false" : no;
+        }
+
+        public static TruthWords defaults() {
+            return new TruthWords("true", "false");
+        }
+    }
 
     public RiftTownySettings {
         Objects.requireNonNull(storage, "storage");
@@ -127,7 +147,10 @@ public record RiftTownySettings(
                         price(config, "taxes.upkeep-per-chunk"),
                         price(config, "taxes.nation-per-town"),
                         java.time.Duration.ofHours(
-                                Math.max(0L, config.getLong("taxes.grace-hours", 72L)))));
+                                Math.max(0L, config.getLong("taxes.grace-hours", 72L)))),
+                new TruthWords(
+                        config.getString("placeholders.true", "true"),
+                        config.getString("placeholders.false", "false")));
     }
 
     /**

@@ -42,6 +42,7 @@ public final class TerritoryNoticeListener implements Listener {
     private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final Clock clock;
     private final boolean actionBar;
+    private final net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions;
     private final Map<UUID, TerritoryNotice.Territory> lastSeen = new ConcurrentHashMap<>();
 
     /**
@@ -56,11 +57,32 @@ public final class TerritoryNoticeListener implements Listener {
             final Clock clock,
             final boolean actionBar
     ) {
+        this(notice, messages, names, clock, actionBar,
+                net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty());
+    }
+
+    /**
+     * The same, recording where each player stands for the placeholder surface.
+     *
+     * <p>Recorded here rather than in a listener of its own because this one already runs on every
+     * chunk crossing and already has the chunk in hand. A second {@code PlayerMoveEvent} handler
+     * doing the same two integer comparisons would double the cost of the hottest event on the
+     * server to learn something this one already knows.</p>
+     */
+    public TerritoryNoticeListener(
+            final TerritoryNotice notice,
+            final MessageService messages,
+            final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
+            final Clock clock,
+            final boolean actionBar,
+            final net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions
+    ) {
         this.notice = Objects.requireNonNull(notice, "notice");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.names = Objects.requireNonNull(names, "names");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.actionBar = actionBar;
+        this.positions = Objects.requireNonNull(positions, "positions");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -92,6 +114,9 @@ public final class TerritoryNoticeListener implements Listener {
     @EventHandler
     public void onQuit(final PlayerQuitEvent event) {
         lastSeen.remove(event.getPlayer().getUniqueId());
+        // A player who has logged out is not standing anywhere. Leaving the entry would let a
+        // scoreboard show where they were last week as though they were still there.
+        positions.forget(event.getPlayer().getUniqueId());
     }
 
     /** How many players are being tracked, for diagnostics. */
@@ -104,6 +129,9 @@ public final class TerritoryNoticeListener implements Listener {
             return;
         }
         final ChunkKey chunk = Chunks.of(where);
+        // Recorded before the "worth announcing" test, not after: a player crossing between two
+        // chunks of the same town gets no notice, and their position still moved.
+        positions.record(player.getUniqueId(), chunk);
         final TerritoryNotice.Territory now = notice.at(chunk, clock.instant());
         final TerritoryNotice.Territory before = lastSeen.put(player.getUniqueId(), now);
         if (!TerritoryNotice.worthAnnouncing(before, now)) {

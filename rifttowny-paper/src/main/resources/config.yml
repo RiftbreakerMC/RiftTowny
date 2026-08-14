@@ -90,6 +90,21 @@ taxes:
   # 0 makes the first missed payment fatal, which is a defensible setting and a brutal one.
   grace-hours: 72
 
+# The %townyadvanced_*% placeholder surface, served so a server's existing scoreboards keep working
+# unchanged. Requires PlaceholderAPI; without it these settings do nothing and nothing else breaks.
+#
+# Every placeholder resolves from memory and never from storage, so one on a scoreboard that ticks
+# every second costs a map lookup rather than a query.
+placeholders:
+  # What a yes/no placeholder renders as - %townyadvanced_has_town%, %townyadvanced_is_town_open%
+  # and the rest.
+  #
+  # Configurable because Towny made it configurable, which means a server migrating from it may have
+  # scoreboards, Discord embeds and web panels written against words other than these two. Changing
+  # them here is cheaper than changing them everywhere else.
+  'true': 'true'
+  'false': 'false'
+
 notices:
   # Tell a player whose land they have walked onto, as they cross the border.
   #

@@ -78,6 +78,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.paper.message.DenialText denialText;
     private net.riftbreaker.rifttowny.domain.directory.CivicDirectory directory;
     private net.riftbreaker.rifttowny.domain.directory.TerritoryMap territoryMap;
+    private net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions;
+    private net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders placeholders;
     private java.time.Clock clock;
 
     /**
@@ -171,6 +173,14 @@ public final class RiftTownyPlugin extends JavaPlugin {
         // working when it is not.
         capabilities.register(
                 economyAdapter,
+                pluginName -> getServer().getPluginManager().getPlugin(pluginName) != null);
+        // The %townyadvanced_*% surface, through the same guard. An absent PlaceholderAPI, or one
+        // whose PlaceholderExpansion has moved between versions, costs the server its placeholders
+        // and nothing else - the LinkageError a moved superclass throws at class-load time is
+        // exactly what the registry is there to catch.
+        capabilities.register(
+                new net.riftbreaker.rifttowny.integrations.placeholder.PlaceholderAdapter(
+                        placeholders, getPluginMeta().getVersion()),
                 pluginName -> getServer().getPluginManager().getPlugin(pluginName) != null);
         capabilities.markBlocked(Capability.AUDIT_BLOCK_HISTORY,
                 "RiftLogger supports block history; RiftTowny's adapter is not written yet. "
@@ -341,6 +351,17 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicCache, territoryIndex, nationCache);
             this.territoryMap = new net.riftbreaker.rifttowny.domain.directory.TerritoryMap(
                     territoryIndex, ruinIndex, civicCache);
+            this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();
+            // Built here rather than beside the expansion so it exists whether PlaceholderAPI is
+            // installed or not: RiftChat, the web panel and anything else that wants these answers
+            // reach the same resolver, and only the PlaceholderAPI wrapper is optional.
+            this.placeholders = new net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders(
+                    directory, civicCache, nationCache, territoryIndex, ruinIndex, positions,
+                    residentNames, settings.prices(), settings.taxes(),
+                    who -> getServer().getPlayer(who.value()) != null,
+                    new net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders.Truth(
+                            settings.truthWords().yes(), settings.truthWords().no()),
+                    clock);
 
             // Both loaded before enable returns, and waited on. A protection listener answers from
             // these and cannot wait for a database, so a partially loaded index would read as
@@ -436,7 +457,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                             messages,
                             residentNames,
                             java.time.Clock.systemUTC(),
-                            settings.territoryNoticesOnActionBar()),
+                            settings.territoryNoticesOnActionBar(),
+                            positions),
                     this);
         }
     }
