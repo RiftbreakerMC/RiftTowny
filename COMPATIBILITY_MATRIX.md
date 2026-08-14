@@ -292,12 +292,72 @@ claim is made for an alias without a passing test.
 | RiftSeasons | RiftTowny | ✅ required dependency |
 | RiftInfrastructure / RiftCivics | RiftTowny | ✅ required dependency |
 
+## 5. Migration — `RT-MOD-MIGRATE`
+
+Status: **the destination half is built and tested; no source reader exists yet.**
+
+### 5.1 The constraint that decides the design
+
+RiftTowny calls `disablePlugin` on itself when Towny is present — the command tree and the
+`%townyadvanced_*%` namespace both collide, and that refusal is enforced in `onEnable`, not merely
+documented. **So the two plugins are never running at the same time, and no importer can read Towny
+through its API: there is no live Towny to ask.**
+
+Every source is therefore *offline*. It reads what the other plugin left behind — its flatfiles or
+its own SQL database — while it is not running. This rules out the design most migration tools use
+and is worth stating plainly, because it is not obvious until you try it.
+
+### 5.2 What is built
+
+| Piece | State |
+|---|---|
+| `MigrationPlan` — a flat, source-agnostic description of another plugin's world | ✅ |
+| `MigrationSource` — the one-method interface a reader implements | ✅ |
+| `CivicImporter` — validation, ordering, collision handling, dry run, per-town commit | ✅ 18 tests |
+| `MigrationReport` — what it did, or would do, and everything it refused | ✅ |
+| A reader for Towny's own data | ⬜ **not written** |
+
+The importer's four rules, each tested:
+
+- **It never overwrites.** A town whose name is already here is skipped and reported. An import is
+  run by somebody who does not know exactly what is in the file, against a server that may already
+  have towns on it, and the failure mode of guessing is somebody's town quietly becoming somebody
+  else's.
+- **It is idempotent.** Everything already present is skipped, so a second run imports what the
+  first missed and nothing else — which is what makes a partial failure survivable.
+- **It commits per town.** One transaction over a whole server would hold locks for its duration and
+  throw away every good town because one was bad.
+- **The order is forced by the aggregates, not chosen.** Residents, then towns, then nations, then
+  claims — because `Town.restore` refuses a mayor who is not a resident and `Nation.restore` refuses
+  a capital that is not one of its towns.
+
+Also refused, reported and tested: a town whose mayor is absent from the source, a name this
+server's `NamePolicy` rejects (reported rather than silently renamed — a town arriving under a name
+its members do not recognise is worse), a claim in a world this server does not have, and two towns
+claiming the same chunk.
+
+Townless residents are not imported. RiftTowny registers a resident on first action rather than on
+login, so a player record with no town carries nothing this server would not recreate by itself.
+
+### 5.3 What a source reader still needs
+
+Towny is available locally as `com.palmergames.bukkit.towny:towny` (`0.101.2.5`, `0.103.0.7`) and
+persists through `TownyFlatFileSource` or `TownySQLSource`, with `SQLSchema` describing its tables.
+So the format is *discoverable* rather than guessed — but it has not been read, and no reader has
+been written against it. **Nothing in this repository can currently read a Towny database**, and the
+importer above has only ever been run against fixtures.
+
+Writing that reader is a clean-room judgement call worth making deliberately rather than by
+accident: reading another plugin's persisted data to translate *out of* it is ordinary
+interoperability and leaves RiftTowny's own design untouched, but it does mean reading Towny's
+storage layer. That decision is not yet taken.
+
 ## 4. Deliberate non-goals
 
 | Not supported | Why |
 |---|---|
 | Coexisting with Towny | Namespace collision, stated up front |
-| Importing a Towny database | Not requested. Would require reading Towny's on-disk format. Revisit only if asked, and only through Towny's own export |
+| ~~Importing a Towny database~~ | **No longer a non-goal — requested 2026-08-13.** See §5 |
 | PostgreSQL | Out of scope per brief |
 | Registering `/rtp` | RiftEssentials owns it |
 | A second chat formatter | RiftChat owns formatting |
