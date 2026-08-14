@@ -60,6 +60,36 @@ prices:
   # Charged for /town spawn.
   spawn-travel: 0
 
+taxes:
+  # Off by default, and deliberately so: a tax run is the one piece of scheduled work in RiftTowny
+  # that can take somebody's town away, and it should never start happening because a server
+  # upgraded.
+  enabled: false
+
+  # How often a run is due. Also the size of the period it claims: several backend servers sharing
+  # one database all compute the same period, and exactly one of them runs it.
+  interval-hours: 24
+
+  # Charged to each resident's own wallet and paid to their town. Needs an economy plugin.
+  #
+  # A resident who cannot pay is NOT evicted. Towny evicts them; this does not, because eviction is
+  # a punishment applied by a timer to somebody who may simply have been on holiday, and a town that
+  # wants somebody gone has /town kick and a person to decide it.
+  resident: 0
+
+  # Charged to the town treasury for every chunk it holds, and it leaves the economy. This is the
+  # pressure that stops a town claiming land it has no use for.
+  upkeep-per-chunk: 0
+
+  # Charged to each member town's treasury and paid to its nation.
+  nation-per-town: 0
+
+  # How long a town may fail to pay before it falls into a ruin. A town that pays is cleared
+  # immediately, so missing one run and recovering costs nothing.
+  #
+  # 0 makes the first missed payment fatal, which is a defensible setting and a brutal one.
+  grace-hours: 72
+
 notices:
   # Tell a player whose land they have walked onto, as they cross the border.
   #

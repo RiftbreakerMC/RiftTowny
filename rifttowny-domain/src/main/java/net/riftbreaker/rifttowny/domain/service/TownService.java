@@ -466,10 +466,32 @@ public final class TownService {
             final ResidentId actor, final TownId townId) {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(townId, "townId");
+        return end(actor, townId);
+    }
 
+    /**
+     * Ends a town that is not choosing to end.
+     *
+     * <p>For a tax run that has exhausted a town's grace, and for anything else that decides a town
+     * has fallen. No actor and no permission check: nobody is doing this, it is happening to
+     * them.</p>
+     *
+     * <p>Otherwise identical to a disband — the same ruin, the same sweeps, the same caches — so a
+     * town that fell to bankruptcy leaves exactly what a town that was deleted leaves, and can be
+     * rebuilt by somebody who can afford its upkeep.</p>
+     */
+    public CompletableFuture<ServiceResult<TownId>> collapse(final TownId townId) {
+        Objects.requireNonNull(townId, "townId");
+        return end(null, townId);
+    }
+
+    private CompletableFuture<ServiceResult<TownId>> end(
+            final ResidentId actor, final TownId townId) {
         return transaction(transaction -> {
             final Town town = town(transaction, townId);
-            requirePermission(transaction, town, actor, Permission.DISBAND);
+            if (actor != null) {
+                requirePermission(transaction, town, actor, Permission.DISBAND);
+            }
 
             final List<ResidentId> departing = new java.util.ArrayList<>();
             for (final Resident resident : transaction.residents().findByTown(townId)) {

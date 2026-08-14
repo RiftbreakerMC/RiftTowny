@@ -69,6 +69,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.PlotService plotService;
     private net.riftbreaker.rifttowny.integrations.economy.RiftEcoAdapter economyAdapter;
     private net.riftbreaker.rifttowny.domain.service.BankService bankService;
+    private net.riftbreaker.rifttowny.domain.service.TaxService taxService;
     private net.riftbreaker.rifttowny.domain.civic.ResidentNames residentNames;
     private net.riftbreaker.rifttowny.domain.service.ResidentNameService residentNameService;
     private net.riftbreaker.rifttowny.paper.spawn.TeleportService teleportService;
@@ -211,7 +212,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 + ", topology: " + settings.describeTopology()
                 + ", " + settings.describeRuins()
                 + ", " + settings.describeSpawnTravel()
-                + ". Prices: " + settings.prices().describe() + '.');
+                + ". Prices: " + settings.prices().describe()
+                + ". " + settings.taxes().describe() + '.');
     }
 
     @Override
@@ -276,6 +278,15 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     new net.riftbreaker.rifttowny.integrations.economy.RiftEcoAdapter();
             this.bankService = new net.riftbreaker.rifttowny.domain.service.BankService(
                     civicStore, clock, economyAdapter);
+            // Given TownService::collapse rather than reaching into it: a tax run ending a town and
+            // a mayor ending one are the same act, so they go through the same path, and injecting
+            // it keeps the two services from depending on each other.
+            this.taxService = new net.riftbreaker.rifttowny.domain.service.TaxService(
+                    civicStore, clock, economyAdapter, settings.taxes(),
+                    settings.topology().serverId(),
+                    (town, reason) -> townService.collapse(town)
+                            .thenApply(net.riftbreaker.rifttowny.domain.service.ServiceResult
+                                    ::succeeded));
             this.residentNames = net.riftbreaker.rifttowny.domain.civic.ResidentNames.empty();
             this.residentNameService =
                     new net.riftbreaker.rifttowny.domain.service.ResidentNameService(
@@ -433,6 +444,26 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 }),
                 java.time.Duration.ofMinutes(5),
                 java.time.Duration.ofHours(1));
+
+        if (settings.taxes().collectsAnything()) {
+            // Checked far more often than a run is due. The period claim is what stops it running
+            // twice, so a frequent check simply finds the period already taken and does nothing —
+            // which is what makes a tax due at midnight still happen on a server that was restarted
+            // at 23:59.
+            scheduler.asyncRepeating(
+                    () -> taxService.runIfDue().whenComplete((run, failure) -> {
+                        if (failure != null) {
+                            getLogger().log(java.util.logging.Level.WARNING,
+                                    "Tax run failed", failure);
+                        } else {
+                            run.ifPresent(completed ->
+                                    getLogger().info("Tax run " + completed.periodKey() + ": "
+                                            + completed.describe()));
+                        }
+                    }),
+                    java.time.Duration.ofMinutes(2),
+                    java.time.Duration.ofMinutes(10));
+        }
 
         if (!settings.ruinsEnabled()) {
             return;

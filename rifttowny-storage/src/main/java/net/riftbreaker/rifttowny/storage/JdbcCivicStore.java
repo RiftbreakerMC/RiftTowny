@@ -87,6 +87,7 @@ public final class JdbcCivicStore implements CivicStore {
         private final ConnectionRuinStore ruins;
         private final ConnectionSpawnStore spawns;
         private final ConnectionBankStore bank;
+        private final ConnectionTaxStore taxes;
 
         private JdbcCivicTransaction(
                 final Connection connection, final RiftTownyDatabase database, final Clock clock) {
@@ -102,6 +103,7 @@ public final class JdbcCivicStore implements CivicStore {
             this.ruins = new ConnectionRuinStore(connection);
             this.spawns = new ConnectionSpawnStore(connection, database.backend());
             this.bank = new ConnectionBankStore(connection, database.backend());
+            this.taxes = new ConnectionTaxStore(connection);
         }
 
         @Override
@@ -152,6 +154,11 @@ public final class JdbcCivicStore implements CivicStore {
         @Override
         public BankStore bank() {
             return bank;
+        }
+
+        @Override
+        public TaxStore taxes() {
+            return taxes;
         }
 
         @Override

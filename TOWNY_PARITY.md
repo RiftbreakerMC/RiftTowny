@@ -74,7 +74,8 @@ rows as the truth.
 | `/town claim` cost, and a refund on unclaim | `prices.claim`, `prices.claim-refund`, charged in the same transaction as the claim | DONE |
 | `/town buy bonus` | — | **MISSING** |
 | `/town deposit`, `/town withdraw` | `/town deposit`, `/town withdraw`, `/town bank` | DONE — bound to RiftEco. Refuses with a clear message when no economy plugin is installed |
-| Town upkeep, bankruptcy, ruin on unpaid upkeep | Ruins exist; upkeep does not | PARTIAL |
+| Town upkeep, bankruptcy, ruin on unpaid upkeep | `taxes.upkeep-per-chunk`, a grace period, then a fall into a ruin | DONE |
+| Resident tax, and eviction of residents who cannot pay | Resident tax charged; **no eviction** | **DIFFERENT** — eviction is a punishment applied by a timer to somebody who may simply have been away. A town that wants somebody gone has `/town kick` and a person to decide it |
 | `/town outlaw add|remove` | — | **MISSING** |
 | `/town merge` | — | **MISSING** |
 | `/town online` | — | **MISSING** |
@@ -97,7 +98,8 @@ rows as the truth.
 | `/nation delete` | `/nation delete` | DONE |
 | `/nation rank add|remove` | `/nation role assign|unassign` | DONE |
 | `/nation ally add|remove`, enemies, neutrality | — | **MISSING** — `RT-MOD-DIPLOMACY` |
-| `/nation deposit`, `/nation withdraw`, nation tax | — | **MISSING** — `RT-MOD-BANK`, `RT-MOD-TAX` |
+| Nation tax collected from member towns | `taxes.nation-per-town` | DONE |
+| `/nation deposit`, `/nation withdraw` | — | **MISSING** — the nation account exists and is credited; nothing can spend it |
 | `/nation set spawn`, `/nation spawn` | — | **MISSING** |
 | `/nation online`, `/nation list` | — | **MISSING** |
 | `/nation set board`, `/nation set tag` | — | **MISSING** |
@@ -139,7 +141,7 @@ rows as the truth.
 
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
-| Economy: town/nation banks, taxes, upkeep, plot prices | Town bank, ledger, RiftEco wallet and all six prices | PARTIAL — no taxes, no upkeep, no nation bank, no plot resale |
+| Economy: town/nation banks, taxes, upkeep, plot prices | Town bank, ledger, RiftEco wallet, all six prices, and taxes with upkeep and bankruptcy | PARTIAL — no `/nation bank` command (the nation account is credited by tax and cannot yet be spent), no plot resale |
 | Chat channels: town, nation, ally | — | **MISSING** — `RT-MOD-CHAT` |
 | `%townyadvanced_*%` placeholders | Manifest captured, none implemented | **MISSING** — `RT-MOD-PAPI` |
 | Dynmap/BlueMap/squaremap territory rendering | — | **MISSING** — `RT-MOD-MAP` |

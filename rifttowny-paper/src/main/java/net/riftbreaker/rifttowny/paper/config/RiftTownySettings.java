@@ -28,7 +28,8 @@ public record RiftTownySettings(
         java.time.Duration spawnCooldown,
         boolean territoryNotices,
         boolean territoryNoticesOnActionBar,
-        net.riftbreaker.rifttowny.domain.bank.CivicPrices prices
+        net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
+        net.riftbreaker.rifttowny.domain.bank.TaxPolicy taxes
 ) {
 
     public RiftTownySettings {
@@ -40,6 +41,7 @@ public record RiftTownySettings(
         Objects.requireNonNull(spawnWarmup, "spawnWarmup");
         Objects.requireNonNull(spawnCooldown, "spawnCooldown");
         Objects.requireNonNull(prices, "prices");
+        Objects.requireNonNull(taxes, "taxes");
     }
 
     /** Whether a disbanded town leaves a ruin at all. */
@@ -116,7 +118,16 @@ public record RiftTownySettings(
                         price(config, "prices.claim-refund"),
                         price(config, "prices.plot"),
                         price(config, "prices.reclaim"),
-                        price(config, "prices.spawn-travel")));
+                        price(config, "prices.spawn-travel")),
+                new net.riftbreaker.rifttowny.domain.bank.TaxPolicy(
+                        config.getBoolean("taxes.enabled", false),
+                        java.time.Duration.ofHours(
+                                Math.max(1L, config.getLong("taxes.interval-hours", 24L))),
+                        price(config, "taxes.resident"),
+                        price(config, "taxes.upkeep-per-chunk"),
+                        price(config, "taxes.nation-per-town"),
+                        java.time.Duration.ofHours(
+                                Math.max(0L, config.getLong("taxes.grace-hours", 72L)))));
     }
 
     /**

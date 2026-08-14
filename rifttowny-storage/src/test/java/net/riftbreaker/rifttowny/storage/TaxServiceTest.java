@@ -1,0 +1,321 @@
+package net.riftbreaker.rifttowny.storage;
+
+import net.riftbreaker.rifttowny.api.ChunkKey;
+import net.riftbreaker.rifttowny.domain.bank.CivicPrices;
+import net.riftbreaker.rifttowny.domain.bank.LedgerEntry;
+import net.riftbreaker.rifttowny.domain.bank.Money;
+import net.riftbreaker.rifttowny.domain.bank.PlayerWallet;
+import net.riftbreaker.rifttowny.domain.bank.TaxPolicy;
+import net.riftbreaker.rifttowny.domain.civic.CivicCache;
+import net.riftbreaker.rifttowny.domain.flag.FlagOverrides;
+import net.riftbreaker.rifttowny.domain.naming.NamePolicy;
+import net.riftbreaker.rifttowny.domain.org.Resident;
+import net.riftbreaker.rifttowny.domain.org.ResidentId;
+import net.riftbreaker.rifttowny.domain.org.Town;
+import net.riftbreaker.rifttowny.domain.service.BankService;
+import net.riftbreaker.rifttowny.domain.service.CivicCacheService;
+import net.riftbreaker.rifttowny.domain.service.TaxService;
+import net.riftbreaker.rifttowny.domain.service.TerritoryService;
+import net.riftbreaker.rifttowny.domain.service.TownService;
+import net.riftbreaker.rifttowny.domain.territory.ClaimKind;
+import net.riftbreaker.rifttowny.domain.territory.RuinIndex;
+import net.riftbreaker.rifttowny.domain.territory.TerritoryIndex;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Tax runs, and the two properties that make them safe to schedule: a period runs once, and a town
+ * that cannot pay is given time rather than destroyed.
+ */
+class TaxServiceTest extends SqliteFixture {
+
+    private static final Instant NOW = Instant.parse("2026-08-13T09:00:00Z");
+    private static final String CURRENCY = "coins";
+    private static final UUID WORLD = UUID.randomUUID();
+    private static final ChunkKey HOME = new ChunkKey(WORLD, 0, 0);
+    private static final ChunkKey NEXT = new ChunkKey(WORLD, 1, 0);
+
+    private static final ResidentId MAYOR = ResidentId.of(UUID.randomUUID());
+    private static final ResidentId CITIZEN = ResidentId.of(UUID.randomUUID());
+
+    private final TerritoryIndex index = TerritoryIndex.empty();
+    private final RuinIndex ruinIndex = RuinIndex.empty();
+    private final CivicCache civicCache = CivicCache.empty();
+    private final FakeWallet wallet = new FakeWallet();
+
+    private JdbcCivicStore store;
+    private BankService bank;
+    private JdbcResidentRepository residents;
+
+    @BeforeEach
+    void createServices() {
+        store = new JdbcCivicStore(database, DIRECT, at(NOW));
+        bank = new BankService(store, at(NOW), wallet);
+        residents = new JdbcResidentRepository(database, DIRECT);
+    }
+
+    private static Clock at(final Instant when) {
+        return Clock.fixed(when, ZoneOffset.UTC);
+    }
+
+    private static Money coins(final String amount) {
+        return Money.of(new BigDecimal(amount), CURRENCY);
+    }
+
+    private TownService towns(final Instant when) {
+        return new TownService(store, NamePolicy.defaults(), at(when), index,
+                new CivicCacheService(store, civicCache, warning -> { }), FlagOverrides.empty(),
+                ruinIndex, Duration.ZERO, Duration.ofDays(3), CivicPrices.free(), wallet);
+    }
+
+    private TaxService taxes(final TaxPolicy policy, final Instant when, final String serverId) {
+        final TownService towns = towns(when);
+        return new TaxService(store, at(when), wallet, policy, serverId,
+                (town, reason) -> towns.collapse(town)
+                        .thenApply(net.riftbreaker.rifttowny.domain.service.ServiceResult
+                                ::succeeded));
+    }
+
+    private static TaxPolicy policy(
+            final String resident, final String upkeep, final Duration grace) {
+        return new TaxPolicy(true, Duration.ofDays(1), new BigDecimal(resident),
+                new BigDecimal(upkeep), BigDecimal.ZERO, grace);
+    }
+
+    /** Riftholm with two chunks and two residents. */
+    private Town riftholm(final Instant when) {
+        residents.save(Resident.newcomer(MAYOR, "Mayor", NOW)).join();
+        residents.save(Resident.newcomer(CITIZEN, "Citizen", NOW)).join();
+        final TownService towns = towns(when);
+        final Town town = towns.found(MAYOR, "Mayor", "Riftholm").join().value().orElseThrow();
+        final TerritoryService territory = new TerritoryService(store, at(when), index);
+        territory.claim(MAYOR, town.id(), HOME, ClaimKind.HOMEBLOCK).join();
+        territory.claim(MAYOR, town.id(), NEXT, ClaimKind.ORDINARY).join();
+        towns.join(MAYOR, CITIZEN, town.id()).join();
+        return town;
+    }
+
+    @Nested
+    @DisplayName("running once")
+    class RunningOnce {
+
+        @Test
+        @DisplayName("a period runs once, however many servers try it")
+        void periodIsClaimedOnce() {
+            riftholm(NOW);
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+
+            assertThat(taxes(policy, NOW, "alpha").runIfDue().join()).isPresent();
+            assertThat(taxes(policy, NOW, "beta").runIfDue().join())
+                    .as("a second backend server sharing the database must not charge everybody "
+                            + "again")
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("the next period runs again")
+        void nextPeriodRuns() {
+            riftholm(NOW);
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            taxes(policy, NOW, "alpha").runIfDue().join();
+
+            assertThat(taxes(policy, NOW.plus(Duration.ofDays(1)), "alpha").runIfDue().join())
+                    .isPresent();
+        }
+
+        @Test
+        @DisplayName("a policy that collects nothing never runs at all")
+        void nothingToCollect() {
+            riftholm(NOW);
+
+            assertThat(taxes(TaxPolicy.off(), NOW, "alpha").runIfDue().join()).isEmpty();
+            assertThat(taxes(policy("0", "0", Duration.ZERO), NOW, "alpha").runIfDue().join())
+                    .isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("collecting")
+    class Collecting {
+
+        @Test
+        @DisplayName("residents pay their town, then the town pays its upkeep")
+        void residentsPayFirst() {
+            final Town town = riftholm(NOW);
+            wallet.balances.put(MAYOR, coins("50"));
+            wallet.balances.put(CITIZEN, coins("50"));
+
+            // Two residents at 10 each pays 20 in; upkeep of 2 chunks at 5 takes 10 out.
+            taxes(policy("10", "5", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(bank.balanceOf(town.id()).join())
+                    .as("charging the town before its residents paid would bankrupt it needlessly")
+                    .isEqualTo(coins("10"));
+            assertThat(wallet.balances.get(MAYOR)).isEqualTo(coins("40"));
+        }
+
+        @Test
+        @DisplayName("upkeep scales with the land held")
+        void upkeepScalesWithChunks() {
+            final Town town = riftholm(NOW);
+            bank.pay(town.id(), coins("100"), LedgerEntry.Reason.ADMIN, null).join();
+
+            taxes(policy("0", "7", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(bank.balanceOf(town.id()).join())
+                    .as("two chunks at 7")
+                    .isEqualTo(coins("86"));
+        }
+
+        @Test
+        @DisplayName("a resident who cannot pay is not evicted")
+        void poorResidentsStay() {
+            final Town town = riftholm(NOW);
+            wallet.balances.put(MAYOR, coins("50"));
+
+            taxes(policy("10", "0", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(store.inTransaction(t -> t.towns().find(town.id()).orElseThrow()
+                    .hasResident(CITIZEN)).join())
+                    .as("eviction by timer punishes somebody who may simply have been away")
+                    .isTrue();
+            assertThat(bank.balanceOf(town.id()).join())
+                    .as("and the one who could pay still did")
+                    .isEqualTo(coins("10"));
+        }
+    }
+
+    @Nested
+    @DisplayName("falling behind")
+    class FallingBehind {
+
+        @Test
+        @DisplayName("a town that cannot pay is marked, not destroyed")
+        void firstMissIsMarkedOnly() {
+            final Town town = riftholm(NOW);
+
+            taxes(policy("0", "50", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(store.inTransaction(t -> t.towns().find(town.id())).join())
+                    .as("a server whose players log off for a week should not come back to an "
+                            + "empty map")
+                    .isPresent();
+            assertThat(store.inTransaction(t -> t.taxes().unpaidSince(town.id())).join())
+                    .isPresent();
+        }
+
+        @Test
+        @DisplayName("paying clears the debt, so one bad week costs nothing")
+        void payingClearsTheMark() {
+            final Town town = riftholm(NOW);
+            taxes(policy("0", "50", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+            bank.pay(town.id(), coins("500"), LedgerEntry.Reason.ADMIN, null).join();
+
+            final Instant later = NOW.plus(Duration.ofDays(1));
+            taxes(policy("0", "50", Duration.ofDays(3)), later, "alpha").runIfDue().join();
+
+            assertThat(store.inTransaction(t -> t.taxes().unpaidSince(town.id())).join()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a town that never pays falls, into a ruin like any other")
+        void graceRunsOut() {
+            final Town town = riftholm(NOW);
+            final TaxPolicy policy = policy("0", "50", Duration.ofDays(3));
+            taxes(policy, NOW, "alpha").runIfDue().join();
+
+            final Instant tooLate = NOW.plus(Duration.ofDays(4));
+            final var run = taxes(policy, tooLate, "alpha").runIfDue().join().orElseThrow();
+
+            assertThat(run.townsFallen()).isEqualTo(1);
+            assertThat(run.fallen()).containsExactly("Riftholm");
+            assertThat(store.inTransaction(t -> t.towns().find(town.id())).join()).isEmpty();
+            assertThat(ruinIndex.at(HOME))
+                    .as("bankruptcy is the second source of ruins, and the first nobody chose")
+                    .isPresent();
+        }
+
+        @Test
+        @DisplayName("grace is measured from the first miss, not the latest run")
+        void graceIsMeasuredFromTheFirstMiss() {
+            final Town town = riftholm(NOW);
+            final TaxPolicy policy = policy("0", "50", Duration.ofDays(3));
+            taxes(policy, NOW, "alpha").runIfDue().join();
+            taxes(policy, NOW.plus(Duration.ofDays(1)), "alpha").runIfDue().join();
+
+            assertThat(store.inTransaction(t -> t.taxes().unpaidSince(town.id())).join())
+                    .as("otherwise every run would reset the clock and nothing would ever fall")
+                    .contains(NOW);
+        }
+    }
+
+    @Test
+    @DisplayName("a negative tax is refused rather than paying towns to exist")
+    void negativeTaxesAreRefused() {
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> new TaxPolicy(
+                true, Duration.ofDays(1), new BigDecimal("-1"), BigDecimal.ZERO, BigDecimal.ZERO,
+                Duration.ZERO)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("every server computes the same period key for the same moment")
+    void periodKeysAgree() {
+        final TaxPolicy daily = policy("0", "1", Duration.ZERO);
+
+        assertThat(daily.periodKey(NOW)).isEqualTo(daily.periodKey(NOW.plusSeconds(3600)));
+        assertThat(daily.periodKey(NOW)).isNotEqualTo(daily.periodKey(NOW.plus(Duration.ofDays(1))));
+    }
+
+    private static final class FakeWallet implements PlayerWallet {
+
+        private final Map<ResidentId, Money> balances = new ConcurrentHashMap<>();
+
+        @Override
+        public boolean available() {
+            return true;
+        }
+
+        @Override
+        public String currency() {
+            return CURRENCY;
+        }
+
+        @Override
+        public CompletableFuture<Optional<Money>> balanceOf(final ResidentId who) {
+            return CompletableFuture.completedFuture(Optional.ofNullable(balances.get(who)));
+        }
+
+        @Override
+        public CompletableFuture<Boolean> take(final ResidentId who, final Money amount) {
+            final Money held = balances.getOrDefault(who, Money.zero(CURRENCY));
+            return held.minus(amount)
+                    .map(left -> {
+                        balances.put(who, left);
+                        return CompletableFuture.completedFuture(true);
+                    })
+                    .orElseGet(() -> CompletableFuture.completedFuture(false));
+        }
+
+        @Override
+        public CompletableFuture<Boolean> give(final ResidentId who, final Money amount) {
+            balances.merge(who, amount, Money::plus);
+            return CompletableFuture.completedFuture(true);
+        }
+    }
+}

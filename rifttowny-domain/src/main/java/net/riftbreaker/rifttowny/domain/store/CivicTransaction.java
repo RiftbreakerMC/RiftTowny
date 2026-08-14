@@ -51,6 +51,8 @@ public interface CivicTransaction {
 
     BankStore bank();
 
+    TaxStore taxes();
+
     /**
      * Queues an event for delivery.
      *
@@ -336,6 +338,38 @@ public interface CivicTransaction {
 
         /** Removes an account's balance and history, as when its organisation is disbanded. */
         int forget(java.util.UUID accountId);
+    }
+
+    /** Tax runs and the debt they leave behind, inside the transaction. */
+    interface TaxStore {
+
+        /**
+         * Claims a period, and says whether this caller got it.
+         *
+         * <p>An insert that fails on the primary key is the answer, not an error: it means another
+         * server — or this one before a restart — already ran that period. The whole idempotency
+         * guard is this one call.</p>
+         *
+         * @return true if the caller now owns the run
+         */
+        boolean claimPeriod(String periodKey, String serverId, java.time.Instant now);
+
+        /** Records what a claimed run did. */
+        void finishRun(
+                String periodKey,
+                int townsCharged,
+                int residentsCharged,
+                int townsFallen,
+                java.time.Instant now);
+
+        /** When a town first failed to pay, or empty if it is up to date. */
+        Optional<java.time.Instant> unpaidSince(TownId town);
+
+        /** Records that a town could not pay, or — with null — that it has caught up. */
+        void markUnpaid(TownId town, java.time.Instant since);
+
+        /** Every town on the server, for a run that has to visit all of them. */
+        List<TownId> allTowns();
     }
 
     /** Nations, inside the transaction. */

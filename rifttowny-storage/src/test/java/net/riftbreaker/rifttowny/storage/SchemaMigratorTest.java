@@ -43,9 +43,9 @@ class SchemaMigratorTest {
      * change here, and a migration added to only one of the two dialect directories still shows up
      * as a failure rather than passing quietly.</p>
      */
-    private static final String CURRENT_SCHEMA_VERSION = "10";
+    private static final String CURRENT_SCHEMA_VERSION = "11";
 
-    private static final int MIGRATION_COUNT = 10;
+    private static final int MIGRATION_COUNT = 11;
 
     @Test
     @DisplayName("the migrations apply and create every table the plan names")
@@ -63,7 +63,7 @@ class SchemaMigratorTest {
                 "rt_resident", "rt_town", "rt_nation", "rt_claim", "rt_area",
                 "rt_role", "rt_role_permission", "rt_role_member",
                 "rt_organisation_currency", "rt_outbox", "rt_idempotency", "rt_audit",
-                "rt_town_trust", "rt_flag_override", "rt_invitation", "rt_ruin", "rt_ruin_claim", "rt_town_spawn", "rt_organisation_balance", "rt_bank_ledger");
+                "rt_town_trust", "rt_flag_override", "rt_invitation", "rt_ruin", "rt_ruin_claim", "rt_town_spawn", "rt_organisation_balance", "rt_bank_ledger", "rt_tax_run");
     }
 
     @Test
