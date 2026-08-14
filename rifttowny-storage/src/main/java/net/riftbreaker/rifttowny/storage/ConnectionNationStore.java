@@ -60,7 +60,8 @@ final class ConnectionNationStore implements CivicTransaction.NationStore {
                 first(load("WHERE name_normalised = ?", name.toLowerCase(Locale.ROOT))));
     }
 
-    List<Nation> all() {
+    @Override
+    public List<Nation> all() {
         return StorageFailure.wrapping(() -> load("ORDER BY created_at, nation_id"));
     }
 

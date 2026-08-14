@@ -233,7 +233,7 @@ public final class NationService {
             final ResidentId actor, final NationId nationId, final TownId townId) {
         Objects.requireNonNull(townId, "townId");
 
-        return transaction(transaction -> {
+        return refreshingNation(transaction(transaction -> {
             final Nation nation = requireNationPermission(
                     transaction, nationId, actor, Permission.MANAGE_SETTINGS);
             final Outcome<Nation> moved = nation.moveCapital(townId);
@@ -241,7 +241,7 @@ public final class NationService {
             transaction.nations().save(updated);
             transaction.publishAll(moved.events(), correlation("capital", nationId));
             return updated;
-        });
+        }));
     }
 
     /**
@@ -255,7 +255,7 @@ public final class NationService {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(candidate, "candidate");
 
-        return transaction(transaction -> {
+        return refreshingNation(transaction(transaction -> {
             final Nation nation = nation(transaction, nationId);
             if (!nation.leader().equals(actor)) {
                 throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
@@ -269,7 +269,7 @@ public final class NationService {
             transaction.nations().save(updated);
             transaction.publishAll(transferred.events(), correlation("crown", nationId));
             return updated;
-        });
+        }));
     }
 
     /**
@@ -288,7 +288,7 @@ public final class NationService {
         Objects.requireNonNull(nationId, "nationId");
         Objects.requireNonNull(change, "change");
 
-        return transaction(transaction -> {
+        return refreshingNation(transaction(transaction -> {
             final Nation nation = requireNationPermission(
                     transaction, nationId, actor, Permission.MANAGE_SETTINGS);
             final Outcome<Nation> changed = nation.withProfile(change.apply(nation.profile()));
@@ -296,7 +296,7 @@ public final class NationService {
             transaction.nations().save(updated);
             transaction.publishAll(changed.events(), correlation("profile", nationId));
             return updated;
-        });
+        }));
     }
 
     /** Renames a nation. Requires {@link Permission#RENAME_ORGANISATION} in the nation. */
@@ -308,7 +308,7 @@ public final class NationService {
         }
         final OrganisationName name = accepted.name();
 
-        return transaction(transaction -> {
+        return refreshingNation(transaction(transaction -> {
             final Nation nation = requireNationPermission(
                     transaction, nationId, actor, Permission.RENAME_ORGANISATION);
             final Optional<Nation> holder = transaction.nations().findByName(name.normalised());
@@ -320,7 +320,7 @@ public final class NationService {
             transaction.nations().save(updated);
             transaction.publishAll(renamed.events(), correlation("rename", nationId));
             return updated;
-        });
+        }));
     }
 
     /**
@@ -522,7 +522,8 @@ public final class NationService {
             if (affected.isEmpty()) {
                 return CompletableFuture.completedFuture(unwrap(result));
             }
-            return civic.refresh(affected.get().town()).thenApply(ignored -> unwrap(result));
+            return civic.refresh(affected.get().town())
+                    .thenCompose(ignored -> alsoRefreshNation(unwrap(result)));
         });
     }
 
@@ -536,7 +537,39 @@ public final class NationService {
         for (final TownId town : affected.get().towns()) {
             chain = chain.thenCompose(ignored -> civic.refresh(town));
         }
-        return chain.thenApply(ignored -> unwrapAll(result));
+        return chain.thenCompose(ignored -> alsoRefreshNation(unwrapAll(result)));
+    }
+
+    /** For the changes that touch the nation row and no town: rename, capital, crown, settings. */
+    private <T> CompletableFuture<ServiceResult<T>> refreshingNation(
+            final CompletableFuture<ServiceResult<T>> pending) {
+        return pending.thenCompose(this::alsoRefreshNation);
+    }
+
+    /**
+     * Updates the nation cache from whatever the result names.
+     *
+     * <p>Driven off the returned value rather than passed a nation id at each of the nine call
+     * sites, because the ninth is the one that would be forgotten. Every mutating method here
+     * returns either the changed {@link Nation} or, for a disband, its {@link NationId} — and a
+     * disband is exactly the case that must reach the cache, since a dissolved nation left in it
+     * would keep answering placeholders with a name nobody holds.</p>
+     */
+    private <T> CompletableFuture<ServiceResult<T>> alsoRefreshNation(final ServiceResult<T> result) {
+        final NationId id = result.value().map(NationService::nationIdOf).orElse(null);
+        return id == null
+                ? CompletableFuture.completedFuture(result)
+                : civic.refreshNation(id).thenApply(ignored -> result);
+    }
+
+    private static NationId nationIdOf(final Object value) {
+        return switch (value) {
+            case Nation nation -> nation.id();
+            case NationId id -> id;
+            // An Invitation or a TownId: the nation row did not change, so there is nothing to
+            // re-read. Returning null here is the "nothing to do" answer, not a missed case.
+            default -> null;
+        };
     }
 
     private static <T> ServiceResult<T> unwrap(final ServiceResult<TownAffected<T>> result) {

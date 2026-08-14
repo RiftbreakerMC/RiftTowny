@@ -60,6 +60,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.TerritoryService territoryService;
     private net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex;
     private net.riftbreaker.rifttowny.domain.civic.CivicCache civicCache;
+    private net.riftbreaker.rifttowny.domain.civic.NationCache nationCache;
     private net.riftbreaker.rifttowny.domain.service.CivicCacheService civicCacheService;
     private net.riftbreaker.rifttowny.domain.flag.FlagOverrides flagOverrides;
     private net.riftbreaker.rifttowny.domain.service.FlagService flagService;
@@ -268,8 +269,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.territoryIndex =
                     net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
             this.civicCache = net.riftbreaker.rifttowny.domain.civic.CivicCache.empty();
+            this.nationCache = net.riftbreaker.rifttowny.domain.civic.NationCache.empty();
             this.civicCacheService = new net.riftbreaker.rifttowny.domain.service.CivicCacheService(
-                    civicStore, civicCache, getLogger()::warning);
+                    civicStore, civicCache, nationCache, getLogger()::warning);
             this.flagOverrides = net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty();
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
@@ -336,7 +338,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
             // Read-only views over the same caches protection reads. They hold no state of their
             // own, so nothing has to keep them current and there is nothing for them to get wrong.
             this.directory = new net.riftbreaker.rifttowny.domain.directory.CivicDirectory(
-                    civicCache, territoryIndex);
+                    civicCache, territoryIndex, nationCache);
             this.territoryMap = new net.riftbreaker.rifttowny.domain.directory.TerritoryMap(
                     territoryIndex, ruinIndex, civicCache);
 

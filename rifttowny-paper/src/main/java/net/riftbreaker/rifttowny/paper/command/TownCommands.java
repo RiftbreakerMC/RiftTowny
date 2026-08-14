@@ -457,23 +457,21 @@ public final class TownCommands {
             final net.riftbreaker.rifttowny.domain.civic.TownFacts facts
     ) {
         final Town town = facts.town();
-        final CompletableFuture<net.riftbreaker.rifttowny.domain.org.Nation> nation =
-                town.nation()
-                        .map(id -> nations.find(id).thenApply(found -> found.orElse(null)))
-                        .orElseGet(() -> CompletableFuture.completedFuture(null));
 
-        then(actor, banks.balanceOf(town.id()).thenCombine(nation, TownScreen::new), screen -> {
+        // One read, not two. The nation's name used to be a second query here and is now in the
+        // nation cache, which leaves the treasury as the only thing on this screen storage owns.
+        then(actor, banks.balanceOf(town.id()), balance -> {
             messages.send(actor::send, MessageKey.TOWN_INFO_HEADER,
                     MessageService.value("town", town.name().display()));
             line(actor, "Mayor", names.describe(town.mayor()));
             line(actor, "Founded", Times.date(town.createdAt()));
-            line(actor, "Treasury", screen.balance().describe());
+            line(actor, "Treasury", balance.describe());
             line(actor, "Land", directory.town(town.id())
                     .map(summary -> summary.chunks() + " chunk(s)")
                     .orElse("0 chunk(s)"));
-            line(actor, "Nation", screen.nation() == null
-                    ? "none"
-                    : screen.nation().name().display());
+            line(actor, "Nation", town.nation()
+                    .flatMap(directory::nationName)
+                    .orElse("none"));
             line(actor, "Trusted", String.valueOf(town.trustedOutsiders().size()));
 
             final TownProfile profile = town.profile();
@@ -525,12 +523,6 @@ public final class TownCommands {
         return named.isEmpty() ? "nobody" : String.join(", ", named);
     }
 
-    /** The two facts about a town that a cache cannot answer, fetched together. */
-    private record TownScreen(
-            net.riftbreaker.rifttowny.domain.bank.Money balance,
-            net.riftbreaker.rifttowny.domain.org.Nation nation) {
-    }
-
     /**
      * Every town on the server.
      *
@@ -547,28 +539,23 @@ public final class TownCommands {
                 messages.send(actor::send, MessageKey.TOWN_LIST_EMPTY);
                 return;
             }
-            then(actor, nations.all(), allNations -> {
-                final java.util.Map<Object, String> nationNames = new java.util.HashMap<>();
-                allNations.forEach(found -> nationNames.put(found.id(), found.name().display()));
+            messages.sendRaw(actor::send, MessageKey.TOWN_LIST_HEADER,
+                    MessageService.value("count", page.total()),
+                    MessageService.value("page", page.number()),
+                    MessageService.value("pages", page.pages()),
+                    MessageService.value("sort", request.sortName()));
 
-                messages.sendRaw(actor::send, MessageKey.TOWN_LIST_HEADER,
-                        MessageService.value("count", page.total()),
-                        MessageService.value("page", page.number()),
-                        MessageService.value("pages", page.pages()),
-                        MessageService.value("sort", request.sort().name().toLowerCase(Locale.ROOT)));
-
-                int index = page.firstIndex();
-                for (final TownSummary summary : page.items()) {
-                    messages.sendRaw(actor::send, MessageKey.TOWN_LIST_LINE,
-                            MessageService.value("index", index++),
-                            MessageService.value("town", summary.name()),
-                            MessageService.value("residents", summary.residents()),
-                            MessageService.value("chunks", summary.chunks()),
-                            nationTag(summary, nationNames));
-                }
-                listings.more(actor, page,
-                        "/town list " + (page.number() + 1) + ' ' + request.sortName());
-            });
+            int index = page.firstIndex();
+            for (final TownSummary summary : page.items()) {
+                messages.sendRaw(actor::send, MessageKey.TOWN_LIST_LINE,
+                        MessageService.value("index", index++),
+                        MessageService.value("town", summary.name()),
+                        MessageService.value("residents", summary.residents()),
+                        MessageService.value("chunks", summary.chunks()),
+                        nationTag(summary));
+            }
+            listings.more(actor, page,
+                    "/town list " + (page.number() + 1) + ' ' + request.sortName());
         });
     }
 
@@ -579,8 +566,8 @@ public final class TownCommands {
      * be the widest column on the screen and would say nothing.</p>
      */
     private net.kyori.adventure.text.minimessage.tag.resolver.TagResolver nationTag(
-            final TownSummary summary, final java.util.Map<Object, String> nationNames) {
-        final String name = summary.nationId().map(nationNames::get).orElse(null);
+            final TownSummary summary) {
+        final String name = summary.nationId().flatMap(directory::nationName).orElse(null);
         return net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component(
                 "nation",
                 name == null

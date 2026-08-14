@@ -87,7 +87,8 @@ class CivicCacheServiceTest extends SqliteFixture {
 
             assertThat(summary.towns()).isEqualTo(1);
             assertThat(summary.unreadable()).isEmpty();
-            assertThat(summary.describe()).isEqualTo("Loaded 1 town(s) into memory.");
+            assertThat(summary.describe())
+                    .isEqualTo("Loaded 1 town(s) and 0 nation(s) into memory.");
             assertThat(cache.knows(riftholm.id())).isTrue();
             assertThat(cache.townOf(MAYOR)).contains(riftholm.id());
         }

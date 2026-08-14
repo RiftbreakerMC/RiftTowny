@@ -31,6 +31,19 @@ public interface CivicCacheRefresher {
      */
     CompletableFuture<Void> refresh(TownId town);
 
+    /**
+     * Re-reads one nation and updates the cache.
+     *
+     * <p>A default no-op rather than a second abstract method, which keeps this a functional
+     * interface and keeps every existing test's one-line lambda working. The staleness it guards
+     * against is milder than the town case — nothing enforces a rule from a nation's cached name —
+     * so a caller that only cares about protection can correctly ignore it.</p>
+     */
+    default CompletableFuture<Void> refreshNation(
+            final net.riftbreaker.rifttowny.domain.org.NationId nation) {
+        return CompletableFuture.completedFuture(null);
+    }
+
     /** Does nothing. For tests, and for any caller that genuinely holds no cache. */
     static CivicCacheRefresher none() {
         return town -> CompletableFuture.completedFuture(null);

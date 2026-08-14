@@ -380,6 +380,15 @@ public interface CivicTransaction {
 
         void save(Nation nation);
 
+        /**
+         * Every nation, for filling the in-memory cache at startup.
+         *
+         * <p>The counterpart to {@code TownStore.all()}, and read in the same transaction as it so
+         * the two caches cannot be filled from either side of a change and disagree about which
+         * towns belong to which nation.</p>
+         */
+        java.util.List<Nation> all();
+
         /** Deletes the nation and releases its towns. */
         boolean delete(NationId id);
     }

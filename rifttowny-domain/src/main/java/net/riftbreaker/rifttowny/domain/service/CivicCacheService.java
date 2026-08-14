@@ -31,6 +31,7 @@ public final class CivicCacheService implements CivicCacheRefresher {
 
     private final CivicStore store;
     private final CivicCache cache;
+    private final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache;
     private final Consumer<String> warn;
 
     /**
@@ -40,14 +41,36 @@ public final class CivicCacheService implements CivicCacheRefresher {
      */
     public CivicCacheService(
             final CivicStore store, final CivicCache cache, final Consumer<String> warn) {
+        this(store, cache, net.riftbreaker.rifttowny.domain.civic.NationCache.empty(), warn);
+    }
+
+    /**
+     * The same, with a nation cache to keep in step.
+     *
+     * <p>Both caches are filled and refreshed by one service on purpose. A town joining a nation
+     * changes a row each cache holds a copy of, and two services would be two places to remember —
+     * with the failure showing up as a nation whose member list disagrees with its towns.</p>
+     */
+    public CivicCacheService(
+            final CivicStore store,
+            final CivicCache cache,
+            final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache,
+            final Consumer<String> warn
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.cache = Objects.requireNonNull(cache, "cache");
+        this.nationCache = Objects.requireNonNull(nationCache, "nationCache");
         this.warn = Objects.requireNonNull(warn, "warn");
     }
 
     /** The cache, for listeners, commands and {@code /rifttowny status}. */
     public CivicCache cache() {
         return cache;
+    }
+
+    /** The nation cache, for the listings and the placeholder surface. */
+    public net.riftbreaker.rifttowny.domain.civic.NationCache nations() {
+        return nationCache;
     }
 
     /**
@@ -71,7 +94,10 @@ public final class CivicCacheService implements CivicCacheRefresher {
                 loaded.add(TownFacts.of(town, roles.get()));
             }
             cache.replaceAll(loaded);
-            return new CivicLoad(loaded.size(), List.copyOf(unreadable));
+            // In the same transaction as the towns, so the two cannot be filled from either side of
+            // a change and disagree about who belongs to what.
+            nationCache.replaceAll(transaction.nations().all());
+            return new CivicLoad(loaded.size(), List.copyOf(unreadable), nationCache.size());
         }).thenApply(summary -> {
             summary.warnAbout(warn);
             return summary;
@@ -112,6 +138,26 @@ public final class CivicCacheService implements CivicCacheRefresher {
         });
     }
 
+    /**
+     * Re-reads one nation after it changed.
+     *
+     * <p>A dissolved nation is forgotten rather than reported as an error, exactly as a disbanded
+     * town is. Its member towns are refreshed by whatever changed them; this only maintains the
+     * nation's own copy.</p>
+     */
+    @Override
+    public CompletableFuture<Void> refreshNation(
+            final net.riftbreaker.rifttowny.domain.org.NationId nation) {
+        if (nation == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return store.<Void>inTransaction(transaction -> {
+            transaction.nations().find(nation).ifPresentOrElse(
+                    nationCache::remember, () -> nationCache.forget(nation));
+            return null;
+        });
+    }
+
     /** Drops a town without reading anything, for a caller that already knows it is gone. */
     public void forget(final TownId town) {
         cache.forget(town);
@@ -127,17 +173,18 @@ public final class CivicCacheService implements CivicCacheRefresher {
      *
      * @param unreadable towns that had no role book, named so an operator can repair them
      */
-    public record CivicLoad(int towns, List<String> unreadable) {
+    public record CivicLoad(int towns, List<String> unreadable, int nations) {
 
         public CivicLoad {
             unreadable = List.copyOf(Objects.requireNonNull(unreadable, "unreadable"));
         }
 
         public String describe() {
+            final String base = "Loaded " + towns + " town(s) and " + nations + " nation(s) "
+                    + "into memory";
             return unreadable.isEmpty()
-                    ? "Loaded " + towns + " town(s) into memory."
-                    : "Loaded " + towns + " town(s) into memory; " + unreadable.size()
-                            + " could not be read.";
+                    ? base + '.'
+                    : base + "; " + unreadable.size() + " town(s) could not be read.";
         }
 
         void warnAbout(final Consumer<String> warn) {

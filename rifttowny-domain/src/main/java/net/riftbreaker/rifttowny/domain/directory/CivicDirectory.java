@@ -36,10 +36,35 @@ public final class CivicDirectory {
 
     private final CivicCache towns;
     private final TerritoryIndex claims;
+    private final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache;
 
     public CivicDirectory(final CivicCache towns, final TerritoryIndex claims) {
+        this(towns, claims, net.riftbreaker.rifttowny.domain.civic.NationCache.empty());
+    }
+
+    public CivicDirectory(
+            final CivicCache towns,
+            final TerritoryIndex claims,
+            final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache
+    ) {
         this.towns = Objects.requireNonNull(towns, "towns");
         this.claims = Objects.requireNonNull(claims, "claims");
+        this.nationCache = Objects.requireNonNull(nationCache, "nationCache");
+    }
+
+    /** What to call a nation, from memory. Empty for a nation this cache has not been given. */
+    public Optional<String> nationName(final NationId id) {
+        return nationCache.nameOf(id);
+    }
+
+    /**
+     * Every nation, from memory.
+     *
+     * <p>Replaces the read {@code /nation list} used to do. Nations are few and the whole set is
+     * held, so a listing costs a copy rather than a query.</p>
+     */
+    public List<Nation> cachedNations() {
+        return nationCache.all();
     }
 
     // --- towns ---------------------------------------------------------------------------------

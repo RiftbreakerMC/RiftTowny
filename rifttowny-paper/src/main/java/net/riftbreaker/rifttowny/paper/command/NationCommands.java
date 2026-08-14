@@ -398,9 +398,11 @@ public final class NationCommands {
      * a movement path asks about one — so this is the query that pays for the whole screen.</p>
      */
     private void list(final CommandActor actor, final List<String> args) {
-        listings.parse(actor, args).ifPresent(request -> then(actor, nationRepository.all(), all -> {
-            final Page<NationSummary> page =
-                    directory.nations(all, request.sort(), request.page(), Listings.PAGE_SIZE);
+        listings.parse(actor, args).ifPresent(request -> {
+            // From memory now that nations are cached. This used to be the one listing that still
+            // cost a query, and it was the query a curious player ran most often.
+            final Page<NationSummary> page = directory.nations(
+                    directory.cachedNations(), request.sort(), request.page(), Listings.PAGE_SIZE);
             if (page.isEmpty()) {
                 messages.send(actor::send, MessageKey.NATION_LIST_EMPTY);
                 return;
@@ -422,7 +424,7 @@ public final class NationCommands {
             }
             listings.more(actor, page,
                     "/nation list " + (page.number() + 1) + ' ' + request.sortName());
-        }));
+        });
     }
 
     private void invite(final CommandActor actor, final List<String> args) {
