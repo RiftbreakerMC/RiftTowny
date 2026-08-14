@@ -13,5 +13,9 @@
 *.txt text eol=lf
 Jenkinsfile text eol=lf
 
+# These two, or committing them from Windows rewrites the whole file.
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
 # Leave archives untouched.
 *.jar binary
