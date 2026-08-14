@@ -55,6 +55,10 @@ public final class RuinService {
     private final RuinIndex ruins;
     private final CivicCacheRefresher civic;
     private final Duration lifetime;
+    private net.riftbreaker.rifttowny.domain.bank.CivicPrices prices =
+            net.riftbreaker.rifttowny.domain.bank.CivicPrices.free();
+    private net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet =
+            net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent();
 
     /**
      * @param lifetime how long a ruin stands before its land reverts. {@link Duration#ZERO} disables
@@ -83,6 +87,26 @@ public final class RuinService {
     /** How long a ruin stands here, for a message that has to say so. */
     public Duration lifetime() {
         return lifetime;
+    }
+
+    /**
+     * Sets what rebuilding costs.
+     *
+     * <p>A setter rather than a constructor argument, deliberately: this service already takes seven
+     * of them, and an eighth and ninth for a price that is zero on most servers would make every
+     * call site harder to read to serve the uncommon case.</p>
+     */
+    public RuinService pricedAt(
+            final net.riftbreaker.rifttowny.domain.bank.CivicPrices civicPrices,
+            final net.riftbreaker.rifttowny.domain.bank.PlayerWallet playerWallet
+    ) {
+        this.prices = Objects.requireNonNull(civicPrices, "civicPrices");
+        this.wallet = Objects.requireNonNull(playerWallet, "playerWallet");
+        return this;
+    }
+
+    private String walletCurrency() {
+        return wallet.currency();
     }
 
     /** The in-memory index, for listeners and for {@code /rifttowny status}. */
@@ -132,6 +156,16 @@ public final class RuinService {
         Objects.requireNonNull(actorName, "actorName");
         Objects.requireNonNull(standingIn, "standingIn");
 
+        // Charged to whoever rebuilds it, and it leaves the economy rather than landing in the
+        // treasury of the town being restored - a reclaim fee that funded the restored town would
+        // be free. This is the one price with a purpose beyond economy: it is what stops a wealthy
+        // player collecting every fallen town on the server.
+        return PlayerCharge.charging(wallet, actor, prices.reclaim(walletCurrency()),
+                () -> reclaimInTransaction(actor, actorName, standingIn));
+    }
+
+    private CompletableFuture<ServiceResult<Town>> reclaimInTransaction(
+            final ResidentId actor, final String actorName, final ChunkKey standingIn) {
         return transaction(transaction -> {
             final Ruin ruin = transaction.ruins().at(standingIn)
                     .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.NOT_A_RUIN));

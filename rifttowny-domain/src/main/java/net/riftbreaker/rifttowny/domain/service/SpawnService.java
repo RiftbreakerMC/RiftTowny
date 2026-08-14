@@ -44,6 +44,10 @@ public final class SpawnService {
     private final Clock clock;
     private final TerritoryIndex territory;
     private final Map<TownId, SpawnPoint> cache = new java.util.concurrent.ConcurrentHashMap<>();
+    private net.riftbreaker.rifttowny.domain.bank.CivicPrices prices =
+            net.riftbreaker.rifttowny.domain.bank.CivicPrices.free();
+    private net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet =
+            net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent();
 
     public SpawnService(
             final CivicStore store, final Clock clock, final TerritoryIndex territory) {
@@ -178,6 +182,57 @@ public final class SpawnService {
                     }
                     return removed;
                 });
+    }
+
+    /**
+     * Takes the fare for a journey that actually happened.
+     *
+     * <p>Charged on arrival rather than on the command, and that is the point: a warmup cancelled by
+     * a punch has cost the player nothing, exactly as it costs them no cooldown. Charging up front
+     * and refunding would be two wallet round trips to reach the same place, with a window in which
+     * the player is out of pocket for a journey they did not take.</p>
+     *
+     * <p>The fare is paid to the town, so a busy town's spawn earns it something. Silent when no
+     * fare is configured, which is the default.</p>
+     */
+    public CompletableFuture<ServiceResult<net.riftbreaker.rifttowny.domain.bank.Money>>
+            chargeForTravel(final ResidentId who, final TownId townId) {
+        Objects.requireNonNull(who, "who");
+        Objects.requireNonNull(townId, "townId");
+
+        final var fare = prices.spawnTravel(wallet.currency());
+        if (fare.isZero()) {
+            return CompletableFuture.completedFuture(ServiceResult.success(fare));
+        }
+        return PlayerCharge.charging(wallet, who, fare, () -> transaction(transaction -> {
+            final Town town = transaction.towns().find(townId)
+                    .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.TOWN_NOT_FOUND));
+            final var before = transaction.bank().balance(town.bankAccountId(), fare.currency())
+                    .orElseGet(() -> net.riftbreaker.rifttowny.domain.bank.Money
+                            .zero(fare.currency()));
+            transaction.bank().record(
+                    net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                            town.bankAccountId(), fare, before.plus(fare),
+                            net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.TRANSFER_IN,
+                            who, "spawn travel", clock.instant()),
+                    clock.instant());
+            return fare;
+        }));
+    }
+
+    /** What travelling costs, so a command can say so before anybody commits to it. */
+    public net.riftbreaker.rifttowny.domain.bank.Money travelFare() {
+        return prices.spawnTravel(wallet.currency());
+    }
+
+    /** Sets what travelling costs. See {@code RuinService.pricedAt} for why this is a setter. */
+    public SpawnService pricedAt(
+            final net.riftbreaker.rifttowny.domain.bank.CivicPrices civicPrices,
+            final net.riftbreaker.rifttowny.domain.bank.PlayerWallet playerWallet
+    ) {
+        this.prices = Objects.requireNonNull(civicPrices, "civicPrices");
+        this.wallet = Objects.requireNonNull(playerWallet, "playerWallet");
+        return this;
     }
 
     /** Forgets a disbanded town's spawn. The row goes with the town; this is the in-memory half. */

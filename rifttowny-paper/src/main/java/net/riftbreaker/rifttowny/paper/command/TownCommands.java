@@ -695,8 +695,21 @@ public final class TownCommands {
                                     MessageService.value("seconds",
                                             teleports.warmup().toSeconds()));
                         }
-                        then(actor, teleports.travel(who, destination),
-                                outcome -> announceArrival(actor, town, outcome));
+                        then(actor, teleports.travel(who, destination), outcome -> {
+                            announceArrival(actor, town, outcome);
+                            if (outcome == net.riftbreaker.rifttowny.paper.spawn.TeleportService
+                                    .Outcome.ARRIVED) {
+                                // The fare is taken for a journey that happened. A warmup cancelled
+                                // by a punch costs nothing, exactly as it costs no cooldown.
+                                then(actor, spawns.chargeForTravel(who, town.id()), charged ->
+                                        charged.value()
+                                                .filter(fare -> !fare.isZero())
+                                                .ifPresent(fare -> messages.send(actor::send,
+                                                        MessageKey.TOWN_SPAWN_FARE,
+                                                        MessageService.value("amount",
+                                                                fare.describe()))));
+                            }
+                        });
                     }));
         });
     }

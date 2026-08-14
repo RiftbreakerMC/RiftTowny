@@ -58,6 +58,7 @@ town:
   bank-withdrew: '<green>Withdrew <white><amount></white>. The treasury holds <white><balance></white>.</green>'
   bank-bad-amount: '<red><white><input></white> is not an amount.</red>'
   spawn-arrived: '<green>Welcome to <white><town></white>.</green>'
+  spawn-fare: '<gray>The journey cost <white><amount></white>.</gray>'
   spawn-warmup: '<gray>Travelling in <white><seconds></white>s. Stand still.</gray>'
   spawn-cancelled-moved: '<yellow>You moved, so the journey was called off.</yellow>'
   spawn-cancelled-damaged: '<red>You were hit, so the journey was called off.</red>'

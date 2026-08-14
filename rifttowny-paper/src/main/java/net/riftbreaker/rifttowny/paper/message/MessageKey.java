@@ -164,6 +164,10 @@ public enum MessageKey {
     TOWN_SPAWN_ARRIVED("town.spawn-arrived",
             "<green>Welcome to <white><town></white>.</green>"),
 
+    /** Only shown when a fare was actually taken, so an unpriced server never sees it. */
+    TOWN_SPAWN_FARE("town.spawn-fare",
+            "<gray>The journey cost <white><amount></white>.</gray>"),
+
     TOWN_SPAWN_WARMUP("town.spawn-warmup",
             "<gray>Travelling in <white><seconds></white>s. Stand still.</gray>"),
 

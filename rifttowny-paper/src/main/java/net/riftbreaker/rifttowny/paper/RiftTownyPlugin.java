@@ -264,9 +264,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
             this.spawnService = new net.riftbreaker.rifttowny.domain.service.SpawnService(
-                    civicStore, clock, territoryIndex);
+                    civicStore, clock, territoryIndex)
+                    .pricedAt(settings.prices(), economyAdapter);
             this.plotService = new net.riftbreaker.rifttowny.domain.service.PlotService(
-                    civicStore, clock, territoryIndex);
+                    civicStore, clock, territoryIndex, settings.prices(), economyAdapter);
             // RiftEco if it is here, and a wallet that refuses everything if it is not. The civic
             // ledger works either way; what the wallet decides is whether money can cross between a
             // player and the town at all. Bound through the registry below, which is what turns a
@@ -287,7 +288,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     territoryIndex,
                     ruinIndex,
                     civicCacheService,
-                    settings.ruinLifetime());
+                    settings.ruinLifetime())
+                    .pricedAt(settings.prices(), economyAdapter);
             this.townService = new net.riftbreaker.rifttowny.domain.service.TownService(
                     civicStore,
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
@@ -297,7 +299,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     flagOverrides,
                     ruinIndex,
                     settings.ruinReclaimDelay(),
-                    settings.ruinLifetime());
+                    settings.ruinLifetime(),
+                    settings.prices(),
+                    economyAdapter);
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(

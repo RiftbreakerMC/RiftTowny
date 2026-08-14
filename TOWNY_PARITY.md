@@ -63,7 +63,7 @@ rows as the truth.
 | `/town claim`, `/town claim outpost` | `/town claim [outpost]` | DONE |
 | `/town unclaim`, `/town unclaim all` | `/town unclaim` | PARTIAL — no `all` |
 | `/town set homeblock` | `/town homeblock` | DONE |
-| `/town set spawn` / `/town spawn` | `/town setspawn`, `/town spawn`, `/town delspawn` | PARTIAL — no public spawns, no cost, no travel to other towns |
+| `/town set spawn` / `/town spawn` | `/town setspawn`, `/town spawn`, `/town delspawn` | PARTIAL — priced, but no public spawns and no travel to other towns |
 | Spawn warmup, cooldown, cancel on move/damage | Warmup and cooldown, cancelled by moving a block or being hit | DONE |
 | `/town toggle pvp|fire|explosion|mobs` | `/town flag set|clear|here|list` | DONE — a general flag system rather than four toggles, and per-chunk as well as town-wide |
 | `/town set perm …` — resident/ally/outsider build/destroy/switch/itemuse | Covered by the flag system's relationship ladder | DONE |
@@ -106,7 +106,7 @@ rows as the truth.
 
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
-| `/plot claim` — a resident takes a plot | `/plot claim` | DONE |
+| `/plot claim` — a resident takes a plot, at a price | `/plot claim`, `prices.plot` paid to the town | DONE |
 | `/plot unclaim` | `/plot unclaim` | DONE |
 | `/plot` — info | `/plot info` | DONE |
 | Plot owner outranks other residents on their own plot | `Relationship.RESIDENT` | DONE |
@@ -139,7 +139,7 @@ rows as the truth.
 
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
-| Economy: town/nation banks, taxes, upkeep, plot prices | Town bank, ledger and RiftEco wallet built; claim prices charged | PARTIAL — no taxes, no upkeep, no nation bank, and four of the six configured prices are read but not yet taken |
+| Economy: town/nation banks, taxes, upkeep, plot prices | Town bank, ledger, RiftEco wallet and all six prices | PARTIAL — no taxes, no upkeep, no nation bank, no plot resale |
 | Chat channels: town, nation, ally | — | **MISSING** — `RT-MOD-CHAT` |
 | `%townyadvanced_*%` placeholders | Manifest captured, none implemented | **MISSING** — `RT-MOD-PAPI` |
 | Dynmap/BlueMap/squaremap territory rendering | — | **MISSING** — `RT-MOD-MAP` |

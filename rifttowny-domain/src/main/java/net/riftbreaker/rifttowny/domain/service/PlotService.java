@@ -43,6 +43,8 @@ public final class PlotService {
     private final CivicStore store;
     private final Clock clock;
     private final TerritoryIndex index;
+    private final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices;
+    private final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet;
 
     /**
      * @param index updated after each change, because the protection check reads plot ownership from
@@ -50,9 +52,24 @@ public final class PlotService {
      */
     public PlotService(
             final CivicStore store, final Clock clock, final TerritoryIndex index) {
+        this(store, clock, index,
+                net.riftbreaker.rifttowny.domain.bank.CivicPrices.free(),
+                net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent());
+    }
+
+    /** @param prices what a plot costs the resident taking it, paid to their town */
+    public PlotService(
+            final CivicStore store,
+            final Clock clock,
+            final TerritoryIndex index,
+            final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
+            final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.index = Objects.requireNonNull(index, "index");
+        this.prices = Objects.requireNonNull(prices, "prices");
+        this.wallet = Objects.requireNonNull(wallet, "wallet");
     }
 
     /**
@@ -67,6 +84,14 @@ public final class PlotService {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(chunk, "chunk");
 
+        // Paid by the resident and received by their town, so unlike a founding fee it stays in the
+        // economy. The credit happens inside the transaction below, with the plot itself.
+        return PlayerCharge.charging(wallet, actor, prices.plot(wallet.currency()),
+                () -> takeInTransaction(actor, chunk));
+    }
+
+    private CompletableFuture<ServiceResult<Claim>> takeInTransaction(
+            final ResidentId actor, final ChunkKey chunk) {
         return transaction(transaction -> {
             final Claim claim = claimAt(transaction, chunk);
             final Town town = town(transaction, claim.town());
@@ -82,6 +107,25 @@ public final class PlotService {
 
             final Claim held = claim.heldBy(actor);
             transaction.claims().updatePlot(held);
+
+            // The town receives what the resident paid, in the same transaction as the plot they
+            // paid for. A price taken from a player that never arrived anywhere would be money the
+            // server destroyed by accident.
+            final var price = prices.plot(wallet.currency());
+            if (!price.isZero()) {
+                final var before = transaction.bank()
+                        .balance(town.bankAccountId(), price.currency())
+                        .orElseGet(() -> net.riftbreaker.rifttowny.domain.bank.Money
+                                .zero(price.currency()));
+                transaction.bank().record(
+                        net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                                town.bankAccountId(), price, before.plus(price),
+                                net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.TRANSFER_IN,
+                                actor, "plot " + chunk.chunkX() + ", " + chunk.chunkZ(),
+                                clock.instant()),
+                        clock.instant());
+            }
+
             transaction.publish(
                     new DomainEvent.PlotHeld(claim.town(), chunk.toString(), actor),
                     correlation(claim.town()));

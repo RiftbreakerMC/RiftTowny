@@ -59,6 +59,8 @@ public final class TownService {
     private final net.riftbreaker.rifttowny.domain.territory.RuinIndex ruins;
     private final Duration ruinReclaimDelay;
     private final Duration ruinLifetime;
+    private final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices;
+    private final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet;
 
     /**
      * @param index needed only so disbanding can drop the town's chunks from the in-memory cache.
@@ -123,6 +125,30 @@ public final class TownService {
             final Duration ruinReclaimDelay,
             final Duration ruinLifetime
     ) {
+        this(store, namePolicy, clock, index, civic, overrides, ruins, ruinReclaimDelay,
+                ruinLifetime,
+                net.riftbreaker.rifttowny.domain.bank.CivicPrices.free(),
+                net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent());
+    }
+
+    /**
+     * @param prices what founding costs. Charged to the founder's own wallet, because the town does
+     *        not exist yet to pay for itself
+     * @param wallet where that money comes from
+     */
+    public TownService(
+            final CivicStore store,
+            final NamePolicy namePolicy,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
+            final CivicCacheRefresher civic,
+            final FlagOverrides overrides,
+            final net.riftbreaker.rifttowny.domain.territory.RuinIndex ruins,
+            final Duration ruinReclaimDelay,
+            final Duration ruinLifetime,
+            final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
+            final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.namePolicy = Objects.requireNonNull(namePolicy, "namePolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -132,6 +158,8 @@ public final class TownService {
         this.ruins = Objects.requireNonNull(ruins, "ruins");
         this.ruinReclaimDelay = Objects.requireNonNull(ruinReclaimDelay, "ruinReclaimDelay");
         this.ruinLifetime = Objects.requireNonNull(ruinLifetime, "ruinLifetime");
+        this.prices = Objects.requireNonNull(prices, "prices");
+        this.wallet = Objects.requireNonNull(wallet, "wallet");
     }
 
     /**
@@ -154,6 +182,15 @@ public final class TownService {
         }
         final OrganisationName name = accepted.name();
 
+        // Charged to the founder, and it leaves the economy rather than landing in the treasury of
+        // the town it paid for - a founding fee that funded the new town would be a fee in name
+        // only. Zero by default, in which case the wallet is never touched.
+        return PlayerCharge.charging(wallet, founder, prices.townFounding(wallet.currency()),
+                () -> foundInTransaction(founder, founderName, name));
+    }
+
+    private CompletableFuture<ServiceResult<Town>> foundInTransaction(
+            final ResidentId founder, final String founderName, final OrganisationName name) {
         return refreshing(transaction(transaction -> {
             if (transaction.towns().findByName(name.normalised()).isPresent()) {
                 throw new ChangeRefusedException(ChangeDenial.NAME_TAKEN);
