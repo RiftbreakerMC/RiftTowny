@@ -45,6 +45,14 @@ commands:
     aliases: [res]
     description: Look at a player's town record.
     usage: /resident [player]
+  townchat:
+    aliases: [tc]
+    description: Speak to your town, or switch to its channel.
+    usage: /tc [message]
+  nationchat:
+    aliases: [nc]
+    description: Speak to your nation, or switch to its channel.
+    usage: /nc [message]
   plot:
     aliases: [p]
     description: Take and manage the plot you are standing on.
@@ -110,6 +118,16 @@ permissions:
   # person rather than a place, and a server that wants to hide one may not want to hide the other.
   rifttowny.resident.info:
     description: View a player's town record.
+    default: true
+
+  # Speaking to your own town or nation. Granted to everyone: the channel a player reaches is the
+  # one they are a member of, and membership is the check that matters. A server that wants to take
+  # a channel away from somebody has LuckPerms and this node.
+  rifttowny.chat.town:
+    description: Speak to your town's channel.
+    default: true
+  rifttowny.chat.nation:
+    description: Speak to your nation's channel.
     default: true
   rifttowny.town.add:
     description: Invite a player to your town, and withdraw the invitation.

@@ -147,7 +147,8 @@ rows as the truth.
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
 | Economy: town/nation banks, taxes, upkeep, plot prices | Town bank, ledger, RiftEco wallet, all six prices, and taxes with upkeep and bankruptcy | PARTIAL — no `/nation bank` command (the nation account is credited by tax and cannot yet be spent), no plot resale |
-| Chat channels: town, nation, ally | — | **MISSING** — `RT-MOD-CHAT` |
+| Chat channels: town, nation | `/tc`, `/nc` — with a message, or bare to switch the channel on | DONE — RiftTowny picks the recipients, RiftChat renders. With RiftChat absent it renders a plain line itself rather than losing the channel |
+| Ally chat | — | **MISSING** — blocked twice: `RiftChatService.Channel` has no `ALLY`, and `RT-MOD-DIPLOMACY` gives it nobody to reach. A `/ac` that accepted a message and delivered it to no one would be worse than none |
 | `%townyadvanced_*%` placeholders | The whole 143-name manifest served under Towny's own identifier | PARTIAL — every name resolves and none can reach a player as raw markup; roughly seventy carry real values and the rest return their documented blank, each with a recorded reason. Balances wait on a snapshot cache; the level-derived numbers wait on `RT-MOD-PROGRESSION` |
 | `%rel_townyadvanced_color%` | Served, as the viewed player's own allegiance colour | PARTIAL — ally / enemy / at-war need `RT-MOD-DIPLOMACY` |
 | Dynmap/BlueMap/squaremap territory rendering | — | **MISSING** — `RT-MOD-MAP` |

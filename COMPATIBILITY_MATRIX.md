@@ -42,7 +42,7 @@ configuration-gated.
 | `/towny` | — | ⬜ | Server info, `/towny warp <name>` in Phase 3 |
 | `/townyadmin` | `/ta` | ⬜ | Phase 2 |
 | `/townyworld` | — | ⬜ | Phase 2 |
-| `/tc` `/nc` `/ac` | — | ⬜ | Phase 5, through RiftChat. Toggles the active channel when given no message |
+| `/tc` `/nc` | — | ✅ | Toggles the active channel when given no message. RiftTowny picks the recipients, RiftChat renders. `/ac` needs `RT-MOD-DIPLOMACY` and a RiftChat `ALLY` constant, and is not built |
 | `/tfly` | `/townyfly`, `/townyflight` | ⬜ | Phase 4 |
 | `/rtp` `/wild` | — | ❌ **by design** | **Owned by RiftEssentials.** RiftTowny supplies a `ClaimGuard` and its safe-destination API instead of registering a conflicting command |
 | `/town top [category]` | — | ⬜ | Phase 3 |

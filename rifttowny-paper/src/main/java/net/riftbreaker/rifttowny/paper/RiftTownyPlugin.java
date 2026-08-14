@@ -80,6 +80,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.directory.TerritoryMap territoryMap;
     private net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions;
     private net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders placeholders;
+    private net.riftbreaker.rifttowny.domain.chat.ActiveChannels activeChannels;
+    private net.riftbreaker.rifttowny.domain.chat.ChannelAudience channelAudience;
+    private net.riftbreaker.rifttowny.integrations.chat.RiftChatAdapter chatAdapter;
     private java.time.Clock clock;
 
     /**
@@ -182,6 +185,15 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 new net.riftbreaker.rifttowny.integrations.placeholder.PlaceholderAdapter(
                         placeholders, getPluginMeta().getVersion()),
                 pluginName -> getServer().getPluginManager().getPlugin(pluginName) != null);
+        // RiftChat, for rendering the town and nation channels. Absent, it costs those channels
+        // their formatting and nothing else: RiftTowny still decides who hears them and renders a
+        // plain line itself, because a channel that disappeared with an optional dependency would
+        // be worse than a plain one.
+        this.chatAdapter =
+                new net.riftbreaker.rifttowny.integrations.chat.RiftChatAdapter(getServer());
+        capabilities.register(
+                chatAdapter,
+                pluginName -> getServer().getPluginManager().getPlugin(pluginName) != null);
         capabilities.markBlocked(Capability.AUDIT_BLOCK_HISTORY,
                 "RiftLogger supports block history; RiftTowny's adapter is not written yet. "
                         + "See INTEGRATION_CONTRACTS.md 2.2.1");
@@ -221,6 +233,19 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("resident", new net.riftbreaker.rifttowny.paper.command.ResidentCommands(
                 residentRepository, plotService, directory, residentNames, messages, clock).tree());
+
+        final net.riftbreaker.rifttowny.paper.chat.ChannelRenderer channelRenderer =
+                new net.riftbreaker.rifttowny.paper.chat.ChannelRenderer(
+                        messages, () -> chatAdapter.service());
+        final net.riftbreaker.rifttowny.paper.command.ChatCommands chatCommands =
+                new net.riftbreaker.rifttowny.paper.command.ChatCommands(
+                        activeChannels, channelAudience, channelRenderer, messages);
+        registerTree("townchat", chatCommands.townTree());
+        registerTree("nationchat", chatCommands.nationTree());
+        getServer().getPluginManager().registerEvents(
+                new net.riftbreaker.rifttowny.paper.chat.ChannelChatListener(
+                        activeChannels, channelAudience, channelRenderer, messages),
+                this);
 
         registerProtection();
         scheduleHousekeeping();
@@ -352,6 +377,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.territoryMap = new net.riftbreaker.rifttowny.domain.directory.TerritoryMap(
                     territoryIndex, ruinIndex, civicCache);
             this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();
+            this.activeChannels = net.riftbreaker.rifttowny.domain.chat.ActiveChannels.empty();
+            this.channelAudience = new net.riftbreaker.rifttowny.domain.chat.ChannelAudience(
+                    civicCache, nationCache);
             // Built here rather than beside the expansion so it exists whether PlaceholderAPI is
             // installed or not: RiftChat, the web panel and anything else that wants these answers
             // reach the same resolver, and only the PlaceholderAPI wrapper is optional.

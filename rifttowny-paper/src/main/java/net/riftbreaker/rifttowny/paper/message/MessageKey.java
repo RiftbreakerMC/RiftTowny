@@ -381,6 +381,33 @@ public enum MessageKey {
     TOWN_BOARD_LINE("town.board-line",
             "<gray>« <white><board></white> »</gray>"),
 
+    // --- chat channels ---------------------------------------------------------------------------
+    // The two format keys are only used when RiftChat is absent. With it installed, RiftChat renders
+    // and these are never reached - which is the point of not building a second chat formatter.
+
+    CHAT_TOWN_FORMAT("chat.town-format",
+            "<dark_green>[Town]</dark_green> <white><sender></white><gray>:</gray> <message>"),
+
+    CHAT_NATION_FORMAT("chat.nation-format",
+            "<dark_aqua>[Nation]</dark_aqua> <white><sender></white><gray>:</gray> <message>"),
+
+    CHAT_CHANNEL_ON("chat.channel-on",
+            "<green>You are now speaking to your <white><channel></white>. "
+                    + "Run the command again to stop.</green>"),
+
+    CHAT_CHANNEL_OFF("chat.channel-off",
+            "<yellow>You are back in ordinary chat.</yellow>"),
+
+    /** Said when somebody's town or nation went away while their channel was still on. */
+    CHAT_CHANNEL_LOST("chat.channel-lost",
+            "<red>You are no longer in a <white><channel></white>, so that was not sent.</red>"),
+
+    CHAT_NO_CHANNEL("chat.no-channel",
+            "<red>You have no <white><channel></white> to speak to.</red>"),
+
+    CHAT_NOBODY_HEARD("chat.nobody-heard",
+            "<gray>Nobody else from your <white><channel></white> is online.</gray>"),
+
     // --- listings ------------------------------------------------------------------------------
     // Every listing that can run to more than one screen shares this footer. It names the command to
     // type rather than only being clickable: a click event is invisible to anybody reading on

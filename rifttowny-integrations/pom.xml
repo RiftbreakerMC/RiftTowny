@@ -56,5 +56,16 @@
       <artifactId>placeholderapi</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!--
+      RiftChat's API. Same rule again: compiled against, never shaded, adapter built inside a guard.
+      RiftTowny selects a channel's recipients and RiftChat renders the line, which is RiftChat's
+      own division of labour rather than one assumed here.
+    -->
+    <dependency>
+      <groupId>net.riftbreaker</groupId>
+      <artifactId>riftchat</artifactId>
+      <version>0.1.0-rc.1</version>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
 </project>
