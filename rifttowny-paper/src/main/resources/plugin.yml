@@ -35,7 +35,7 @@ softdepend:
 commands:
   rifttowny:
     description: RiftTowny administration and diagnostics.
-    usage: /rifttowny <status|help>
+    usage: /rifttowny <status|migrate|help>
     permission: rifttowny.admin
   town:
     aliases: [t]
@@ -68,8 +68,15 @@ permissions:
     default: op
     children:
       rifttowny.admin.status: true
+      rifttowny.admin.migrate: true
   rifttowny.admin.status:
     description: View platform, storage, outbox and integration state.
+    default: op
+
+  # Importing another plugin's world. op-only and separate from .status, because this is the one
+  # irreversible bulk operation in the plugin - it can create hundreds of towns in one command.
+  rifttowny.admin.migrate:
+    description: Import an existing Towny database.
     default: op
 
   # Deliberately not a child of rifttowny.admin. Ignoring every claim on the server is a distinct

@@ -53,7 +53,7 @@ rows as the truth.
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
 | `/town new <name>` | `/town new` | DONE |
-| `/town` / `/town <name>` — info screen | `/town info [town]` | PARTIAL — mayor, founding date, treasury, land, nation, trusted and the resident list are all there; no board and no per-flag summary |
+| `/town` / `/town <name>` — info screen | `/town info [town]` | PARTIAL — mayor, founding date, treasury, land, nation, trusted, tag, declared settings, the board and the resident list; no per-flag summary |
 | `/town add <player>` sends an invite; `/accept` | `/town add`, `/town accept`, `/town deny`, `/town invites` | DONE — answered with `/town accept` rather than a global `/accept` |
 | `/town kick <player>` | `/town kick` | DONE |
 | `/town leave` | `/town leave` | DONE |
@@ -63,7 +63,7 @@ rows as the truth.
 | `/town claim`, `/town claim outpost` | `/town claim [outpost]` | DONE |
 | `/town unclaim`, `/town unclaim all` | `/town unclaim` | PARTIAL — no `all` |
 | `/town set homeblock` | `/town homeblock` | DONE |
-| `/town set spawn` / `/town spawn` | `/town setspawn`, `/town spawn`, `/town delspawn` | PARTIAL — priced, but no public spawns and no travel to other towns |
+| `/town set spawn` / `/town spawn` | `/town setspawn`, `/town spawn [town]`, `/town delspawn` | DONE — priced, with travel to another town's spawn when that town has made it public |
 | Spawn warmup, cooldown, cancel on move/damage | Warmup and cooldown, cancelled by moving a block or being hit | DONE |
 | `/town toggle pvp|fire|explosion|mobs` | `/town flag set|clear|here|list` | DONE — a general flag system rather than four toggles, and per-chunk as well as town-wide |
 | `/town set perm …` — resident/ally/outsider build/destroy/switch/itemuse | Covered by the flag system's relationship ladder | DONE |
@@ -155,7 +155,7 @@ rows as the truth.
 | Jails, outlaws, courts | — | **MISSING** — `RT-MOD-JUSTICE` |
 | Discord relay | — | **MISSING** — `RT-MOD-DISCORD` |
 | `/townyadmin …` — the whole administrative surface | `/rifttowny status` only | PARTIAL |
-| Importing an existing Towny database | `CivicImporter` plus `TownySqlSource`, 34 tests | PARTIAL — residents, towns, nations, claims, plots, homeblocks, boards and tags come across from Towny's MySQL database, with a dry run first. **Not yet run against a real Towny installation**, and no flatfile reader for servers that never moved to MySQL. See COMPATIBILITY_MATRIX §5 |
+| Importing an existing Towny database | `CivicImporter` plus `TownySqlSource`, 34 tests | PARTIAL — residents, towns, nations, claims, plots, homeblocks, boards and tags come across from Towny's MySQL database, with a dry run first. **Not yet run against a real Towny installation**, and no flatfile reader for servers that never moved to MySQL. Run with `/rifttowny migrate towny`. See COMPATIBILITY_MATRIX §5 |
 
 ## 7. Where RiftTowny already goes further
 

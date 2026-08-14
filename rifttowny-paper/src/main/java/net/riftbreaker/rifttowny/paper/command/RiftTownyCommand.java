@@ -26,6 +26,16 @@ import java.util.Locale;
 public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
 
     private static final String PERMISSION_STATUS = "rifttowny.admin.status";
+    private static final String PERMISSION_MIGRATE = "rifttowny.admin.migrate";
+
+    /**
+     * The word that turns a dry run into a real one.
+     *
+     * <p>Not {@code yes}, not {@code -f}, and not a second command that is one keystroke from the
+     * first. An import is the only irreversible bulk operation here, and the word has to be one
+     * nobody types by accident or by muscle memory.</p>
+     */
+    private static final String CONFIRMATION = "confirm";
 
     /**
      * The plugin, resolved per call rather than captured.
@@ -56,6 +66,13 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
                 }
                 sendStatus(sender);
             }
+            case "migrate" -> {
+                if (!hasPermission(sender, PERMISSION_MIGRATE)) {
+                    messages.send(sender, MessageKey.COMMAND_NO_PERMISSION);
+                    return true;
+                }
+                migrate(sender, args);
+            }
             case "help" -> sendHelp(sender);
             default -> messages.send(sender, MessageKey.COMMAND_UNKNOWN_SUBCOMMAND,
                     MessageService.value("input", args[0]),
@@ -71,17 +88,98 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
             @NotNull final String label,
             final String @NotNull [] args
     ) {
-        if (args.length != 1) {
+        final List<String> candidates = switch (args.length) {
+            case 1 -> List.of("status", "migrate", "help");
+            case 2 -> "migrate".equalsIgnoreCase(args[0]) ? List.of("towny") : List.of();
+            // Deliberately not offering the confirmation word. Tab-completing your way into an
+            // irreversible bulk import is exactly what the word is there to prevent.
+            default -> List.of();
+        };
+        if (candidates.isEmpty()) {
             return List.of();
         }
-        final String partial = args[0].toLowerCase(Locale.ROOT);
+        final String partial = args[args.length - 1].toLowerCase(Locale.ROOT);
         final List<String> options = new ArrayList<>();
-        for (final String candidate : List.of("status", "help")) {
+        for (final String candidate : candidates) {
             if (candidate.startsWith(partial)) {
                 options.add(candidate);
             }
         }
         return options;
+    }
+
+    /**
+     * {@code /rifttowny migrate towny [confirm]} — brings a Towny database in.
+     *
+     * <p>A dry run unless the confirmation word is typed. Everything below runs off the server
+     * thread: it opens a second database connection, reads an entire Towny installation and then
+     * writes one, none of which a tick can wait for.</p>
+     */
+    private void migrate(final CommandSender sender, final String[] args) {
+        final MessageService messages = plugin().messages();
+        final var configured = plugin().settings().townyImport();
+
+        if (args.length < 2 || !"towny".equalsIgnoreCase(args[1])) {
+            messages.send(sender, MessageKey.COMMAND_USAGE,
+                    MessageService.value("usage", "/rifttowny migrate towny [" + CONFIRMATION + ']'));
+            return;
+        }
+        if (!configured.isConfigured()) {
+            messages.send(sender, MessageKey.MIGRATE_NOT_CONFIGURED);
+            return;
+        }
+        final boolean apply = args.length > 2 && CONFIRMATION.equalsIgnoreCase(args[2]);
+
+        messages.send(sender, MessageKey.MIGRATE_STARTED,
+                MessageService.value("source", configured.describe()),
+                MessageService.value("mode", apply ? "importing" : "dry run"));
+
+        plugin().scheduler().async(() -> {
+            final var source = new net.riftbreaker.rifttowny.storage.migration.TownySqlSource(
+                    configured.jdbcUrl(), configured.username(), configured.password(),
+                    configured.tablePrefix());
+            final net.riftbreaker.rifttowny.domain.migration.MigrationPlan plan;
+            try {
+                plan = source.read();
+            } catch (final net.riftbreaker.rifttowny.domain.migration.MigrationSource
+                    .MigrationException unreadable) {
+                // The message names the database and the driver's own complaint. Never the
+                // password: the URL is printed through describe(), which cuts the query string.
+                plugin().getLogger().warning("Towny import could not read the source: "
+                        + unreadable.getMessage());
+                messages.send(sender, MessageKey.MIGRATE_UNREADABLE,
+                        MessageService.value("reason", unreadable.getMessage()));
+                return;
+            }
+
+            messages.send(sender, MessageKey.MIGRATE_READ,
+                    MessageService.value("summary", plan.describe()));
+            source.notes().forEach(note -> messages.sendRaw(sender, MessageKey.MIGRATE_PROBLEM,
+                    MessageService.value("problem", note)));
+
+            final var pending = apply
+                    ? plugin().importer().apply(plan)
+                    : plugin().importer().preview(plan);
+
+            pending.whenComplete((report, failure) -> {
+                if (failure != null) {
+                    plugin().getLogger().log(java.util.logging.Level.WARNING,
+                            "Towny import failed part-way through", failure);
+                    messages.send(sender, MessageKey.MIGRATE_FAILED);
+                    return;
+                }
+                messages.send(sender, MessageKey.MIGRATE_DONE,
+                        MessageService.value("summary", report.describe()));
+                report.problems().forEach(problem ->
+                        messages.sendRaw(sender, MessageKey.MIGRATE_PROBLEM,
+                                MessageService.value("problem", problem.describe())));
+                if (!apply) {
+                    messages.send(sender, MessageKey.MIGRATE_DRY_RUN,
+                            MessageService.value("command",
+                                    "/rifttowny migrate towny " + CONFIRMATION));
+                }
+            });
+        });
     }
 
     private void sendHelp(final CommandSender sender) {
@@ -91,6 +189,10 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
         messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
                 MessageService.value("usage", "/rifttowny status"),
                 MessageService.value("description", "platform, storage, outbox and integration state"));
+        messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
+                MessageService.value("usage", "/rifttowny migrate towny"),
+                MessageService.value("description",
+                        "read a Towny database; a dry run unless you add '" + CONFIRMATION + '\''));
     }
 
     private void sendStatus(final CommandSender sender) {

@@ -507,6 +507,36 @@ public enum MessageKey {
                     + "<dark_gray>|</dark_gray> <white>[]</white> claimed "
                     + "<dark_gray>|</dark_gray> <white>--</white> wilderness</gray>"),
 
+    // --- migration -------------------------------------------------------------------------------
+
+    MIGRATE_NOT_CONFIGURED("migrate.not-configured",
+            "<red>No Towny database is configured. Set <white>migration.towny.jdbc-url</white> in "
+                    + "config.yml — the credentials go there rather than in this command, so they "
+                    + "do not end up in the log.</red>"),
+
+    MIGRATE_STARTED("migrate.started",
+            "<gray>Reading <white><source></white> (<white><mode></white>)…</gray>"),
+
+    MIGRATE_READ("migrate.read",
+            "<gray>Read <white><summary></white></gray>"),
+
+    MIGRATE_UNREADABLE("migrate.unreadable",
+            "<red>That database could not be read: <white><reason></white></red>"),
+
+    MIGRATE_DONE("migrate.done",
+            "<green><summary></green>"),
+
+    MIGRATE_PROBLEM("migrate.problem",
+            "  <yellow><problem></yellow>"),
+
+    MIGRATE_DRY_RUN("migrate.dry-run",
+            "<gray>Nothing was written. Run <white><command></white> to do it for real — take a "
+                    + "backup first, because there is no undo.</gray>"),
+
+    MIGRATE_FAILED("migrate.failed",
+            "<red>The import stopped part-way. Whatever had already been written is kept, and "
+                    + "running it again will resume — the details are in the server log.</red>"),
+
     STATUS_HEADER("status.header",
             "<gray>RiftTowny <white><version></white></gray>"),
 

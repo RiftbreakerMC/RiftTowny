@@ -184,6 +184,17 @@ protection:
   denied-by-role: '<red>Your role in <white><town></white> does not allow that <gray>(<permission>)</gray>.</red>'
   town-not-loaded: '<red>This land is protected, but its town could not be loaded. Please tell an administrator.</red>'
 
+# Importing another plugin's world. See COMPATIBILITY_MATRIX section 5.
+migrate:
+  not-configured: '<red>No Towny database is configured. Set <white>migration.towny.jdbc-url</white> in config.yml — the credentials go there rather than in this command, so they do not end up in the log.</red>'
+  started: '<gray>Reading <white><source></white> (<white><mode></white>)…</gray>'
+  read: '<gray>Read <white><summary></white></gray>'
+  unreadable: '<red>That database could not be read: <white><reason></white></red>'
+  done: '<green><summary></green>'
+  problem: '  <yellow><problem></yellow>'
+  dry-run: '<gray>Nothing was written. Run <white><command></white> to do it for real — take a backup first, because there is no undo.</gray>'
+  failed: '<red>The import stopped part-way. Whatever had already been written is kept, and running it again will resume — the details are in the server log.</red>'
+
 status:
   header: '<gray>RiftTowny <white><version></white></gray>'
   platform: '  <gray>Platform</gray> <white><platform></white> <dark_gray>|</dark_gray> <gray>API</gray> <white><api></white>'

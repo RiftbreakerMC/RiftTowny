@@ -47,7 +47,7 @@ configuration-gated.
 | `/rtp` `/wild` | — | ❌ **by design** | **Owned by RiftEssentials.** RiftTowny supplies a `ClaimGuard` and its safe-destination API instead of registering a conflicting command |
 | `/town top [category]` | — | ⬜ | Phase 3 |
 | `/nation top [category]` | — | ⬜ | Phase 3 |
-| `/rifttowny` | — | 🟡 | `status` subcommand exists in Phase 1 and reports real integration state |
+| `/rifttowny` | — | 🟡 | `status` reports real integration state; `migrate towny` imports a Towny database, dry run unless confirmed |
 | `/town discord create` | — | 🚫 | **Blocked**: VelocitySrv has no channel-provisioning API. Contract defined in INTEGRATION_CONTRACTS §2.6 |
 | `/nation discord create` | — | 🚫 | Same blocker |
 
@@ -294,7 +294,7 @@ claim is made for an alias without a passing test.
 
 ## 5. Migration — `RT-MOD-MIGRATE`
 
-Status: **the importer and a reader for Towny's MySQL database are built and tested. Not yet run
+Status: **`/rifttowny migrate towny` works end to end. The importer and a reader for Towny's MySQL database are built and tested. Not yet run
 against a real Towny installation.**
 
 ### 5.1 The constraint that decides the design
@@ -317,7 +317,24 @@ and is worth stating plainly, because it is not obvious until you try it.
 | `CivicImporter` — validation, ordering, collision handling, dry run, per-town commit | ✅ 18 tests |
 | `MigrationReport` — what it did, or would do, and everything it refused | ✅ |
 | `TownySqlSource` — a reader for Towny's MySQL database | ✅ 16 tests |
+| `/rifttowny migrate towny [confirm]` — dry run unless confirmed | ✅ |
 | A reader for Towny's flatfiles | ⬜ not written |
+
+### 5.0 Running one
+
+1. **Stop Towny.** RiftTowny refuses to start beside it, so this reads a database nothing is
+   holding open.
+2. **Take a backup of RiftTowny's own database.** There is no undo, and the command says so.
+3. Fill in `migration.towny.*` in `config.yml`. The credentials go there, not into the command — a
+   password given as a command argument is written to the console log, to any command-logging
+   plugin, and to the sender's own client history.
+4. `/rifttowny migrate towny` — reads everything and reports what it *would* do, writing nothing.
+5. Read the report. Every refusal is named with its reason.
+6. `/rifttowny migrate towny confirm` — does it.
+
+The confirmation word is not tab-completed, deliberately: tab-completing into an irreversible bulk
+import is what the word exists to prevent. Re-running after a failure resumes rather than
+duplicating, because the importer is idempotent.
 
 The importer's four rules, each tested:
 

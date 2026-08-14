@@ -80,6 +80,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.directory.TerritoryMap territoryMap;
     private net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions;
     private net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders placeholders;
+    private net.riftbreaker.rifttowny.domain.service.CivicImporter importer;
     private net.riftbreaker.rifttowny.domain.chat.ActiveChannels activeChannels;
     private net.riftbreaker.rifttowny.domain.chat.ChannelAudience channelAudience;
     private net.riftbreaker.rifttowny.integrations.chat.RiftChatAdapter chatAdapter;
@@ -376,6 +377,14 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicCache, territoryIndex, nationCache);
             this.territoryMap = new net.riftbreaker.rifttowny.domain.directory.TerritoryMap(
                     territoryIndex, ruinIndex, civicCache);
+            // The world check is a live server lookup rather than a stored list: a claim arriving
+            // for a world that is not loaded here would be territory nobody can visit.
+            this.importer = new net.riftbreaker.rifttowny.domain.service.CivicImporter(
+                    civicStore,
+                    net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),
+                    clock,
+                    civicCacheService,
+                    worldId -> getServer().getWorld(worldId) != null);
             this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();
             this.activeChannels = net.riftbreaker.rifttowny.domain.chat.ActiveChannels.empty();
             this.channelAudience = new net.riftbreaker.rifttowny.domain.chat.ChannelAudience(
@@ -630,6 +639,11 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
     public net.riftbreaker.rifttowny.domain.territory.TerritoryIndex territoryIndex() {
         return territoryIndex;
+    }
+
+    /** Brings another plugin's world in. Reached by {@code /rifttowny migrate}. */
+    public net.riftbreaker.rifttowny.domain.service.CivicImporter importer() {
+        return importer;
     }
 
     public net.riftbreaker.rifttowny.domain.civic.CivicCache civicCache() {

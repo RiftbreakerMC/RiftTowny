@@ -90,6 +90,27 @@ taxes:
   # 0 makes the first missed payment fatal, which is a defensible setting and a brutal one.
   grace-hours: 72
 
+# Importing an existing Towny installation. Used only by /rifttowny migrate; leaving it blank costs
+# nothing.
+#
+# Towny must be STOPPED. RiftTowny refuses to start beside it, so the two are never running at once
+# and this reads the database Towny left behind.
+#
+# The credentials live here rather than being typed into the command, and that is deliberate: a
+# password given as a command argument is written to the console log, to any command-logging plugin
+# on the server, and to the sender's own client history. Three copies nobody meant to make.
+#
+# RiftTowny only ever reads this database. An account with SELECT and nothing else is the right one
+# to give it.
+migration:
+  towny:
+    # e.g. jdbc:mariadb://127.0.0.1:3306/towny
+    jdbc-url: ''
+    username: ''
+    password: ''
+    # Towny's own default. Its setting is database.sql.table_prefix.
+    table-prefix: 'towny_'
+
 # The %townyadvanced_*% placeholder surface, served so a server's existing scoreboards keep working
 # unchanged. Requires PlaceholderAPI; without it these settings do nothing and nothing else breaks.
 #

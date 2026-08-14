@@ -30,8 +30,50 @@ public record RiftTownySettings(
         boolean territoryNoticesOnActionBar,
         net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
         net.riftbreaker.rifttowny.domain.bank.TaxPolicy taxes,
-        TruthWords truthWords
+        TruthWords truthWords,
+        TownyImport townyImport
 ) {
+
+    /**
+     * Where a Towny database lives, for {@code /rifttowny migrate}.
+     *
+     * <p><strong>Here rather than as command arguments, and the reason is the password.</strong> A
+     * credential typed into a command is written to the console log, to any command-logging plugin
+     * on the server, and to the sender's own client history — three copies of a database password
+     * that nobody meant to make. The master brief's rule is that no secret reaches a log, and a
+     * command argument is a log entry.</p>
+     *
+     * <p>Read-only in every sense: RiftTowny opens this connection to read and never writes a row
+     * to it. An account with SELECT and nothing else is the right one to configure.</p>
+     */
+    public record TownyImport(String jdbcUrl, String username, String password, String tablePrefix) {
+
+        public TownyImport {
+            jdbcUrl = jdbcUrl == null ? "" : jdbcUrl.trim();
+            username = username == null ? "" : username;
+            password = password == null ? "" : password;
+            tablePrefix = tablePrefix == null || tablePrefix.isBlank() ? "towny_" : tablePrefix.trim();
+        }
+
+        /** Whether an operator has actually filled this in. */
+        public boolean isConfigured() {
+            return !jdbcUrl.isEmpty();
+        }
+
+        /**
+         * The connection, with no credentials in it.
+         *
+         * <p>What gets printed. A JDBC URL can itself carry {@code ?user=&password=}, so the query
+         * string is cut off rather than trusted to be harmless.</p>
+         */
+        public String describe() {
+            if (!isConfigured()) {
+                return "not configured";
+            }
+            final int query = jdbcUrl.indexOf('?');
+            return query < 0 ? jdbcUrl : jdbcUrl.substring(0, query);
+        }
+    }
 
     /**
      * The words a boolean placeholder renders as.
@@ -150,7 +192,12 @@ public record RiftTownySettings(
                                 Math.max(0L, config.getLong("taxes.grace-hours", 72L)))),
                 new TruthWords(
                         config.getString("placeholders.true", "true"),
-                        config.getString("placeholders.false", "false")));
+                        config.getString("placeholders.false", "false")),
+                new TownyImport(
+                        config.getString("migration.towny.jdbc-url", ""),
+                        config.getString("migration.towny.username", ""),
+                        config.getString("migration.towny.password", ""),
+                        config.getString("migration.towny.table-prefix", "towny_")));
     }
 
     /**
