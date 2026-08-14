@@ -155,7 +155,7 @@ rows as the truth.
 | Jails, outlaws, courts | — | **MISSING** — `RT-MOD-JUSTICE` |
 | Discord relay | — | **MISSING** — `RT-MOD-DISCORD` |
 | `/townyadmin …` — the whole administrative surface | `/rifttowny status` only | PARTIAL |
-| Importing an existing Towny database | The importer is built and tested; **no reader for Towny's own data yet** | PARTIAL — the hard half (ordering, collisions, idempotency, dry run, per-town commit) is done and covered by 18 tests, but it has only ever run against fixtures. A server still cannot switch. See COMPATIBILITY_MATRIX §5 |
+| Importing an existing Towny database | `CivicImporter` plus `TownySqlSource`, 34 tests | PARTIAL — residents, towns, nations, claims, plots, homeblocks, boards and tags come across from Towny's MySQL database, with a dry run first. **Not yet run against a real Towny installation**, and no flatfile reader for servers that never moved to MySQL. See COMPATIBILITY_MATRIX §5 |
 
 ## 7. Where RiftTowny already goes further
 

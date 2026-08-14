@@ -294,7 +294,8 @@ claim is made for an alias without a passing test.
 
 ## 5. Migration — `RT-MOD-MIGRATE`
 
-Status: **the destination half is built and tested; no source reader exists yet.**
+Status: **the importer and a reader for Towny's MySQL database are built and tested. Not yet run
+against a real Towny installation.**
 
 ### 5.1 The constraint that decides the design
 
@@ -315,7 +316,8 @@ and is worth stating plainly, because it is not obvious until you try it.
 | `MigrationSource` — the one-method interface a reader implements | ✅ |
 | `CivicImporter` — validation, ordering, collision handling, dry run, per-town commit | ✅ 18 tests |
 | `MigrationReport` — what it did, or would do, and everything it refused | ✅ |
-| A reader for Towny's own data | ⬜ **not written** |
+| `TownySqlSource` — a reader for Towny's MySQL database | ✅ 16 tests |
+| A reader for Towny's flatfiles | ⬜ not written |
 
 The importer's four rules, each tested:
 
@@ -339,18 +341,44 @@ claiming the same chunk.
 Townless residents are not imported. RiftTowny registers a resident on first action rather than on
 login, so a player record with no town carries nothing this server would not recreate by itself.
 
-### 5.3 What a source reader still needs
+### 5.3 Reading Towny's SQL database
 
-Towny is available locally as `com.palmergames.bukkit.towny:towny` (`0.101.2.5`, `0.103.0.7`) and
-persists through `TownyFlatFileSource` or `TownySQLSource`, with `SQLSchema` describing its tables.
-So the format is *discoverable* rather than guessed — but it has not been read, and no reader has
-been written against it. **Nothing in this repository can currently read a Towny database**, and the
-importer above has only ever been run against fixtures.
+The clean-room judgement was taken deliberately and is recorded here: reading another plugin's
+persisted data in order to translate *out of* it is ordinary interoperability. RiftTowny's own
+schema, design and code are untouched by it — the reader only ever moves data outward, and nothing
+about Towny's structure survives into how RiftTowny stores anything.
 
-Writing that reader is a clean-room judgement call worth making deliberately rather than by
-accident: reading another plugin's persisted data to translate *out of* it is ordinary
-interoperability and leaves RiftTowny's own design untouched, but it does mean reading Towny's
-storage layer. That decision is not yet taken.
+The schema was read out of Towny's own artifact (`com.palmergames.bukkit.towny:towny:0.103.0.7`)
+rather than guessed: `TownySQLSource$TownyDBTableType` for the table names and primary keys,
+`SQLSchema` for the columns, `DatabaseConfig` for the `towny_` prefix default.
+
+Two mappings would have been wrong if assumed, and are worth recording:
+
+- **A nation has no leader column.** Towny stores `capital` and takes the king from that town's
+  mayor. A guessed `king` column would have produced a reader that compiled, ran, and imported
+  every nation leaderless.
+- **A town's homeblock lives on the town, not the townblock.** It is a `world,x,z` string on the
+  town row; townblock rows carry no flag of their own, so the two are matched back together.
+
+**It reads defensively, and that is the design rather than caution.** Every table is fetched with
+`SELECT *` and read by name against the result set's own metadata. Towny's schema grows version by
+version; a reader naming its columns in the `SELECT` would fail wholesale on the one version missing
+one of them, and would do it *during somebody's migration*. A missing column reads as absent. The
+test that matters most is the one loading a deliberately old, narrow schema.
+
+Left out on purpose, each reported to the operator: residents with no UUID (a player cannot be
+matched by name alone — the next person to take that name would inherit their town), Towny's own NPC
+accounts, towns Towny had already ruined (importing them would resurrect towns whose members had
+already lost them), and nations whose capital did not come across.
+
+Still unwritten: a reader for Towny's **flatfile** storage, for servers that never moved to MySQL.
+`TownyFlatFileSource` describes that format. The importer and the interchange model are shared, so
+it is a second `MigrationSource` and nothing else.
+
+There is **no integration test against a real Towny**, and there cannot be one here: Towny cannot
+run beside RiftTowny. The fixtures encode the schema as read out of Towny's artifact, which is the
+closest thing available — a first real migration should still be run against a copy of the
+database, with the dry run read before applying.
 
 ## 4. Deliberate non-goals
 
