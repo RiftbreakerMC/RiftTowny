@@ -378,24 +378,47 @@ for typed input.
 `TeleportSafetyService` and `ServerPolicyService` both currently consult Towny; both are
 PR targets.
 
-### 2.7 RiftEco — player wallets — `BLOCKED` (2026-08-13)
+### 2.7 RiftEco — player wallets — `VERIFIED` (2026-08-13)
 
-RiftEco is **not present in this workspace**. Its API cannot be read, so no adapter can be
-written against it and none has been: the only `PlayerWallet` implementation that ships is
-`PlayerWallet.absent()`, which refuses every operation.
+Cloned to `C:\Users\zws11\Coding\RiftEco` at `d81ee73` and installed to the local Maven
+repository as `net.riftbreaker:rifteco:0.1.0-SNAPSHOT`. The adapter is compiled against the
+real API — `provided` scope, so it is **not** shaded into `RiftTowny.jar`; two copies of
+`RiftEcoService` on one classpath is a `ClassCastException` on the server that has the real
+one. A test asserts the jar contains no `net/riftbreaker/eco/` classes.
+
+**What was read, and what is used** (`net.riftbreaker.eco.api`):
+
+| Type | Member | Used for |
+|---|---|---|
+| `RiftEcoProvider` | `find()` → `Optional<RiftEcoService>` | Locating the service through Bukkit's services manager |
+| `RiftEcoService` | `balance(AccountRef, CurrencyKey)` | `PlayerWallet.balanceOf` |
+| `RiftEcoService` | `withdraw(AccountRef, Money, String)` | `PlayerWallet.take` |
+| `RiftEcoService` | `deposit(AccountRef, Money, String)` | `PlayerWallet.give` |
+| `RiftEcoService` | `defaultCurrency()` → `CurrencyDefinition` | The currency organisations bank in, and the binding proof |
+| `AccountRef` | `player(UUID)` | Addressing a player's account |
+| `Money` | `(CurrencyKey, BigDecimal)` | Amounts. Both sides are `BigDecimal`, so nothing rounds |
+| `TransactionReceipt` | `successful()` | Whether money actually moved |
+
+**Deliberately not used.** RiftEco has `AccountType.TOWN`, a bank subsystem, fees, rewards,
+an ore exchange and its own `RiftEcoTownyService` bridge. None is touched. A town's treasury
+stays in RiftTowny's ledger: putting it in another plugin's storage would put the balance
+outside our transaction, give the ledger two sources of truth, and make disbanding a town
+depend on a second plugin agreeing. This seam is one wallet, one direction at a time.
+
+**Without RiftEco installed**, `PlayerWallet.absent()` takes over and refuses every transfer;
+the civic ledger is unaffected.
 
 **What is built and does not need RiftEco.** The civic ledger is entirely RiftTowny's:
 `rt_organisation_balance` and `rt_bank_ledger`, balances, history, and every rule about who
 may move what. A town has a treasury on a server with no economy plugin at all. Taxes,
 upkeep, claim costs and the ruin reclaim price will all move money inside that ledger.
 
-**What is blocked.** Money crossing between a *player* and an organisation — `/town deposit`
-and `/town withdraw`. A player's balance belongs to the economy plugin, and RiftTowny will
-not keep a second one: a server with two answers to "how much money do I have" has a bug it
-cannot fix. Those two commands refuse with `NO_ECONOMY` and `/town bank` says so on its first
-line, so an operator learns it from the screen rather than from a player's complaint.
+**Why the seam exists at all.** A player's balance belongs to the economy plugin, and
+RiftTowny will not keep a second one: a server with two answers to "how much money do I have"
+has a bug it cannot fix. So everything that moves money between a person and an organisation
+goes through one interface, and nothing else in RiftTowny knows what an economy plugin is.
 
-**The contract an adapter must satisfy** — `net.riftbreaker.rifttowny.domain.bank.PlayerWallet`:
+**The contract any adapter must satisfy** — `net.riftbreaker.rifttowny.domain.bank.PlayerWallet`:
 
 | Method | Required behaviour |
 |---|---|
@@ -416,7 +439,8 @@ This is not a two-phase commit and does not claim to be. A crash between `take` 
 and the civic write committing loses that transaction; the window is one write wide, the loss
 is in the safe direction, and the ledger records what did commit.
 
-**VaultUnlocked** is the intended fallback and is equally unbuilt, for the same reason.
+**VaultUnlocked** is the intended fallback and is still unbuilt — the same interface, a second
+implementation, chosen only when RiftEco is absent.
 
 ### 2.12 Third-party — `NOT INSPECTED`
 

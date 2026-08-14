@@ -27,7 +27,8 @@ public record RiftTownySettings(
         java.time.Duration spawnWarmup,
         java.time.Duration spawnCooldown,
         boolean territoryNotices,
-        boolean territoryNoticesOnActionBar
+        boolean territoryNoticesOnActionBar,
+        net.riftbreaker.rifttowny.domain.bank.CivicPrices prices
 ) {
 
     public RiftTownySettings {
@@ -38,6 +39,7 @@ public record RiftTownySettings(
         Objects.requireNonNull(ruinSweepInterval, "ruinSweepInterval");
         Objects.requireNonNull(spawnWarmup, "spawnWarmup");
         Objects.requireNonNull(spawnCooldown, "spawnCooldown");
+        Objects.requireNonNull(prices, "prices");
     }
 
     /** Whether a disbanded town leaves a ruin at all. */
@@ -107,7 +109,35 @@ public record RiftTownySettings(
                 java.time.Duration.ofSeconds(
                         Math.max(0L, config.getLong("spawn.cooldown-seconds", 60L))),
                 config.getBoolean("notices.territory", true),
-                config.getBoolean("notices.action-bar", true));
+                config.getBoolean("notices.action-bar", true),
+                new net.riftbreaker.rifttowny.domain.bank.CivicPrices(
+                        price(config, "prices.town-founding"),
+                        price(config, "prices.claim"),
+                        price(config, "prices.claim-refund"),
+                        price(config, "prices.plot"),
+                        price(config, "prices.reclaim"),
+                        price(config, "prices.spawn-travel")));
+    }
+
+    /**
+     * Reads one price.
+     *
+     * <p>Through the string form rather than {@code getDouble}: an operator writes {@code 12.10} and
+     * a double turns that into {@code 12.099999999999999}, which is the error the whole ledger is
+     * built as {@link java.math.BigDecimal} to avoid. Anything unreadable is zero — a price that
+     * cannot be parsed should not become an accidental charge.</p>
+     */
+    private static java.math.BigDecimal price(final FileConfiguration config, final String path) {
+        final String raw = config.getString(path);
+        if (raw == null || raw.isBlank()) {
+            return java.math.BigDecimal.ZERO;
+        }
+        try {
+            final java.math.BigDecimal parsed = new java.math.BigDecimal(raw.trim());
+            return parsed.signum() < 0 ? java.math.BigDecimal.ZERO : parsed;
+        } catch (final NumberFormatException notANumber) {
+            return java.math.BigDecimal.ZERO;
+        }
     }
 
     /** How spawn travel reads in the startup log. */

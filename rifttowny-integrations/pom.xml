@@ -34,5 +34,17 @@
       <groupId>io.papermc.paper</groupId>
       <artifactId>paper-api</artifactId>
     </dependency>
+    <!--
+      RiftEco's API, compiled against and never shaded. provided scope on purpose: the adapter is
+      constructed inside a guard and the plugin runs without it, so shipping a copy in the jar would
+      mean two RiftEcoService interfaces on the classpath and a ClassCastException on a server that
+      has the real one.
+    -->
+    <dependency>
+      <groupId>net.riftbreaker</groupId>
+      <artifactId>rifteco</artifactId>
+      <version>0.1.0-SNAPSHOT</version>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
 </project>

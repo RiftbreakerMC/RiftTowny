@@ -36,6 +36,30 @@ network:
   # True when more than one backend server shares this database. Requires mariadb.
   shared: false
 
+prices:
+  # What things cost. Every value is 0 by default, which means free: a server that installs
+  # RiftTowny and configures nothing should find claiming works, not find that nobody can afford to.
+  #
+  # Founding, plots and spawn travel are charged to a player's own wallet and need an economy plugin
+  # (RiftEco). Claiming and the refund move money inside the town's own treasury and work without
+  # one - a town with an empty treasury simply cannot afford to expand.
+  town-founding: 0
+  claim: 0
+
+  # Returned to the treasury when a chunk is released. Deliberately its own number rather than a
+  # percentage of the claim price: a full refund makes claiming free to experiment with, and a small
+  # one makes a misclick expensive, and which of those you want is not something to guess.
+  claim-refund: 0
+
+  plot: 0
+
+  # Charged to whoever rebuilds a ruin. The one price with a purpose beyond economy: it is what
+  # stops a wealthy player collecting every fallen town on the server.
+  reclaim: 0
+
+  # Charged for /town spawn.
+  spawn-travel: 0
+
 notices:
   # Tell a player whose land they have walked onto, as they cross the border.
   #

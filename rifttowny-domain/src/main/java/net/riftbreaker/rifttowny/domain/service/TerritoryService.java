@@ -40,6 +40,8 @@ public final class TerritoryService {
     private final CivicStore store;
     private final Clock clock;
     private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index;
+    private final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices;
+    private final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet;
 
     /**
      * @param index kept current by this service, and the only thing a protection listener is
@@ -52,9 +54,30 @@ public final class TerritoryService {
             final Clock clock,
             final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index
     ) {
+        this(store, clock, index,
+                net.riftbreaker.rifttowny.domain.bank.CivicPrices.free(),
+                net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent());
+    }
+
+    /**
+     * @param prices what territory costs. {@link
+     *        net.riftbreaker.rifttowny.domain.bank.CivicPrices#free()} charges nothing, which is
+     *        what a server that has configured no economy gets
+     * @param wallet consulted only for its currency: a claim is paid by the town's treasury, not by
+     *        a player, so it works with no economy plugin at all
+     */
+    public TerritoryService(
+            final CivicStore store,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
+            final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
+            final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.index = Objects.requireNonNull(index, "index");
+        this.prices = Objects.requireNonNull(prices, "prices");
+        this.wallet = Objects.requireNonNull(wallet, "wallet");
     }
 
     /**
@@ -94,6 +117,14 @@ public final class TerritoryService {
             final Outcome<TownClaims> outcome = claims.claim(chunk, kind, clock.instant());
             final TownClaims updated = require(outcome);
 
+            // Charged inside the same transaction as the claim, so a town cannot end up owning a
+            // chunk it did not pay for or paying for one it does not own. The shape rules ran
+            // first: being told a claim is illegal is more useful than being told it is unaffordable
+            // when it is both.
+            civicCharge(transaction, town, prices.claim(currency()),
+                    net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.CLAIM,
+                    describe(chunk));
+
             // Only the new chunk is written. A town's territory can be thousands of rows, and
             // rewriting all of them to add one would turn a routine command into a table scan.
             final Claim created = updated.at(chunk).orElseThrow();
@@ -115,6 +146,14 @@ public final class TerritoryService {
             final TownClaims claims = load(transaction, townId);
             final Outcome<TownClaims> outcome = claims.unclaim(chunk);
             require(outcome);
+
+            // Refunded, if the server configured one. Separate from the claim price rather than a
+            // percentage of it: a refund equal to the price makes claiming free to experiment with,
+            // and one far below makes a misclick expensive, and which of those a server wants is
+            // not something to infer.
+            civicPay(transaction, town, prices.claimRefund(currency()),
+                    net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.UNCLAIM_REFUND,
+                    describe(chunk));
 
             transaction.claims().delete(chunk);
             transaction.publishAll(outcome.events(), correlation("unclaim", townId));
@@ -220,6 +259,63 @@ public final class TerritoryService {
     public CompletableFuture<TownClaims> territoryOf(final TownId townId) {
         Objects.requireNonNull(townId, "townId");
         return store.inTransaction(transaction -> load(transaction, townId));
+    }
+
+    /** The currency the treasury banks in, which is the wallet's. */
+    private String currency() {
+        return wallet.currency();
+    }
+
+    /**
+     * Takes money from a town's treasury inside the caller's transaction.
+     *
+     * <p>Not {@code BankService.charge}: that opens its own transaction, and a charge that committed
+     * separately from the claim it paid for could leave a town poorer with nothing to show. The
+     * ledger write belongs in the same unit of work as the thing being bought.</p>
+     */
+    private void civicCharge(
+            final CivicTransaction transaction,
+            final Town town,
+            final net.riftbreaker.rifttowny.domain.bank.Money price,
+            final net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason reason,
+            final String detail
+    ) {
+        if (price.isZero()) {
+            return;
+        }
+        final var before = transaction.bank().balance(town.bankAccountId(), price.currency())
+                .orElseGet(() -> net.riftbreaker.rifttowny.domain.bank.Money.zero(price.currency()));
+        final var after = before.minus(price).orElseThrow(() ->
+                new ChangeRefusedException(ChangeDenial.INSUFFICIENT_CIVIC_FUNDS));
+        transaction.bank().record(
+                net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                        town.bankAccountId(), price, after, reason, null, detail, clock.instant()),
+                clock.instant());
+    }
+
+    /** The same, in the other direction. */
+    private void civicPay(
+            final CivicTransaction transaction,
+            final Town town,
+            final net.riftbreaker.rifttowny.domain.bank.Money amount,
+            final net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason reason,
+            final String detail
+    ) {
+        if (amount.isZero()) {
+            return;
+        }
+        final var before = transaction.bank().balance(town.bankAccountId(), amount.currency())
+                .orElseGet(() ->
+                        net.riftbreaker.rifttowny.domain.bank.Money.zero(amount.currency()));
+        transaction.bank().record(
+                net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                        town.bankAccountId(), amount, before.plus(amount), reason, null, detail,
+                        clock.instant()),
+                clock.instant());
+    }
+
+    private static String describe(final ChunkKey chunk) {
+        return chunk.chunkX() + ", " + chunk.chunkZ();
     }
 
     private static TownClaims load(final CivicTransaction transaction, final TownId townId) {

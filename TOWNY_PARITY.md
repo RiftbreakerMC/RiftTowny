@@ -71,8 +71,9 @@ rows as the truth.
 | `/town set tag` | — | **MISSING** |
 | `/town rank add|remove` | `/town role assign|unassign` | DONE |
 | Custom ranks with configurable permissions | `/town role new|delete`, grant, revoke, reprioritise | DONE — Towny's ranks are config-defined; ours are per-town and editable in game |
-| `/town buy bonus`, `/town claim` cost | — | **MISSING** — `RT-MOD-BANK` |
-| `/town deposit`, `/town withdraw` | `/town deposit`, `/town withdraw`, `/town bank` | PARTIAL — the ledger, balances, history and permissions are done; the two transfer commands refuse until an economy provider exists. See `INTEGRATION_CONTRACTS.md` §2.7 |
+| `/town claim` cost, and a refund on unclaim | `prices.claim`, `prices.claim-refund`, charged in the same transaction as the claim | DONE |
+| `/town buy bonus` | — | **MISSING** |
+| `/town deposit`, `/town withdraw` | `/town deposit`, `/town withdraw`, `/town bank` | DONE — bound to RiftEco. Refuses with a clear message when no economy plugin is installed |
 | Town upkeep, bankruptcy, ruin on unpaid upkeep | Ruins exist; upkeep does not | PARTIAL |
 | `/town outlaw add|remove` | — | **MISSING** |
 | `/town merge` | — | **MISSING** |
@@ -138,7 +139,7 @@ rows as the truth.
 
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
-| Economy: town/nation banks, taxes, upkeep, plot prices | Town bank and ledger built; no player wallet, no taxes, no prices | PARTIAL — the civic half exists and every price row above is now one `BankService.charge` away. The player half needs RiftEco, which is not in this workspace |
+| Economy: town/nation banks, taxes, upkeep, plot prices | Town bank, ledger and RiftEco wallet built; claim prices charged | PARTIAL — no taxes, no upkeep, no nation bank, and four of the six configured prices are read but not yet taken |
 | Chat channels: town, nation, ally | — | **MISSING** — `RT-MOD-CHAT` |
 | `%townyadvanced_*%` placeholders | Manifest captured, none implemented | **MISSING** — `RT-MOD-PAPI` |
 | Dynmap/BlueMap/squaremap territory rendering | — | **MISSING** — `RT-MOD-MAP` |
