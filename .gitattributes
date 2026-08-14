@@ -9,6 +9,8 @@
 *.sql text eol=lf
 *.properties text eol=lf
 *.md text eol=lf
+# The placeholder manifest is a resource a test reads line by line.
+*.txt text eol=lf
 Jenkinsfile text eol=lf
 
 # Leave archives untouched.
