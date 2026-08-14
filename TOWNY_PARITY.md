@@ -67,8 +67,12 @@ rows as the truth.
 | Spawn warmup, cooldown, cancel on move/damage | Warmup and cooldown, cancelled by moving a block or being hit | DONE |
 | `/town toggle pvp|fire|explosion|mobs` | `/town flag set|clear|here|list` | DONE — a general flag system rather than four toggles, and per-chunk as well as town-wide |
 | `/town set perm …` — resident/ally/outsider build/destroy/switch/itemuse | Covered by the flag system's relationship ladder | DONE |
-| `/town set board` | — | **MISSING** |
-| `/town set tag` | — | **MISSING** |
+| `/town set board` | `/town set board <text\|clear>` | DONE |
+| `/town set tag` | `/town set tag <text\|clear>` | DONE |
+| `/town toggle open` — anyone may join without an invitation | `/town set open <on\|off>`, and `/town join <town>` | DONE |
+| `/town toggle public` — outsiders may use the spawn | `/town set public <on\|off>`, and `/town spawn <town>` | DONE |
+| `/town toggle neutral` / peaceful | `/town set neutral <on\|off>` | PARTIAL — recorded and shown; **nothing enforces it**, because there is no war module. RiftWars will read it |
+| Town map colour | `/town set colour <#a1b2c3\|clear>` | DONE |
 | `/town rank add|remove` | `/town role assign|unassign` | DONE |
 | Custom ranks with configurable permissions | `/town role new|delete`, grant, revoke, reprioritise | DONE — Towny's ranks are config-defined; ours are per-town and editable in game |
 | `/town claim` cost, and a refund on unclaim | `prices.claim`, `prices.claim-refund`, charged in the same transaction as the claim | DONE |
@@ -103,7 +107,7 @@ rows as the truth.
 | `/nation set spawn`, `/nation spawn` | — | **MISSING** |
 | `/nation list` | `/nation list [page] [order]` | DONE |
 | `/nation online` | — | **MISSING** |
-| `/nation set board`, `/nation set tag` | — | **MISSING** |
+| `/nation set board`, `/nation set tag` | `/nation set board\|tag\|colour\|neutral` | DONE |
 
 ## 4. Plots
 
@@ -144,7 +148,8 @@ rows as the truth.
 |---|---|---|
 | Economy: town/nation banks, taxes, upkeep, plot prices | Town bank, ledger, RiftEco wallet, all six prices, and taxes with upkeep and bankruptcy | PARTIAL — no `/nation bank` command (the nation account is credited by tax and cannot yet be spent), no plot resale |
 | Chat channels: town, nation, ally | — | **MISSING** — `RT-MOD-CHAT` |
-| `%townyadvanced_*%` placeholders | Manifest captured, none implemented | **MISSING** — `RT-MOD-PAPI` |
+| `%townyadvanced_*%` placeholders | The whole 143-name manifest served under Towny's own identifier | PARTIAL — every name resolves and none can reach a player as raw markup; roughly seventy carry real values and the rest return their documented blank, each with a recorded reason. Balances wait on a snapshot cache; the level-derived numbers wait on `RT-MOD-PROGRESSION` |
+| `%rel_townyadvanced_color%` | Served, as the viewed player's own allegiance colour | PARTIAL — ally / enemy / at-war need `RT-MOD-DIPLOMACY` |
 | Dynmap/BlueMap/squaremap territory rendering | — | **MISSING** — `RT-MOD-MAP` |
 | Jails, outlaws, courts | — | **MISSING** — `RT-MOD-JUSTICE` |
 | Discord relay | — | **MISSING** — `RT-MOD-DISCORD` |
@@ -175,17 +180,20 @@ Counted by row: roughly **half** of Towny's observable surface is DONE, a quarte
 MISSING. The missing quarter is not evenly spread — it is concentrated in four blocks, and three of
 them are one dependency:
 
-1. **Placeholders and chat** (`RT-MOD-PAPI`, `RT-MOD-CHAT`) — what makes a server's existing
-   scoreboards and channels keep working, and the reason a server that switched would look broken to
-   its own players on day one.
+1. **Chat channels** (`RT-MOD-CHAT`) — `/tc` and `/nc`. Nothing upstream is in the way:
+   `RiftChatService.Channel` already declares `TOWN` and `NATION`, and RiftTowny is the thing that
+   knows who is in them. `/ac` is blocked twice over — no `ALLY` constant, and no allies to send to.
 2. **Migration** (`RT-MOD-MIGRATE`) — no server can switch to RiftTowny without importing its Towny
    database.
 3. **Justice and diplomacy** (`RT-MOD-JUSTICE`, `RT-MOD-DIPLOMACY`) — jails, outlaws, allies and
    enemies. The largest remaining block by row count, and the one with no dependency left in its way.
+   Diplomacy also unblocks the relational colour and four location placeholders.
 4. **The GUI** (`RT-CORE-UI`) — nothing declares `Surface.GUI` yet, which is what the parity test
    wants to see while there is no menu, and will stop being true the moment there is one.
 
-Economy and the read-only surface have both come off this list: they were the two highest-value
-things left, and both are built.
+Economy, the read-only surface and the placeholder surface have all come off this list. The
+placeholder one mattered most for switching: a server's scoreboards, Discord embeds and web panels
+are written against `%townyadvanced_*%`, and until an hour ago every one of them would have gone
+blank on the day it changed plugin.
 
 A server could not replace Towny with RiftTowny today. It could run a new world on it.

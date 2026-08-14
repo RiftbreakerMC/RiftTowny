@@ -64,8 +64,19 @@ in 9 groups.** The manifest is versioned: when Towny adds placeholders, the base
 re-captured, the diff is reviewed, and new entries are added as a new manifest version
 rather than silently.
 
-Nothing in this table is implemented yet — the whole surface is Phase 2 work. It is
-recorded now so "complete" can be measured against a real list instead of a vague goal.
+**Served. 🟡** The expansion is registered and every name below resolves — `%townyadvanced_*%`,
+identifier and all, so an existing scoreboard keeps working unchanged. The list lives as a
+resource (`placeholders/townyadvanced.txt`) that both `/papi info` and the golden test read, so
+"complete" is measured against a real list rather than a vague goal.
+
+What "resolves" guarantees, exactly: **every name returns a string, never `null`.** Returning
+`null` makes PlaceholderAPI leave the literal `%townyadvanced_whatever%` on the player's screen, so
+the difference between an unimplemented placeholder rendering blank and rendering as raw markup is
+this one rule. A test sweeps all 143 names against three subjects — a player in a town and a
+nation, a player in no town, and no player at all — and fails on any `null`.
+
+Roughly seventy carry real values today. The rest return their documented blank, and each blank has
+a reason recorded beside it in `TownyPlaceholders`; the groups below say which.
 
 ### Global mapping rules
 
@@ -138,8 +149,15 @@ the highest-priority role the resident holds.
 `time_until_new_day_hours_formatted`, `time_until_new_day_minutes_formatted`,
 `time_until_new_day_seconds_formatted`
 
-RiftTowny's upkeep cycle supplies the "new day" instant. If upkeep is disabled these
-resolve to the configured blank value rather than a misleading zero.
+RiftTowny's tax run supplies the "new day" instant, floored the same way `TaxPolicy.periodKey`
+floors it so the countdown ends exactly when a run becomes due. **Served.** With taxes disabled
+these resolve blank rather than to a misleading zero — a countdown to nothing is worse than no
+countdown.
+
+**Blank, and why:** `title`, `surname` and the four `towny_*fix` forms are columns `V12` added and
+the `Resident` aggregate does not yet carry. `resident_friends_amount` is `0` — there is no friends
+subsystem, and town trust is a different thing. `player_jailed` returns the **not-jailed** value
+rather than a blank, exactly as the mapping table above promises.
 
 ### 3.6 Money (28)
 
@@ -156,10 +174,17 @@ resolve to the configured blank value rather than a misleading zero.
 `town_merge_cost`, `town_merge_per_plot_percentage`, `town_reclaim_cost`,
 `daily_resident_tax`, `daily_resident_tax_unformatted`
 
-All resolve in the organisation's default currency. Where RiftEco is absent and
-VaultUnlocked is the provider, the single Vault currency is used. Where no economy
-provider exists at all, these return the blank value — never `0`, which would read as a
-real balance.
+Prices and tax rates are **served** — they are configured values held in memory, so
+`town_creation_cost`, `townblock_claim_price`, the upkeeps and the taxes all answer.
+
+**Balances are blank**, and deliberately so: `BankService.balanceOf` returns a future and a
+placeholder cannot wait for one. A `0` there would read as a real balance of nothing, which is a
+worse lie than saying nothing. They stay blank until a balance snapshot cache exists. The same
+applies to `top_town_balance_<n>`.
+
+The level-derived reductions and allowances (`*_reduction_from_*_level`, `townblock_buy_bonus_price`,
+`town_merge_*`) belong to `RT-MOD-PROGRESSION`, which is unbuilt. Blank rather than a number,
+because any number there is one a town could plan against and lose.
 
 ### 3.7 Leaderboard (4, parameterised)
 
@@ -189,20 +214,43 @@ returns blank.
 `number_of_neutral_towns_in_server`, `number_of_towns_in_world`,
 `number_of_neutral_towns_in_world`
 
-Location placeholders resolve from the player's **last known claim**, updated by the
-movement listener, never by a synchronous chunk lookup during parsing.
+**Served**, and they resolve from the player's **last known claim** — recorded by the movement
+listener into `LastKnownChunk`, never by a synchronous chunk lookup during parsing. The reason is
+not speed: a placeholder is resolved by whatever plugin wants it, on whatever thread it likes, and
+reading a player's position from an arbitrary thread is illegal on Folia and racy on Paper.
+
+A player whose position was never recorded resolves blank rather than "Wilderness" — "not standing
+anywhere" and "standing in the wild" are different facts, and conflating them puts an offline
+player's last position on a live scoreboard.
+
+Blank within this group: districts and plot groups (`RT-CORE-AREA`), for-sale price and flag
+(`RT-MOD-PROPERTY`), ally and enemy homeblocks (`RT-MOD-DIPLOMACY`), and `player_location_pvp`
+pending a flag-resolution entry point that takes no viewer.
 
 ### 3.9 Relational (1)
 
-`%rel_townyadvanced_color%` — the colour of the viewed player relative to the viewer:
-own town, own nation, ally, enemy, neutral, at war. Colours are configurable and default
-to RiftTowny's own palette, not to any other plugin's.
+`%rel_townyadvanced_color%` — the colour of the viewed player relative to the viewer.
+**Served, partially**: the expansion implements `me.clip.placeholderapi.expansion.Relational` and
+answers with the viewed player's own allegiance colour — their nation's if they have one, their
+town's otherwise. The ally / enemy / at-war distinctions need `RT-MOD-DIPLOMACY`, which is unbuilt,
+so a stranger and an ally currently look the same rather than looking convincingly different and
+being wrong. Colours are RiftTowny's own, set per organisation with `/town set colour`.
 
 ### 3.10 TownyChat compatibility
 
 `%townychat_*%` is served **through RiftChat**, not by a second formatter inside
-RiftTowny. RiftTowny supplies channel, role, prefix and relationship context; RiftChat
-renders. Status ⬜, Phase 5.
+RiftTowny. RiftChat owns formatting; RiftTowny owns who is in what town.
+
+The route turned out to need no RiftChat change at all. RiftChat's
+`PlaceholderPresentationService` resolves operator-configured `%…%` expressions through
+PlaceholderAPI on a timer, so with the expansion above registered an operator writes the expression
+they want into RiftChat's config and town and nation context appears in any channel. Its own
+`TownyPresentationService` is unreachable here — it reflects on `com.palmergames.bukkit.towny` and
+only wakes when a plugin named `Towny` is enabled — and it is unnecessary. See
+INTEGRATION_CONTRACTS §2.5.
+
+Routing `/tc` and `/nc` is RiftTowny's, and needs no upstream change either:
+`RiftChatService.Channel` already declares `TOWN` and `NATION`. Status ⬜.
 
 ### 3.11 Native namespace
 
