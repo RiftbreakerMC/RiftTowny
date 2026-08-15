@@ -121,6 +121,23 @@ class DiplomacyBookTest {
             assertThat(book.hostile(valen, ashmark)).isTrue();
             assertThat(book.hostile(ashmark, valen)).isTrue();
         }
+
+        @Test
+        @DisplayName("an enmity beats an alliance, however the rows got there")
+        void warBeatsAnAlliance() {
+            // The service withdraws the opposite declaration, so this pair of states should be
+            // unreachable through the commands. It is reachable by editing the table, and the two
+            // wrong answers are not equally wrong: protection reads areAllied to decide whether to
+            // open a gate, and opening it to a nation at war is the one that costs a build.
+            declare(valen, Relation.ALLY, ashmark);
+            declare(ashmark, Relation.ALLY, valen);
+            assertThat(book.areAllied(valen, ashmark)).isTrue();
+
+            declare(ashmark, Relation.ENEMY, valen);
+
+            assertThat(book.areAllied(valen, ashmark)).isFalse();
+            assertThat(book.areAllied(ashmark, valen)).isFalse();
+        }
     }
 
     @Nested

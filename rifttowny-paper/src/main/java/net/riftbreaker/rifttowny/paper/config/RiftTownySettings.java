@@ -31,6 +31,7 @@ public record RiftTownySettings(
         net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
         net.riftbreaker.rifttowny.domain.bank.TaxPolicy taxes,
         TruthWords truthWords,
+        net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders.RelationColours relationColours,
         TownyImport townyImport
 ) {
 
@@ -223,6 +224,12 @@ public record RiftTownySettings(
                 new TruthWords(
                         config.getString("placeholders.true", "true"),
                         config.getString("placeholders.false", "false")),
+                new net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders.RelationColours(
+                        config.getString("placeholders.relation-colours.own", ""),
+                        config.getString("placeholders.relation-colours.nation", ""),
+                        config.getString("placeholders.relation-colours.ally", ""),
+                        config.getString("placeholders.relation-colours.enemy", ""),
+                        config.getString("placeholders.relation-colours.neutral", "")),
                 new TownyImport(
                         config.getString("migration.towny.jdbc-url", ""),
                         config.getString("migration.towny.username", ""),

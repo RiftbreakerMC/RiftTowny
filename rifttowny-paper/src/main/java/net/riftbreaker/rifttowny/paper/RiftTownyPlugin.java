@@ -403,7 +403,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     who -> getServer().getPlayer(who.value()) != null,
                     new net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders.Truth(
                             settings.truthWords().yes(), settings.truthWords().no()),
-                    clock);
+                    diplomacyBook, settings.relationColours(), clock);
 
             // Both loaded before enable returns, and waited on. A protection listener answers from
             // these and cannot wait for a database, so a partially loaded index would read as

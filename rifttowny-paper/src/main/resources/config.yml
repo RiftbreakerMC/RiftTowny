@@ -136,6 +136,19 @@ placeholders:
   'true': 'true'
   'false': 'false'
 
+  # How %rel_townyadvanced_color% paints one player for another, and what %townyadvanced_rel_color%
+  # paints the land you are standing on. Tested narrowest first: your own town, then your nation,
+  # then a mutual alliance, then an enmity either side declared, then everybody else.
+  #
+  # MiniMessage tags, because that is what the rest of this plugin speaks. Hex works too - write
+  # '<#a1b2c3>'. A blank entry falls back to the default below rather than colouring nothing.
+  relation-colours:
+    own: '<green>'
+    nation: '<dark_green>'
+    ally: '<aqua>'
+    enemy: '<red>'
+    neutral: '<gray>'
+
 notices:
   # Tell a player whose land they have walked onto, as they cross the border.
   #

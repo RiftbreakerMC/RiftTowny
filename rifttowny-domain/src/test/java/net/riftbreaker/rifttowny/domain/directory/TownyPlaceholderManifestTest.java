@@ -7,6 +7,8 @@ import net.riftbreaker.rifttowny.domain.civic.CivicCache;
 import net.riftbreaker.rifttowny.domain.civic.CivicFixture;
 import net.riftbreaker.rifttowny.domain.civic.NationCache;
 import net.riftbreaker.rifttowny.domain.civic.ResidentNames;
+import net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook;
+import net.riftbreaker.rifttowny.domain.diplomacy.Relation;
 import net.riftbreaker.rifttowny.domain.naming.NamePolicy;
 import net.riftbreaker.rifttowny.domain.org.MapColour;
 import net.riftbreaker.rifttowny.domain.org.Nation;
@@ -394,6 +396,166 @@ class TownyPlaceholderManifestTest {
 
         private String answer(final String name) {
             return placeholders.resolve(mayor.value(), name).orElseThrow();
+        }
+    }
+
+    /**
+     * The three names that read the diplomacy book.
+     *
+     * <p>Worth their own class because all three used to be blank, and a blank ally placeholder is
+     * indistinguishable on screen from a working one that has correctly decided you are not allied.
+     * These tests are the only thing that tells the two apart.</p>
+     */
+    @Nested
+    @DisplayName("relationships")
+    class Relationships {
+
+        private final DiplomacyBook book = DiplomacyBook.empty();
+
+        private ResidentId stranger;
+        private NationId ashmarkId;
+        private NationId valenId;
+        private TownyPlaceholders diplomatic;
+
+        @BeforeEach
+        void buildANeighbour() {
+            stranger = CivicFixture.resident();
+            names.remember(stranger, "Cato");
+
+            ashmarkId = NationId.random();
+            final Town elsewhere = Town.found(TownId.random(), CivicFixture.name("Farhold"),
+                            stranger, UUID.randomUUID(), CivicFixture.NOW)
+                    .joinNation(ashmarkId).orElseThrow();
+            towns.remember(CivicFixture.facts(elsewhere));
+            nations.remember(Nation.restore(ashmarkId, CivicFixture.name("Ashmark"), stranger,
+                    elsewhere.id(), UUID.randomUUID(), java.util.Set.of(elsewhere.id()),
+                    NationProfile.empty(), CivicFixture.NOW));
+
+            // The neighbour's own homeblock, which is where the viewer has to be standing for the
+            // ally and enemy placeholders to have anything to say.
+            claims.put(Claim.of(new ChunkKey(WORLD, 9, 9), elsewhere.id(),
+                    ClaimKind.HOMEBLOCK, CivicFixture.NOW));
+
+            valenId = towns.nationOfResident(mayor).orElseThrow();
+            diplomatic = new TownyPlaceholders(
+                    new CivicDirectory(towns, claims, nations), towns, nations, claims, ruins,
+                    positions, names, CivicPrices.free(), TaxPolicy.off(), who -> false,
+                    TownyPlaceholders.Truth.defaults(), book,
+                    TownyPlaceholders.RelationColours.defaults(), CLOCK);
+        }
+
+        @Test
+        @DisplayName("one nation's declaration is not an alliance; both sides' is")
+        void alliesNeedBothSides() {
+            positions.record(mayor.value(), new ChunkKey(WORLD, 9, 9));
+            book.declare(new DiplomacyBook.Declaration(valenId, Relation.ALLY, ashmarkId));
+
+            assertThat(ally()).isEqualTo("false");
+
+            book.declare(new DiplomacyBook.Declaration(ashmarkId, Relation.ALLY, valenId));
+
+            assertThat(ally()).isEqualTo("true");
+            assertThat(enemy()).isEqualTo("false");
+        }
+
+        @Test
+        @DisplayName("either side declaring an enemy makes the homeblock an enemy's")
+        void enmityRunsBothWays() {
+            positions.record(mayor.value(), new ChunkKey(WORLD, 9, 9));
+            book.declare(new DiplomacyBook.Declaration(ashmarkId, Relation.ENEMY, valenId));
+
+            // Declared against us, not by us. Standing in the homeblock of a nation that has
+            // declared war on yours is exactly the case the placeholder exists to warn about.
+            assertThat(enemy()).isEqualTo("true");
+            assertThat(ally()).isEqualTo("false");
+        }
+
+        @Test
+        @DisplayName("your own homeblock is neither an ally's nor an enemy's")
+        void homeIsNeither() {
+            positions.record(mayor.value(), new ChunkKey(WORLD, 0, 0));
+
+            assertThat(ally()).isEqualTo("false");
+            assertThat(enemy()).isEqualTo("false");
+        }
+
+        @Test
+        @DisplayName("wilderness leaves all three blank rather than answering false")
+        void wildernessIsBlank() {
+            positions.record(mayor.value(), new ChunkKey(WORLD, 40, 40));
+
+            assertThat(ally()).isEmpty();
+            assertThat(enemy()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("the land you stand on is coloured by how it stands to you")
+        void landColour() {
+            positions.record(mayor.value(), new ChunkKey(WORLD, 0, 0));
+            assertThat(colour()).isEqualTo("<green>");
+
+            positions.record(mayor.value(), new ChunkKey(WORLD, 9, 9));
+            assertThat(colour()).isEqualTo("<gray>");
+
+            book.declare(new DiplomacyBook.Declaration(valenId, Relation.ALLY, ashmarkId));
+            book.declare(new DiplomacyBook.Declaration(ashmarkId, Relation.ALLY, valenId));
+            assertThat(colour()).isEqualTo("<aqua>");
+
+            book.declare(new DiplomacyBook.Declaration(valenId, Relation.ENEMY, ashmarkId));
+            assertThat(colour()).isEqualTo("<red>");
+        }
+
+        @Test
+        @DisplayName("a player is coloured by how they stand to the viewer, narrowest first")
+        void playerColour() {
+            // Own town beats own nation beats ally beats enemy. Ashford's citizen shares both the
+            // town and the nation, and has to come out as 'own town' rather than 'own nation'.
+            final ResidentId townmate = towns.town(towns.townOf(mayor).orElseThrow())
+                    .orElseThrow().residents().stream()
+                    .filter(who -> !who.equals(mayor)).findFirst().orElseThrow();
+
+            assertThat(diplomatic.colourBetween(mayor.value(), townmate.value()))
+                    .isEqualTo("<green>");
+            assertThat(diplomatic.colourBetween(mayor.value(), stranger.value()))
+                    .isEqualTo("<gray>");
+
+            book.declare(new DiplomacyBook.Declaration(valenId, Relation.ALLY, ashmarkId));
+            book.declare(new DiplomacyBook.Declaration(ashmarkId, Relation.ALLY, valenId));
+            assertThat(diplomatic.colourBetween(mayor.value(), stranger.value()))
+                    .isEqualTo("<aqua>");
+        }
+
+        @Test
+        @DisplayName("without a viewer there is no relationship, so the answer is neutral")
+        void noViewerIsNeutral() {
+            // Not the viewed player's own colour: that would be a guess dressed as a relationship.
+            assertThat(diplomatic.colourBetween(null, stranger.value())).isEqualTo("<gray>");
+        }
+
+        @Test
+        @DisplayName("a blank configured colour falls back rather than colouring nothing")
+        void blankColoursFallBack() {
+            final var colours = new TownyPlaceholders.RelationColours("", null, " ", "", "");
+
+            assertThat(colours.own()).isEqualTo("<green>");
+            assertThat(colours.nation()).isEqualTo("<dark_green>");
+            assertThat(colours.ally()).isEqualTo("<aqua>");
+            assertThat(colours.enemy()).isEqualTo("<red>");
+            assertThat(colours.neutral()).isEqualTo("<gray>");
+        }
+
+        private String ally() {
+            return diplomatic.resolve(mayor.value(), "player_location_in_homeblock_ally")
+                    .orElseThrow();
+        }
+
+        private String enemy() {
+            return diplomatic.resolve(mayor.value(), "player_location_in_homeblock_enemy")
+                    .orElseThrow();
+        }
+
+        private String colour() {
+            return diplomatic.resolve(mayor.value(), "rel_color").orElseThrow();
         }
     }
 }

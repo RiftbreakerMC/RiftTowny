@@ -7,8 +7,10 @@ import net.riftbreaker.rifttowny.domain.civic.CivicCache;
 import net.riftbreaker.rifttowny.domain.civic.NationCache;
 import net.riftbreaker.rifttowny.domain.civic.ResidentNames;
 import net.riftbreaker.rifttowny.domain.civic.TownFacts;
+import net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook;
 import net.riftbreaker.rifttowny.domain.org.MapColour;
 import net.riftbreaker.rifttowny.domain.org.Nation;
+import net.riftbreaker.rifttowny.domain.org.NationId;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
@@ -72,6 +74,8 @@ public final class TownyPlaceholders {
     private final TaxPolicy taxes;
     private final Presence presence;
     private final Truth truth;
+    private final DiplomacyBook diplomacy;
+    private final RelationColours colours;
     private final Clock clock;
 
     public TownyPlaceholders(
@@ -88,6 +92,33 @@ public final class TownyPlaceholders {
             final Truth truth,
             final Clock clock
     ) {
+        this(directory, towns, nations, claims, ruins, positions, names, prices, taxes, presence,
+                truth, DiplomacyBook.empty(),
+                RelationColours.defaults(), clock);
+    }
+
+    /**
+     * The same, with diplomacy.
+     *
+     * @param diplomacy what nations have declared. An empty book answers "not allied" and "not at
+     *        war" to everything, which is the right reading of a server with no diplomacy
+     */
+    public TownyPlaceholders(
+            final CivicDirectory directory,
+            final CivicCache towns,
+            final NationCache nations,
+            final TerritoryIndex claims,
+            final RuinIndex ruins,
+            final LastKnownChunk positions,
+            final ResidentNames names,
+            final CivicPrices prices,
+            final TaxPolicy taxes,
+            final Presence presence,
+            final Truth truth,
+            final DiplomacyBook diplomacy,
+            final RelationColours colours,
+            final Clock clock
+    ) {
         this.directory = Objects.requireNonNull(directory, "directory");
         this.towns = Objects.requireNonNull(towns, "towns");
         this.nations = Objects.requireNonNull(nations, "nations");
@@ -99,6 +130,8 @@ public final class TownyPlaceholders {
         this.taxes = Objects.requireNonNull(taxes, "taxes");
         this.presence = Objects.requireNonNull(presence, "presence");
         this.truth = Objects.requireNonNull(truth, "truth");
+        this.diplomacy = Objects.requireNonNull(diplomacy, "diplomacy");
+        this.colours = Objects.requireNonNull(colours, "colours");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -109,6 +142,40 @@ public final class TownyPlaceholders {
 
         static Presence nobody() {
             return who -> false;
+        }
+    }
+
+    /**
+     * How a viewer is meant to see somebody, by how their nations stand.
+     *
+     * <p>MiniMessage colour tags rather than legacy codes, because that is what the rest of this
+     * plugin speaks. A server that wants Towny's own palette configures these; the defaults are
+     * RiftTowny's, not any other plugin's.</p>
+     *
+     * @param own somebody in your own town
+     * @param nation somebody in your nation but another town
+     * @param ally a nation you have a <em>mutual</em> alliance with
+     * @param enemy a nation either of you has declared an enemy
+     * @param neutral everybody else, including anyone in no nation
+     */
+    public record RelationColours(
+            String own, String nation, String ally, String enemy, String neutral) {
+
+        public static RelationColours defaults() {
+            return new RelationColours(
+                    "<green>", "<dark_green>", "<aqua>", "<red>", "<gray>");
+        }
+
+        public RelationColours {
+            own = blankTo(own, "<green>");
+            nation = blankTo(nation, "<dark_green>");
+            ally = blankTo(ally, "<aqua>");
+            enemy = blankTo(enemy, "<red>");
+            neutral = blankTo(neutral, "<gray>");
+        }
+
+        private static String blankTo(final String value, final String fallback) {
+            return value == null || value.isBlank() ? fallback : value;
         }
     }
 
@@ -343,6 +410,7 @@ public final class TownyPlaceholders {
         final Optional<TownFacts> here = claim.map(Claim::town).flatMap(towns::town);
         final Optional<Nation> hereNation =
                 here.flatMap(facts -> facts.nation()).flatMap(nations::nation);
+        final NationId hereNationId = here.flatMap(TownFacts::nation).orElse(null);
 
         return switch (name) {
             case "player_location_town_or_wildname", "player_location_formattedtown_or_wildname" ->
@@ -387,11 +455,18 @@ public final class TownyPlaceholders {
             case "player_town_is_trusted" -> here
                     .map(facts -> truth.of(who != null && facts.trusts(who))).orElse(BLANK);
             case "player_location_town_prefix", "player_location_town_postfix" -> BLANK;
-            // Diplomacy, areas and property are unbuilt; each of these belongs to one of them.
-            case "player_location_in_homeblock_enemy", "player_location_in_homeblock_ally",
-                 "player_location_district_name", "player_location_plotgroup_name",
+            case "player_location_in_homeblock_ally" -> claim
+                    .map(found -> truth.of(found.kind() == ClaimKind.HOMEBLOCK
+                            && alliedWith(who, hereNationId)))
+                    .orElse(BLANK);
+            case "player_location_in_homeblock_enemy" -> claim
+                    .map(found -> truth.of(found.kind() == ClaimKind.HOMEBLOCK
+                            && hostileTo(who, hereNationId)))
+                    .orElse(BLANK);
+            // Areas and property are still unbuilt; each of these belongs to one of them.
+            case "player_location_district_name", "player_location_plotgroup_name",
                  "player_location_plot_forsale", "player_location_town_forsale_cost" -> BLANK;
-            case "rel_color" -> colourOf(hereNation, here.map(TownFacts::town));
+            case "rel_color" -> relationalColour(who, here.orElse(null));
             default -> null;
         };
     }
@@ -448,6 +523,71 @@ public final class TownyPlaceholders {
     }
 
     // --- helpers ---------------------------------------------------------------------------------
+
+    /** Whether the viewer's nation and this one hold a mutual alliance. */
+    private boolean alliedWith(
+            final ResidentId who, final NationId other) {
+        if (who == null || other == null) {
+            return false;
+        }
+        return towns.nationOfResident(who)
+                .filter(mine -> diplomacy.areAllied(mine, other))
+                .isPresent();
+    }
+
+    /** Whether either nation has declared the other an enemy — what a war looks like from outside. */
+    private boolean hostileTo(
+            final ResidentId who, final NationId other) {
+        if (who == null || other == null) {
+            return false;
+        }
+        return towns.nationOfResident(who)
+                .filter(mine -> diplomacy.hostile(mine, other))
+                .isPresent();
+    }
+
+    /**
+     * How the viewer should see somebody standing in this town.
+     *
+     * <p>Ordered narrowest first, exactly as the protection ladder is and for the same reason: your
+     * own town is inside your nation, and your nation is not an ally of itself. A wider test placed
+     * earlier would swallow the narrower ones and the colours would stop distinguishing anything.</p>
+     */
+    private String relationalColour(final ResidentId who, final TownFacts theirs) {
+        if (who == null || theirs == null) {
+            return colours.neutral();
+        }
+        if (towns.townOf(who).filter(theirs.id()::equals).isPresent()) {
+            return colours.own();
+        }
+        final var theirNation = theirs.nation().orElse(null);
+        final var mine = towns.nationOfResident(who).orElse(null);
+        if (mine != null && mine.equals(theirNation)) {
+            return colours.nation();
+        }
+        if (alliedWith(who, theirNation)) {
+            return colours.ally();
+        }
+        if (hostileTo(who, theirNation)) {
+            return colours.enemy();
+        }
+        return colours.neutral();
+    }
+
+    /**
+     * The colour for a relational placeholder, given a viewer and somebody they are looking at.
+     *
+     * <p>Reached by the {@code Relational} expansion, which is the only caller that has two players.
+     * Everything else goes through {@link #resolve}.</p>
+     */
+    public String colourBetween(final UUID viewer, final UUID viewed) {
+        if (viewer == null || viewed == null) {
+            return colours.neutral();
+        }
+        return relationalColour(
+                ResidentId.of(viewer),
+                towns.townFactsOf(ResidentId.of(viewed)).orElse(null));
+    }
 
     private String tagOf(final Optional<Nation> nation, final Optional<Town> town) {
         return nation.map(found -> found.profile().tag())

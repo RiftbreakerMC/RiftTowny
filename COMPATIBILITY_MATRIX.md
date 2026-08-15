@@ -223,18 +223,33 @@ A player whose position was never recorded resolves blank rather than "Wildernes
 anywhere" and "standing in the wild" are different facts, and conflating them puts an offline
 player's last position on a live scoreboard.
 
+`player_location_in_homeblock_ally` and `..._enemy` read the diplomacy book: an ally is a **mutual**
+declaration, an enemy is one **either** side has made. Both are blank in wilderness — "you are not
+in an enemy's homeblock" and "there is no homeblock here" are different facts.
+
 Blank within this group: districts and plot groups (`RT-CORE-AREA`), for-sale price and flag
-(`RT-MOD-PROPERTY`), ally and enemy homeblocks (`RT-MOD-DIPLOMACY`), and `player_location_pvp`
-pending a flag-resolution entry point that takes no viewer.
+(`RT-MOD-PROPERTY`), and `player_location_pvp` pending a flag-resolution entry point that takes no
+viewer.
 
 ### 3.9 Relational (1)
 
-`%rel_townyadvanced_color%` — the colour of the viewed player relative to the viewer.
-**Served, partially**: the expansion implements `me.clip.placeholderapi.expansion.Relational` and
-answers with the viewed player's own allegiance colour — their nation's if they have one, their
-town's otherwise. The ally / enemy / at-war distinctions need `RT-MOD-DIPLOMACY`, which is unbuilt,
-so a stranger and an ally currently look the same rather than looking convincingly different and
-being wrong. Colours are RiftTowny's own, set per organisation with `/town set colour`.
+`%rel_townyadvanced_color%` — the colour of the viewed player relative to the viewer. **Served.**
+The expansion implements `me.clip.placeholderapi.expansion.Relational` and answers from both
+players, tested narrowest first: the viewer's own town, then their nation, then a mutual alliance,
+then an enmity either side declared, then neutral. Narrowest first because the wider tests contain
+the narrower ones — your own town is inside your own nation — and any other order stops the colours
+distinguishing anything.
+
+Without a viewer the answer is the neutral colour, not the viewed player's own allegiance colour: a
+relational placeholder with one player has no relationship to describe, and answering with an
+allegiance would dress a guess as a relationship.
+
+`%townyadvanced_rel_color%` is the same ladder applied to **the land you are standing on** rather
+than to another player.
+
+The five colours are configured under `placeholders.relation-colours` as MiniMessage tags, and
+default to RiftTowny's own palette rather than any other plugin's. They are distinct from the map
+colours set with `/town set colour`, which say who owns a chunk rather than how you stand to them.
 
 ### 3.10 TownyChat compatibility
 

@@ -99,11 +99,10 @@ public final class TownyAdvancedExpansion extends PlaceholderExpansion implement
     /**
      * {@code %rel_townyadvanced_color%} — how the viewer should see the viewed player.
      *
-     * <p>Only {@code color} is served, because it is the only relational placeholder Towny has. The
-     * colour is the viewed player's own allegiance colour: their nation's if they have one, their
-     * town's otherwise. A relationship ladder that distinguished ally from enemy would need
-     * {@code RT-MOD-DIPLOMACY}, which is unbuilt, so a stranger and an ally currently look the
-     * same rather than looking convincingly different and being wrong.</p>
+     * <p>Only {@code color} is served, because it is the only relational placeholder Towny has. It
+     * answers from both players: own town, then own nation, then a mutual alliance, then an enmity
+     * either side has declared, then neutral. Without a viewer there is no relationship to describe,
+     * so the answer is the neutral colour rather than a guess made from one player.</p>
      */
     @Override
     public String onPlaceholderRequest(
@@ -114,7 +113,8 @@ public final class TownyAdvancedExpansion extends PlaceholderExpansion implement
         if (!params.equalsIgnoreCase("color") && !params.equalsIgnoreCase("colour")) {
             return null;
         }
-        return placeholders.resolve(viewed.getUniqueId(), "towny_colour").orElse(null);
+        return placeholders.colourBetween(
+                viewer == null ? null : viewer.getUniqueId(), viewed.getUniqueId());
     }
 
     /**

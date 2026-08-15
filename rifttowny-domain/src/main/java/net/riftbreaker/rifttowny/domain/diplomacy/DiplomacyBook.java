@@ -97,12 +97,20 @@ public final class DiplomacyBook {
      * Whether these two nations are allied.
      *
      * <p>Both must have said so. This is the whole reason declarations are stored one-way.</p>
+     *
+     * <p><strong>And neither may have declared the other an enemy.</strong> The service withdraws
+     * the opposite declaration, so the two should never both stand — but "should never" is not a
+     * guarantee when the rows can be edited in the table by hand, and the failure is not symmetric.
+     * Calling a war an alliance opens the gate to a nation currently attacking you; calling an
+     * alliance a war only makes an ally knock. The safe reading wins.</p>
      */
     public boolean areAllied(final NationId one, final NationId other) {
         if (one == null || other == null || one.equals(other)) {
             return false;
         }
-        return hasDeclared(one, Relation.ALLY, other) && hasDeclared(other, Relation.ALLY, one);
+        return hasDeclared(one, Relation.ALLY, other)
+                && hasDeclared(other, Relation.ALLY, one)
+                && !hostile(one, other);
     }
 
     /**
