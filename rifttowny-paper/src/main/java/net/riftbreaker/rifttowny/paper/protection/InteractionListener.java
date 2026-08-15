@@ -71,6 +71,32 @@ public final class InteractionListener implements Listener {
         }
     }
 
+    /**
+     * Bone meal.
+     *
+     * <p>The one member of the tool-on-block family that a {@code (block, item)} pair cannot express:
+     * what bone meal does depends on what is under it, and the set of things it grows is most of the
+     * plant kingdom. Its own event fires only when the fertilising actually took effect, which is
+     * both narrower and more accurate than any list of materials — a right-click that did nothing is
+     * not worth a denial message.</p>
+     *
+     * <p>{@link ProtectionFlag#BUILD}, for the same reason as stripping a log: it is the town's
+     * ground that ends up different. Growing somebody's sapling into a tree can put branches through
+     * a roof, and turning their lawn to flowers is a change they did not ask for even where it was
+     * meant kindly.</p>
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onFertilise(final org.bukkit.event.block.BlockFertilizeEvent event) {
+        // Null when a dispenser applies it. Nothing there holds a permission.
+        if (event.getPlayer() == null) {
+            return;
+        }
+        if (!protection.allows(event.getPlayer(), Chunks.of(event.getBlock()),
+                ProtectionFlag.BUILD, Permission.BUILD)) {
+            event.setCancelled(true);
+        }
+    }
+
     /** What the player was holding, or null for an empty hand. */
     private static org.bukkit.Material heldType(final PlayerInteractEvent event) {
         return event.getItem() == null ? null : event.getItem().getType();

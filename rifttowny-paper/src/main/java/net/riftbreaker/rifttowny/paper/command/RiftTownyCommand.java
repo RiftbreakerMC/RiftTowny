@@ -102,22 +102,27 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
             @NotNull final String label,
             final String @NotNull [] args
     ) {
-        final List<String> candidates = "flag".equalsIgnoreCase(args.length == 0 ? "" : args[0])
-                ? completeFlag(args)
-                : switch (args.length) {
-                    case 1 -> List.of("status", "migrate", "flag", "help");
-                    case 2 -> "migrate".equalsIgnoreCase(args[0]) ? List.of("towny") : List.of();
-                    // Deliberately not offering the confirmation word. Tab-completing your way into
-                    // an irreversible bulk import is exactly what the word is there to prevent.
-                    default -> List.of();
-                };
+        final List<String> candidates = insideFlag(args)
+                        ? completeFlag(args)
+                        : switch (args.length) {
+                            case 1 -> List.of("status", "migrate", "flag", "help");
+                            case 2 -> "migrate".equalsIgnoreCase(args[0])
+                                    ? List.of("towny") : List.of();
+                            // Deliberately not offering the confirmation word. Tab-completing your
+                            // way into an irreversible bulk import is exactly what the word is
+                            // there to prevent.
+                            default -> List.of();
+                        };
         if (candidates.isEmpty()) {
             return List.of();
         }
-        final String partial = args[args.length - 1].toLowerCase(Locale.ROOT);
+        final String partial = args[args.length - 1];
         final List<String> options = new ArrayList<>();
         for (final String candidate : candidates) {
-            if (candidate.startsWith(partial)) {
+            // Case-insensitively on both sides: every other candidate here is a lower-case literal,
+            // but a world name is whatever the operator called their world, and comparing a capital
+            // 'N' against a lower-cased partial would leave Nether uncompletable.
+            if (candidate.regionMatches(true, 0, partial, 0, partial.length())) {
                 options.add(candidate);
             }
         }
@@ -149,6 +154,17 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
             case DECISION -> List.of("allow", "deny");
             case NONE -> List.of();
         };
+    }
+
+    /**
+     * Whether completion is inside {@code /rifttowny flag} rather than still naming a subcommand.
+     *
+     * <p>The length test is the whole point: on the first argument the operator is still typing the
+     * word {@code flag} itself, and routing there would answer with its verbs instead of completing
+     * its name — so typing {@code flag} and pressing tab would offer nothing at all.</p>
+     */
+    static boolean insideFlag(final String[] args) {
+        return args.length > 1 && "flag".equalsIgnoreCase(args[0]);
     }
 
     /** Which argument of {@code /rifttowny flag} is being typed. */

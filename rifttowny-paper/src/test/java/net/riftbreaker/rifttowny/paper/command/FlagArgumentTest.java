@@ -96,6 +96,30 @@ class FlagArgumentTest {
     }
 
     @Nested
+    @DisplayName("the subcommand name itself")
+    class NotYetInside {
+
+        @Test
+        @DisplayName("typing 'flag' is still typing the subcommand, not its arguments")
+        void theWordItself() {
+            // Answering with the verbs here would mean tabbing on 'flag' offers nothing, because
+            // none of set/clear/list starts with 'flag'. The operator loses the completion of the
+            // subcommand name they were in the middle of.
+            assertThat(RiftTownyCommand.insideFlag(new String[] { "flag" })).isFalse();
+            assertThat(RiftTownyCommand.insideFlag(new String[] { "fla" })).isFalse();
+            assertThat(RiftTownyCommand.insideFlag(new String[] { })).isFalse();
+        }
+
+        @Test
+        @DisplayName("once there is a second word, it is the flag command's own")
+        void onceInside() {
+            assertThat(RiftTownyCommand.insideFlag(new String[] { "flag", "" })).isTrue();
+            assertThat(RiftTownyCommand.insideFlag(new String[] { "FLAG", "set" })).isTrue();
+            assertThat(RiftTownyCommand.insideFlag(new String[] { "migrate", "towny" })).isFalse();
+        }
+    }
+
+    @Nested
     @DisplayName("the decision words")
     class Decisions {
 
