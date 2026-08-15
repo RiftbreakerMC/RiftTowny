@@ -128,6 +128,12 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
             messages.send(sender, MessageKey.MIGRATE_NOT_CONFIGURED);
             return;
         }
+        if (configured.isAmbiguous()) {
+            // Refused rather than resolved by precedence: a server that moved from flatfile to
+            // MySQL has both on disk, and the flatfiles are the stale half.
+            messages.send(sender, MessageKey.MIGRATE_AMBIGUOUS);
+            return;
+        }
         final boolean apply = args.length > 2 && CONFIRMATION.equalsIgnoreCase(args[2]);
 
         messages.send(sender, MessageKey.MIGRATE_STARTED,
@@ -135,9 +141,12 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
                 MessageService.value("mode", apply ? "importing" : "dry run"));
 
         plugin().scheduler().async(() -> {
-            final var source = new net.riftbreaker.rifttowny.storage.migration.TownySqlSource(
-                    configured.jdbcUrl(), configured.username(), configured.password(),
-                    configured.tablePrefix());
+            final var source = configured.usesFlatfile()
+                    ? new net.riftbreaker.rifttowny.storage.migration.TownyFlatFileSource(
+                            java.nio.file.Path.of(configured.dataFolder()))
+                    : new net.riftbreaker.rifttowny.storage.migration.TownySqlSource(
+                            configured.jdbcUrl(), configured.username(), configured.password(),
+                            configured.tablePrefix());
             final net.riftbreaker.rifttowny.domain.migration.MigrationPlan plan;
             try {
                 plan = source.read();

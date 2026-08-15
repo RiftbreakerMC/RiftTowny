@@ -187,6 +187,7 @@ protection:
 # Importing another plugin's world. See COMPATIBILITY_MATRIX section 5.
 migrate:
   not-configured: '<red>No Towny database is configured. Set <white>migration.towny.jdbc-url</white> in config.yml — the credentials go there rather than in this command, so they do not end up in the log.</red>'
+  ambiguous: '<red>Both <white>jdbc-url</white> and <white>data-folder</white> are set, and they may hold different data — a server that moved to MySQL still has its old files. Clear whichever one is not the live database.</red>'
   started: '<gray>Reading <white><source></white> (<white><mode></white>)…</gray>'
   read: '<gray>Read <white><summary></white></gray>'
   unreadable: '<red>That database could not be read: <white><reason></white></red>'

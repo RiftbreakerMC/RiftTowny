@@ -17,8 +17,20 @@ package net.riftbreaker.rifttowny.domain.migration;
  * <p>Reading is separated from writing for one more reason: a source can be exercised against a
  * fixture. A reader that wrote as it went could only be tested against a real server.</p>
  */
-@FunctionalInterface
 public interface MigrationSource {
+
+    /**
+     * What the reader itself could not make sense of, in the source's own terms.
+     *
+     * <p>Distinct from {@link MigrationReport}'s problems, which are about what the <em>importer</em>
+     * refused. A resident with no UUID is dropped before the importer ever sees them, so without
+     * this the operator would be told about a town that lost half its members and never told why.</p>
+     *
+     * <p>Read after {@link #read()}. A source with nothing to say returns nothing.</p>
+     */
+    default java.util.List<String> notes() {
+        return java.util.List.of();
+    }
 
     /**
      * Reads everything, without writing anything.

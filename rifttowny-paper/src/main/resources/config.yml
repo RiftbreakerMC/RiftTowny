@@ -104,12 +104,22 @@ taxes:
 # to give it.
 migration:
   towny:
+    # Route one: Towny on MySQL or MariaDB.
     # e.g. jdbc:mariadb://127.0.0.1:3306/towny
     jdbc-url: ''
     username: ''
     password: ''
     # Towny's own default. Its setting is database.sql.table_prefix.
     table-prefix: 'towny_'
+
+    # Route two: Towny on flatfiles, for a server that never moved to a database.
+    # Point this at Towny's data folder - the one containing residents/, towns/, nations/ and
+    # townblocks/. Usually plugins/Towny/data.
+    #
+    # Fill in ONE route, not both. A server that migrated from flatfile to MySQL still has the old
+    # files on disk, and they are the stale half; picking one silently would import the wrong
+    # history and look like it had worked, so configuring both is refused rather than resolved.
+    data-folder: ''
 
 # The %townyadvanced_*% placeholder surface, served so a server's existing scoreboards keep working
 # unchanged. Requires PlaceholderAPI; without it these settings do nothing and nothing else breaks.

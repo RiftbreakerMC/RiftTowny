@@ -74,7 +74,7 @@ public final class TownySqlSource implements MigrationSource {
         this.prefix = prefix == null || prefix.isBlank() ? DEFAULT_PREFIX : prefix;
     }
 
-    /** What the reader could not make sense of, for the operator's report. */
+    @Override
     public List<String> notes() {
         return List.copyOf(notes);
     }

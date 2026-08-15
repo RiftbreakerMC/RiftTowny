@@ -514,6 +514,11 @@ public enum MessageKey {
                     + "config.yml — the credentials go there rather than in this command, so they "
                     + "do not end up in the log.</red>"),
 
+    MIGRATE_AMBIGUOUS("migrate.ambiguous",
+            "<red>Both <white>jdbc-url</white> and <white>data-folder</white> are set, and they may "
+                    + "hold different data — a server that moved to MySQL still has its old files. "
+                    + "Clear whichever one is not the live database.</red>"),
+
     MIGRATE_STARTED("migrate.started",
             "<gray>Reading <white><source></white> (<white><mode></white>)…</gray>"),
 

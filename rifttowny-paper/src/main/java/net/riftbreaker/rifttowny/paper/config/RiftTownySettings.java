@@ -46,18 +46,45 @@ public record RiftTownySettings(
      * <p>Read-only in every sense: RiftTowny opens this connection to read and never writes a row
      * to it. An account with SELECT and nothing else is the right one to configure.</p>
      */
-    public record TownyImport(String jdbcUrl, String username, String password, String tablePrefix) {
+    public record TownyImport(
+            String jdbcUrl,
+            String username,
+            String password,
+            String tablePrefix,
+            String dataFolder
+    ) {
 
         public TownyImport {
             jdbcUrl = jdbcUrl == null ? "" : jdbcUrl.trim();
             username = username == null ? "" : username;
             password = password == null ? "" : password;
             tablePrefix = tablePrefix == null || tablePrefix.isBlank() ? "towny_" : tablePrefix.trim();
+            dataFolder = dataFolder == null ? "" : dataFolder.trim();
         }
 
-        /** Whether an operator has actually filled this in. */
+        /** Whether an operator has filled in either route. */
         public boolean isConfigured() {
+            return usesSql() || usesFlatfile();
+        }
+
+        public boolean usesSql() {
             return !jdbcUrl.isEmpty();
+        }
+
+        public boolean usesFlatfile() {
+            return !dataFolder.isEmpty();
+        }
+
+        /**
+         * Whether both routes are configured at once.
+         *
+         * <p>Refused rather than resolved by precedence. The two could hold different data — a
+         * server that moved from flatfile to MySQL has both on disk, and the flatfiles are the
+         * stale half. Picking one silently would import the wrong server's history and look like
+         * it worked.</p>
+         */
+        public boolean isAmbiguous() {
+            return usesSql() && usesFlatfile();
         }
 
         /**
@@ -67,7 +94,10 @@ public record RiftTownySettings(
          * string is cut off rather than trusted to be harmless.</p>
          */
         public String describe() {
-            if (!isConfigured()) {
+            if (usesFlatfile()) {
+                return dataFolder;
+            }
+            if (!usesSql()) {
                 return "not configured";
             }
             final int query = jdbcUrl.indexOf('?');
@@ -197,7 +227,8 @@ public record RiftTownySettings(
                         config.getString("migration.towny.jdbc-url", ""),
                         config.getString("migration.towny.username", ""),
                         config.getString("migration.towny.password", ""),
-                        config.getString("migration.towny.table-prefix", "towny_")));
+                        config.getString("migration.towny.table-prefix", "towny_"),
+                        config.getString("migration.towny.data-folder", "")));
     }
 
     /**

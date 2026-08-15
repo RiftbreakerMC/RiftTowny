@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TownyImportTest {
 
     private static RiftTownySettings.TownyImport connection(final String url) {
-        return new RiftTownySettings.TownyImport(url, "root", "hunter2", null);
+        return new RiftTownySettings.TownyImport(url, "root", "hunter2", null, "");
     }
 
     @Test
@@ -51,7 +51,7 @@ class TownyImportTest {
     @DisplayName("an unconfigured connection says so rather than printing an empty string")
     void unconfiguredIsNamed() {
         final RiftTownySettings.TownyImport blank =
-                new RiftTownySettings.TownyImport("", "", "", "");
+                new RiftTownySettings.TownyImport("", "", "", "", "");
 
         assertThat(blank.isConfigured()).isFalse();
         assertThat(blank.describe()).isEqualTo("not configured");
@@ -60,9 +60,9 @@ class TownyImportTest {
     @Test
     @DisplayName("a blank prefix falls back to Towny's own default")
     void prefixDefaults() {
-        assertThat(new RiftTownySettings.TownyImport("jdbc:x", "", "", "  ").tablePrefix())
+        assertThat(new RiftTownySettings.TownyImport("jdbc:x", "", "", "  ", "").tablePrefix())
                 .isEqualTo("towny_");
-        assertThat(new RiftTownySettings.TownyImport("jdbc:x", "", "", "tny_").tablePrefix())
+        assertThat(new RiftTownySettings.TownyImport("jdbc:x", "", "", "tny_", "").tablePrefix())
                 .isEqualTo("tny_");
     }
 
@@ -70,10 +70,36 @@ class TownyImportTest {
     @DisplayName("nulls do not become the string 'null' in a connection")
     void nullsAreHandled() {
         final RiftTownySettings.TownyImport nulls =
-                new RiftTownySettings.TownyImport(null, null, null, null);
+                new RiftTownySettings.TownyImport(null, null, null, null, null);
 
         assertThat(nulls.isConfigured()).isFalse();
         assertThat(nulls.username()).isEmpty();
         assertThat(nulls.password()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("configuring both routes at once is ambiguous rather than resolved by precedence")
+    void bothRoutesIsAmbiguous() {
+        // A server that moved from flatfile to MySQL still has the old files on disk, and they are
+        // the stale half. Picking one silently would import the wrong history and look like it had
+        // worked.
+        final RiftTownySettings.TownyImport both = new RiftTownySettings.TownyImport(
+                "jdbc:mariadb://db/towny", "", "", null, "plugins/Towny/data");
+
+        assertThat(both.isAmbiguous()).isTrue();
+        assertThat(both.usesSql()).isTrue();
+        assertThat(both.usesFlatfile()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a flatfile route describes its folder and is not ambiguous on its own")
+    void flatfileRouteIsRecognised() {
+        final RiftTownySettings.TownyImport flatfile =
+                new RiftTownySettings.TownyImport("", "", "", null, "plugins/Towny/data");
+
+        assertThat(flatfile.isConfigured()).isTrue();
+        assertThat(flatfile.usesFlatfile()).isTrue();
+        assertThat(flatfile.isAmbiguous()).isFalse();
+        assertThat(flatfile.describe()).isEqualTo("plugins/Towny/data");
     }
 }

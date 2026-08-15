@@ -318,7 +318,7 @@ and is worth stating plainly, because it is not obvious until you try it.
 | `MigrationReport` — what it did, or would do, and everything it refused | ✅ |
 | `TownySqlSource` — a reader for Towny's MySQL database | ✅ 16 tests |
 | `/rifttowny migrate towny [confirm]` — dry run unless confirmed | ✅ |
-| A reader for Towny's flatfiles | ⬜ not written |
+| `TownyFlatFileSource` — a reader for Towny’s flatfiles | ✅ 19 tests |
 
 ### 5.0 Running one
 
@@ -388,7 +388,9 @@ matched by name alone — the next person to take that name would inherit their 
 accounts, towns Towny had already ruined (importing them would resurrect towns whose members had
 already lost them), and nations whose capital did not come across.
 
-Still unwritten: a reader for Towny's **flatfile** storage, for servers that never moved to MySQL.
+Both routes are built. `migration.towny.jdbc-url` selects the database, `migration.towny.data-folder`
+the files; configuring both is refused rather than resolved by precedence, because a server that
+moved from one to the other still has the stale half on disk.
 `TownyFlatFileSource` describes that format. The importer and the interchange model are shared, so
 it is a second `MigrationSource` and nothing else.
 
