@@ -101,7 +101,7 @@ rows as the truth.
 | `/nation rename` | `/nation rename` | DONE |
 | `/nation delete` | `/nation delete` | DONE |
 | `/nation rank add|remove` | `/nation role assign|unassign` | DONE |
-| `/nation ally add|remove`, enemies, neutrality | — | **MISSING** — `RT-MOD-DIPLOMACY` |
+| `/nation ally add\|remove`, enemies, neutrality | `/nation relations ally\|enemy\|neutral\|list` | DONE — an alliance takes **both** nations declaring it; an enemy takes one. Protection's `ALLY` rung reads it |
 | Nation tax collected from member towns | `taxes.nation-per-town` | DONE |
 | `/nation deposit`, `/nation withdraw` | — | **MISSING** — the nation account exists and is credited; nothing can spend it |
 | `/nation set spawn`, `/nation spawn` | — | **MISSING** |

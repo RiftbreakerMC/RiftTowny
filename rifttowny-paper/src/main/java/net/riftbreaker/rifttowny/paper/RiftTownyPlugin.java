@@ -232,7 +232,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
                 nationService, nationRoleService, residentNames, residentRepository, townRepository,
-                nationRepository, directory, messages, denialText).tree());
+                nationRepository, directory, diplomacy, messages, denialText).tree());
 
         registerTree("resident", new net.riftbreaker.rifttowny.paper.command.ResidentCommands(
                 residentRepository, plotService, directory, residentNames, messages, clock).tree());
@@ -308,8 +308,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     net.riftbreaker.rifttowny.domain.territory.TerritoryIndex.empty();
             this.civicCache = net.riftbreaker.rifttowny.domain.civic.CivicCache.empty();
             this.nationCache = net.riftbreaker.rifttowny.domain.civic.NationCache.empty();
+            this.diplomacyBook = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
             this.civicCacheService = new net.riftbreaker.rifttowny.domain.service.CivicCacheService(
-                    civicStore, civicCache, nationCache, getLogger()::warning);
+                    civicStore, civicCache, nationCache, diplomacyBook, getLogger()::warning);
             this.flagOverrides = net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty();
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
@@ -387,7 +388,6 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     clock,
                     civicCacheService,
                     worldId -> getServer().getWorld(worldId) != null);
-            this.diplomacyBook = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
             this.diplomacy = new net.riftbreaker.rifttowny.domain.service.DiplomacyService(
                     civicStore, clock, diplomacyBook);
             this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();

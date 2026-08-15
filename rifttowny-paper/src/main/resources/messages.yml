@@ -130,6 +130,11 @@ nation:
   set-tag: '<green>The tag of <white><nation></white> is now <white><value></white>.</green>'
   set-colour: '<green><white><nation></white> is drawn in <white><value></white> on maps.</green>'
   set-neutral: '<green><white><nation></white> has declared neutrality <white><state></white>.</green>'
+  alliance-offered: '<yellow>Offered an alliance to <white><nation></white>. Nothing changes until they declare it too.</yellow>'
+  alliance-sealed: '<green>Allied with <white><nation></white>. Their people may now build on your land.</green>'
+  enemy-declared: '<red><white><nation></white> is now an enemy of your nation.</red>'
+  relation-withdrawn: '<yellow>Your nation no longer declares anything about <white><nation></white>.</yellow>'
+  relations-header: '<gray>Where <white><nation></white> stands</gray>'
 
 # One player's record.
 resident:

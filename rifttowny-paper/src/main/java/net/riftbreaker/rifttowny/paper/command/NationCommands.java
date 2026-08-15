@@ -1,5 +1,6 @@
 package net.riftbreaker.rifttowny.paper.command;
 
+import net.riftbreaker.rifttowny.domain.diplomacy.Relation;
 import net.riftbreaker.rifttowny.domain.directory.CivicDirectory;
 import net.riftbreaker.rifttowny.domain.directory.NationSummary;
 import net.riftbreaker.rifttowny.domain.directory.Page;
@@ -25,6 +26,7 @@ import net.riftbreaker.rifttowny.paper.message.DenialText;
 import net.riftbreaker.rifttowny.paper.message.MessageKey;
 import net.riftbreaker.rifttowny.paper.message.MessageService;
 
+import java.util.Locale;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -53,6 +55,7 @@ public final class NationCommands {
     private final TownRepository towns;
     private final NationRepository nationRepository;
     private final CivicDirectory directory;
+    private final net.riftbreaker.rifttowny.domain.service.DiplomacyService diplomacy;
     private final Listings listings;
     private final MessageService messages;
     private final DenialText denials;
@@ -65,6 +68,7 @@ public final class NationCommands {
             final TownRepository towns,
             final NationRepository nationRepository,
             final CivicDirectory directory,
+            final net.riftbreaker.rifttowny.domain.service.DiplomacyService diplomacy,
             final MessageService messages,
             final DenialText denials
     ) {
@@ -75,6 +79,7 @@ public final class NationCommands {
         this.towns = Objects.requireNonNull(towns, "towns");
         this.nationRepository = Objects.requireNonNull(nationRepository, "nationRepository");
         this.directory = Objects.requireNonNull(directory, "directory");
+        this.diplomacy = Objects.requireNonNull(diplomacy, "diplomacy");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.denials = Objects.requireNonNull(denials, "denials");
         this.listings = new Listings(messages);
@@ -160,7 +165,152 @@ public final class NationCommands {
                         .runs(this::disband, Surface.CHAT))
                 .child(roleTree())
                 .child(settingsTree())
+                .child(diplomacyTree())
                 .build();
+    }
+
+    /**
+     * The {@code /nation ally} and {@code /nation enemy} trees.
+     *
+     * <p>Two commands rather than one {@code /nation relation <kind>}, because they are not the
+     * same act. Offering an alliance asks; declaring an enemy tells. The messages say so, and the
+     * reply to an offer names what still has to happen.</p>
+     */
+    private CommandNode diplomacyTree() {
+        return CommandNode.group("relations")
+                .aliases("diplomacy")
+                .permission("rifttowny.nation.diplomacy")
+                .usage("nation relations")
+                .describedAs("See and change who your nation stands with")
+                .child(CommandNode.action("list")
+                        .permission("rifttowny.nation.diplomacy")
+                        .usage("nation relations list")
+                        .describedAs("Who your nation stands with, and who stands against it")
+                        .runs(this::relations, Surface.CHAT))
+                .child(CommandNode.action("ally")
+                        .permission("rifttowny.nation.diplomacy")
+                        .usage("nation relations ally <nation>")
+                        .describedAs("Offer an alliance, or complete one you were offered")
+                        .completer((actor, args) -> args.size() <= 1 ? nationNames() : List.of())
+                        .runs((actor, args) -> declare(actor, args, Relation.ALLY), Surface.CHAT))
+                .child(CommandNode.action("enemy")
+                        .permission("rifttowny.nation.diplomacy")
+                        .usage("nation relations enemy <nation>")
+                        .describedAs("Declare a nation an enemy")
+                        .completer((actor, args) -> args.size() <= 1 ? nationNames() : List.of())
+                        .runs((actor, args) -> declare(actor, args, Relation.ENEMY), Surface.CHAT))
+                .child(CommandNode.action("neutral")
+                        .aliases("clear")
+                        .permission("rifttowny.nation.diplomacy")
+                        .usage("nation relations neutral <nation>")
+                        .describedAs("Take back whatever you declared about a nation")
+                        .completer((actor, args) -> args.size() <= 1 ? nationNames() : List.of())
+                        .runs(this::withdrawBoth, Surface.CHAT))
+                .build();
+    }
+
+    // --- diplomacy -------------------------------------------------------------------------------
+
+    private void declare(
+            final CommandActor actor, final List<String> args, final Relation relation) {
+        withNationAndOther(actor, args, "nation relations " + relation.name().toLowerCase(Locale.ROOT)
+                + " <nation>", (who, mine, theirs) ->
+                reply(actor, diplomacy.declare(who, mine.id(), relation, theirs.id()), declared ->
+                        announce(actor, relation, mine, theirs)));
+    }
+
+    /**
+     * Says what happened, and — for an alliance — what has not happened yet.
+     *
+     * <p>An offer that reported itself as an alliance would be the command lying: the other nation
+     * has agreed to nothing, and its territory is not open.</p>
+     */
+    private void announce(
+            final CommandActor actor,
+            final Relation relation,
+            final Nation mine,
+            final Nation theirs
+    ) {
+        if (relation == Relation.ENEMY) {
+            messages.send(actor::send, MessageKey.NATION_ENEMY_DECLARED,
+                    MessageService.value("nation", theirs.name().display()));
+            return;
+        }
+        final boolean mutual = diplomacy.book().areAllied(mine.id(), theirs.id());
+        messages.send(actor::send,
+                mutual ? MessageKey.NATION_ALLIANCE_SEALED : MessageKey.NATION_ALLIANCE_OFFERED,
+                MessageService.value("nation", theirs.name().display()));
+    }
+
+    /** Takes back whichever declaration stands, so one command undoes either. */
+    private void withdrawBoth(final CommandActor actor, final List<String> args) {
+        withNationAndOther(actor, args, "nation relations neutral <nation>", (who, mine, theirs) -> {
+            final Relation standing = diplomacy.book()
+                    .hasDeclared(mine.id(), Relation.ENEMY, theirs.id())
+                    ? Relation.ENEMY
+                    : Relation.ALLY;
+            reply(actor, diplomacy.withdraw(who, mine.id(), standing, theirs.id()), withdrawn ->
+                    messages.send(actor::send, MessageKey.NATION_RELATION_WITHDRAWN,
+                            MessageService.value("nation", theirs.name().display())));
+        });
+    }
+
+    private void relations(final CommandActor actor, final List<String> args) {
+        withNation(actor, (who, nation) -> then(actor, diplomacy.involving(nation.id()), all -> {
+            messages.send(actor::send, MessageKey.NATION_RELATIONS_HEADER,
+                    MessageService.value("nation", nation.name().display()));
+
+            line(actor, "Allies", namesOf(diplomacy.book().allies(nation.id())));
+            line(actor, "Offered", namesOf(diplomacy.book().offeredAlliances(nation.id())));
+            line(actor, "Enemies", namesOf(diplomacy.book().declared(nation.id(), Relation.ENEMY)));
+
+            // Who has declared something about US, which is the half a nation cannot see from its
+            // own declarations - and the half that matters when somebody declares war.
+            final java.util.Set<NationId> against = new java.util.LinkedHashSet<>();
+            all.forEach(declaration -> {
+                if (declaration.target().equals(nation.id())
+                        && declaration.relation() == Relation.ENEMY) {
+                    against.add(declaration.declarer());
+                }
+            });
+            line(actor, "Declared against you", namesOf(against));
+        }));
+    }
+
+    private String namesOf(final java.util.Collection<NationId> ids) {
+        final List<String> named = new java.util.ArrayList<>(ids.size());
+        ids.forEach(id -> directory.nationName(id).ifPresent(named::add));
+        return named.isEmpty() ? "none" : String.join(", ", named);
+    }
+
+    /** Resolves the actor's own nation and the one they named. */
+    private void withNationAndOther(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final OtherNationWork work
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        withNation(actor, (who, mine) ->
+                then(actor, nationRepository.findByName(args.getFirst()), found ->
+                        found.ifPresentOrElse(
+                                theirs -> work.accept(who, mine, theirs),
+                                () -> denied(actor, ChangeDenial.NATION_NOT_FOUND))));
+    }
+
+    /** Every nation's name, from the cache, for completion. */
+    private List<String> nationNames() {
+        final List<String> named = new java.util.ArrayList<>();
+        directory.cachedNations().forEach(nation -> named.add(nation.name().display()));
+        return named;
+    }
+
+    @FunctionalInterface
+    private interface OtherNationWork {
+        void accept(ResidentId actor, Nation mine, Nation theirs);
     }
 
     /**

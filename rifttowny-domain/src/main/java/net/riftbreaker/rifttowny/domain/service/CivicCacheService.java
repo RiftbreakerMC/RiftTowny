@@ -32,6 +32,7 @@ public final class CivicCacheService implements CivicCacheRefresher {
     private final CivicStore store;
     private final CivicCache cache;
     private final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache;
+    private final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy;
     private final Consumer<String> warn;
 
     /**
@@ -57,9 +58,29 @@ public final class CivicCacheService implements CivicCacheRefresher {
             final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache,
             final Consumer<String> warn
     ) {
+        this(store, cache, nationCache,
+                net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty(), warn);
+    }
+
+    /**
+     * The same, keeping the diplomacy book in step too.
+     *
+     * <p>Here rather than in {@code DiplomacyService} because the event that matters is a nation
+     * <em>disbanding</em>, and this is the one thing already told about that. A book that had to be
+     * cleaned up by whoever happened to disband the nation would be cleaned up on some paths and
+     * not others.</p>
+     */
+    public CivicCacheService(
+            final CivicStore store,
+            final CivicCache cache,
+            final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache,
+            final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy,
+            final Consumer<String> warn
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.cache = Objects.requireNonNull(cache, "cache");
         this.nationCache = Objects.requireNonNull(nationCache, "nationCache");
+        this.diplomacy = Objects.requireNonNull(diplomacy, "diplomacy");
         this.warn = Objects.requireNonNull(warn, "warn");
     }
 
@@ -152,8 +173,14 @@ public final class CivicCacheService implements CivicCacheRefresher {
             return CompletableFuture.completedFuture(null);
         }
         return store.<Void>inTransaction(transaction -> {
-            transaction.nations().find(nation).ifPresentOrElse(
-                    nationCache::remember, () -> nationCache.forget(nation));
+            transaction.nations().find(nation).ifPresentOrElse(nationCache::remember, () -> {
+                nationCache.forget(nation);
+                // A dissolved nation's declarations cascade in the database, and the book has to
+                // be told separately or protection keeps granting the ALLY rung to a nation that
+                // no longer exists - until the next restart, which is the worst kind of bug to
+                // reproduce.
+                diplomacy.forget(nation);
+            });
             return null;
         });
     }

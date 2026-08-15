@@ -381,6 +381,33 @@ public enum MessageKey {
     TOWN_BOARD_LINE("town.board-line",
             "<gray>« <white><board></white> »</gray>"),
 
+    // --- diplomacy -------------------------------------------------------------------------------
+
+    /**
+     * An alliance offered but not yet returned.
+     *
+     * <p>Says plainly that nothing has changed yet. A message that reported an offer as an alliance
+     * would be the command lying: the other nation has agreed to nothing and its land is not
+     * open.</p>
+     */
+    NATION_ALLIANCE_OFFERED("nation.alliance-offered",
+            "<yellow>Offered an alliance to <white><nation></white>. Nothing changes until they "
+                    + "declare it too.</yellow>"),
+
+    NATION_ALLIANCE_SEALED("nation.alliance-sealed",
+            "<green>Allied with <white><nation></white>. Their people may now build on your "
+                    + "land.</green>"),
+
+    NATION_ENEMY_DECLARED("nation.enemy-declared",
+            "<red><white><nation></white> is now an enemy of your nation.</red>"),
+
+    NATION_RELATION_WITHDRAWN("nation.relation-withdrawn",
+            "<yellow>Your nation no longer declares anything about "
+                    + "<white><nation></white>.</yellow>"),
+
+    NATION_RELATIONS_HEADER("nation.relations-header",
+            "<gray>Where <white><nation></white> stands</gray>"),
+
     // --- chat channels ---------------------------------------------------------------------------
     // The two format keys are only used when RiftChat is absent. With it installed, RiftChat renders
     // and these are never reached - which is the point of not building a second chat formatter.

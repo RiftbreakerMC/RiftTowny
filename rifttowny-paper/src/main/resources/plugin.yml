@@ -230,6 +230,7 @@ permissions:
       rifttowny.nation.rename: true
       rifttowny.nation.delete: true
       rifttowny.nation.set: true
+      rifttowny.nation.diplomacy: true
       rifttowny.nation.role.view: true
       rifttowny.nation.role.manage: true
       rifttowny.nation.role.assign: true
@@ -265,6 +266,9 @@ permissions:
     default: true
   rifttowny.nation.set:
     description: Set your nation's board, tag, map colour and neutrality. The MANAGE_SETTINGS role permission decides who really can.
+    default: true
+  rifttowny.nation.diplomacy:
+    description: See and change who your nation is allied to and at odds with. The MANAGE_DIPLOMACY role permission decides who really can declare.
     default: true
   rifttowny.nation.role.view:
     description: View your nation's roles.

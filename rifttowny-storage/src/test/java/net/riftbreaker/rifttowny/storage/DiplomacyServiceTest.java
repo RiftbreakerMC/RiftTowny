@@ -59,7 +59,7 @@ class DiplomacyServiceTest extends SqliteFixture {
     void createServices() {
         store = new JdbcCivicStore(database, DIRECT, CLOCK);
         final CivicCacheService civic =
-                new CivicCacheService(store, civicCache, nationCache, warning -> { });
+                new CivicCacheService(store, civicCache, nationCache, book, warning -> { });
         towns = new TownService(store, NamePolicy.defaults(), CLOCK, TerritoryIndex.empty(), civic);
         nations = new NationService(store, NamePolicy.defaults(), CLOCK, civic);
         diplomacy = new DiplomacyService(store, CLOCK, book);
@@ -206,8 +206,10 @@ class DiplomacyServiceTest extends SqliteFixture {
             diplomacy.declare(VALEN_KING, valen.id(), Relation.ALLY, ashmark.id()).join();
             diplomacy.declare(ASHMARK_KING, ashmark.id(), Relation.ALLY, valen.id()).join();
 
+            // Nothing calls forget() by hand here: disbanding refreshes the nation, and the refresh
+            // is what tells the book. Otherwise protection would keep granting the ALLY rung to a
+            // nation that no longer exists, until the next restart.
             nations.disband(ASHMARK_KING, ashmark.id()).join();
-            diplomacy.forget(ashmark.id());
 
             assertThat(store.inTransaction(t -> t.relations().all()).join()).isEmpty();
             assertThat(book.areAllied(valen.id(), ashmark.id())).isFalse();
