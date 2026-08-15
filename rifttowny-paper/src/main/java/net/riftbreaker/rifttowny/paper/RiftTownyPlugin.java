@@ -477,7 +477,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 new net.riftbreaker.rifttowny.paper.protection.BlockProtectionListener(protection),
                 this);
         manager.registerEvents(
-                new net.riftbreaker.rifttowny.paper.protection.InteractionListener(protection),
+                new net.riftbreaker.rifttowny.paper.protection.InteractionListener(protection,
+                        new net.riftbreaker.rifttowny.paper.protection.BlockActions(
+                                new net.riftbreaker.rifttowny.paper.protection.BukkitBlockTags())),
                 this);
         manager.registerEvents(
                 new net.riftbreaker.rifttowny.paper.protection.EntityProtectionListener(protection),

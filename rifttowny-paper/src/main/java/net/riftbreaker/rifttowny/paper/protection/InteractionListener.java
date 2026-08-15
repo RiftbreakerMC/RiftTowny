@@ -25,26 +25,34 @@ import java.util.Optional;
 public final class InteractionListener implements Listener {
 
     private final ProtectionService protection;
+    private final BlockActions blocks;
 
-    public InteractionListener(final ProtectionService protection) {
+    public InteractionListener(final ProtectionService protection, final BlockActions blocks) {
         this.protection = Objects.requireNonNull(protection, "protection");
+        this.blocks = Objects.requireNonNull(blocks, "blocks");
     }
 
     /**
-     * Right-clicking and standing on things.
+     * Right-clicking, hitting and standing on things.
      *
-     * <p>Left-clicking is not handled: breaking a block is a {@code BlockBreakEvent}, and cancelling
-     * the swing as well would stop a player punching a chest to no effect, which is not a rule
-     * worth having.</p>
+     * <p>Left-clicking reaches {@link BlockActions#forLeftClick} rather than being ignored, but it
+     * still answers for almost nothing: breaking a block is a {@code BlockBreakEvent} and is caught
+     * there, and cancelling every swing would stop a player punching a chest to no effect, which is
+     * not a rule worth having.</p>
      */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onInteract(final PlayerInteractEvent event) {
         if (event.getClickedBlock() == null) {
             return;
         }
+        final org.bukkit.Material clicked = event.getClickedBlock().getType();
         final Optional<BlockActions.Action> action = switch (event.getAction()) {
-            case RIGHT_CLICK_BLOCK -> BlockActions.forRightClick(event.getClickedBlock());
-            case PHYSICAL -> BlockActions.forStandingOn(event.getClickedBlock());
+            // What is in the hand matters for this one case only: an axe, a shovel, a hoe, shears
+            // or a honeycomb rewrites the block it is used on, and that arrives as a plain
+            // right-click on a block which by itself means nothing.
+            case RIGHT_CLICK_BLOCK -> blocks.forRightClick(clicked, heldType(event));
+            case LEFT_CLICK_BLOCK -> blocks.forLeftClick(clicked);
+            case PHYSICAL -> blocks.forStandingOn(clicked);
             default -> Optional.empty();
         };
         if (action.isEmpty()) {
@@ -60,6 +68,44 @@ public final class InteractionListener implements Listener {
             if (event.getAction() == Action.PHYSICAL) {
                 event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
             }
+        }
+    }
+
+    /** What the player was holding, or null for an empty hand. */
+    private static org.bukkit.Material heldType(final PlayerInteractEvent event) {
+        return event.getItem() == null ? null : event.getItem().getType();
+    }
+
+    /**
+     * Putting an entity down: an item frame, a painting, an armour stand, a boat, a minecart.
+     *
+     * <p>None of these is a block, so none of them fires a {@code BlockPlaceEvent} — which made a
+     * claim's build rule stop at the wall and let anybody hang a painting on the other side of it.
+     * Both events carry the block the entity was placed against, and that block's chunk is the one
+     * that owns the decision.</p>
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onEntityPlace(final org.bukkit.event.entity.EntityPlaceEvent event) {
+        // Null for a dispenser putting down a boat. Nothing there holds a permission, and the world
+        // rules are the ones that apply to it.
+        if (event.getPlayer() == null) {
+            return;
+        }
+        if (!protection.allows(event.getPlayer(), Chunks.of(event.getBlock()),
+                ProtectionFlag.BUILD, Permission.BUILD)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** The same, for the events Bukkit routes through its own hanging-entity hierarchy. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onHangingPlace(final org.bukkit.event.hanging.HangingPlaceEvent event) {
+        if (event.getPlayer() == null) {
+            return;
+        }
+        if (!protection.allows(event.getPlayer(), Chunks.of(event.getBlock()),
+                ProtectionFlag.BUILD, Permission.BUILD)) {
+            event.setCancelled(true);
         }
     }
 
