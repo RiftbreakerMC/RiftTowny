@@ -90,7 +90,7 @@ public final class TownySqlSource implements MigrationSource {
 
             return new MigrationPlan(
                     "Towny at " + jdbcUrl,
-                    residents.values().stream().map(Resident::plan).toList(),
+                    resolveResidentTowns(residents, towns),
                     towns.values().stream().map(TownRow::plan).toList(),
                     nations,
                     claims);
@@ -154,6 +154,38 @@ public final class TownySqlSource implements MigrationSource {
         return residents;
     }
 
+    /**
+     * Turns each resident's {@code town} value into a town name.
+     *
+     * <p>It is a town <strong>UUID</strong> on modern Towny, not a name — Towny's own loader parses
+     * it as one and falls back to a name for older rows. The importer joins residents to towns by
+     * name, so leaving the UUID would match nothing: every town would arrive holding only its
+     * mayor and every other resident would be dropped, reported as an adjustment rather than as
+     * the data loss it is.</p>
+     */
+    private List<MigrationPlan.Resident> resolveResidentTowns(
+            final Map<String, Resident> residents, final Map<String, TownRow> towns) {
+        // Name and UUID both point at the same town. Kept separate from the towns map itself,
+        // which must stay one entry per town or the plan would carry each town twice.
+        final Map<String, String> namesByReference = new HashMap<>();
+        for (final TownRow town : towns.values()) {
+            namesByReference.put(key(town.plan().name()), town.plan().name());
+            if (town.uuid() != null) {
+                namesByReference.put(key(town.uuid().toString()), town.plan().name());
+            }
+        }
+
+        final List<MigrationPlan.Resident> resolved = new ArrayList<>(residents.size());
+        for (final Resident resident : residents.values()) {
+            final MigrationPlan.Resident plan = resident.plan();
+            resolved.add(new MigrationPlan.Resident(
+                    plan.id(), plan.name(),
+                    namesByReference.getOrDefault(key(plan.townName()), plan.townName()),
+                    plan.joined(), plan.lastSeen()));
+        }
+        return List.copyOf(resolved);
+    }
+
     // --- towns ------------------------------------------------------------------------------------
 
     private Map<String, TownRow> readTowns(
@@ -194,7 +226,8 @@ public final class TownySqlSource implements MigrationSource {
                                 columns.bool(results, "public", false),
                                 columns.bool(results, "neutral", false),
                                 columns.instant(results, "registered")),
-                        Homeblock.parse(columns.string(results, "homeblock"))));
+                        Homeblock.parse(columns.string(results, "homeblock")),
+                        columns.uuid(results, "uuid")));
             }
         }
 
@@ -368,7 +401,7 @@ public final class TownySqlSource implements MigrationSource {
     private record Resident(MigrationPlan.Resident plan) {
     }
 
-    private record TownRow(MigrationPlan.Town plan, Homeblock homeblock) {
+    private record TownRow(MigrationPlan.Town plan, Homeblock homeblock, UUID uuid) {
     }
 
     /**

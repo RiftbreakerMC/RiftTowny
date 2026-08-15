@@ -104,10 +104,39 @@ public final class TownyFlatFileSource implements MigrationSource {
 
         return new MigrationPlan(
                 "Towny flatfiles at " + dataFolder,
-                residents.distinct(),
+                resolveResidentTowns(residents, towns),
                 towns.distinct().stream().map(TownRow::plan).toList(),
                 nations,
                 claims);
+    }
+
+    /**
+     * Turns each resident's town reference into a town name.
+     *
+     * <p>A resident's {@code town=} is a town <strong>UUID</strong> on modern Towny — Towny's own
+     * loader parses it as one and falls back to a name. The importer joins residents to towns by
+     * name, so leaving the UUID in place would match nothing: every town would arrive holding only
+     * its mayor, every other resident would be dropped, and the report would call it an adjustment
+     * rather than the data loss it is.</p>
+     *
+     * <p>Done as a pass at the end because the two reads are circular — a town needs its mayor from
+     * the residents, and a resident needs its town's name from the towns.</p>
+     */
+    private static List<MigrationPlan.Resident> resolveResidentTowns(
+            final References<MigrationPlan.Resident> residents, final References<TownRow> towns) {
+        final List<MigrationPlan.Resident> resolved = new ArrayList<>(residents.size());
+        for (final MigrationPlan.Resident resident : residents.distinct()) {
+            final String townName = towns.find(resident.townName())
+                    .map(town -> town.plan().name())
+                    // Left as it was when nothing matches: a name that already is a town's name
+                    // resolves above, and anything else is a town that did not come across, which
+                    // the importer reports for itself.
+                    .orElse(resident.townName());
+            resolved.add(new MigrationPlan.Resident(
+                    resident.id(), resident.name(), townName,
+                    resident.joined(), resident.lastSeen()));
+        }
+        return List.copyOf(resolved);
     }
 
     /**

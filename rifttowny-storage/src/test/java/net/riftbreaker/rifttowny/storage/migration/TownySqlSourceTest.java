@@ -339,6 +339,40 @@ class TownySqlSourceTest {
         }
 
         @Test
+        @DisplayName("a resident's town column is a UUID, and resolves to the town's name")
+        void residentTownColumnIsAUuid() throws Exception {
+            // Same silent failure as the flatfile reader had: Towny parses rt_residents.town as a
+            // town UUID with a name fallback, and the importer joins on names. Left unresolved,
+            // every town imports holding only its mayor.
+            final String ashford = UUID.randomUUID().toString();
+            townySchema();
+            sql("ALTER TABLE `towny_TOWNS` ADD COLUMN `uuid` VARCHAR(36)",
+                    "INSERT INTO `towny_RESIDENTS` (name, uuid, town) VALUES "
+                            + "('Bede', '" + BEDE + "', '" + ashford + "')",
+                    "INSERT INTO `towny_RESIDENTS` (name, uuid, town) VALUES "
+                            + "('Ada', '" + ADA + "', '" + ashford + "')",
+                    "INSERT INTO `towny_TOWNS` (name, mayor, uuid) VALUES "
+                            + "('Ashford', 'Bede', '" + ashford + "')");
+
+            assertThat(read().residents())
+                    .hasSize(2)
+                    .allSatisfy(resident ->
+                            assertThat(resident.townName()).isEqualTo("Ashford"));
+        }
+
+        @Test
+        @DisplayName("a resident's town given as a name still resolves")
+        void residentTownColumnMayBeAName() throws Exception {
+            townySchema();
+            sql("INSERT INTO `towny_RESIDENTS` (name, uuid, town) VALUES "
+                            + "('Bede', '" + BEDE + "', 'Ashford')",
+                    "INSERT INTO `towny_TOWNS` (name, mayor) VALUES ('Ashford', 'Bede')");
+
+            assertThat(read().residents()).singleElement()
+                    .extracting(MigrationPlan.Resident::townName).isEqualTo("Ashford");
+        }
+
+        @Test
         @DisplayName("a custom table prefix is honoured")
         void customPrefixIsUsed() throws Exception {
             sql("CREATE TABLE `tny_RESIDENTS` (`name` VARCHAR(32), `uuid` VARCHAR(36))",

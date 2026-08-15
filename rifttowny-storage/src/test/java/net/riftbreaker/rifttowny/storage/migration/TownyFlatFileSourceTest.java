@@ -278,6 +278,38 @@ class TownyFlatFileSourceTest {
         }
 
         @Test
+        @DisplayName("a resident's town is a UUID, and resolves to the town's name")
+        void residentTownReferenceIsAUuid() throws Exception {
+            // The bug this exists for was silent and severe: a resident's town= is a town UUID on
+            // modern Towny, the importer joins residents to towns by NAME, so every town would have
+            // arrived holding only its mayor and every other resident would have been dropped -
+            // reported as an adjustment rather than as the data loss it is.
+            write("residents/Bede.txt", "name=Bede", "uuid=" + BEDE, "town=" + ASHFORD);
+            write("residents/Ada.txt", "name=Ada", "uuid=" + ADA, "town=" + ASHFORD);
+            write("towns/" + ASHFORD + ".txt",
+                    "name=Ashford", "uuid=" + ASHFORD, "mayor=" + BEDE);
+
+            assertThat(read().residents())
+                    .as("both residents must name the town, not its UUID")
+                    .allSatisfy(resident ->
+                            assertThat(resident.townName()).isEqualTo("Ashford"))
+                    .hasSize(2);
+        }
+
+        @Test
+        @DisplayName("a resident whose town did not come across keeps their reference")
+        void unresolvedTownReferencesSurvive() throws Exception {
+            // Left as-is rather than nulled: the importer reports a town it cannot find, and
+            // blanking it here would turn a reportable problem into a silent townless player.
+            final UUID missing = UUID.randomUUID();
+            write("residents/Bede.txt", "name=Bede", "uuid=" + BEDE, "town=" + missing);
+
+            assertThat(read().residents()).singleElement()
+                    .extracting(MigrationPlan.Resident::townName)
+                    .isEqualTo(missing.toString());
+        }
+
+        @Test
         @DisplayName("older files referencing by name still resolve")
         void legacyNameReferencesStillWork() throws Exception {
             // Towny's own loader tries the UUID and falls back to the name, because files carried
