@@ -58,6 +58,94 @@ class ProtectionQueryTest {
     }
 
     @Nested
+    @DisplayName("the ally rung")
+    class Allies {
+
+        private final ResidentId foreigner = CivicFixture.resident();
+
+        /** Riftholm in one nation, a foreigner living in a town of another. */
+        private ProtectionQuery queryWith(
+                final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook book,
+                final NationId valen,
+                final NationId ashmark
+        ) {
+            final Town home = CivicFixture.town("Riftholm", MAYOR).joinNation(valen).orElseThrow();
+            final Town abroad =
+                    CivicFixture.town("Ashford", foreigner).joinNation(ashmark).orElseThrow();
+
+            territory.put(Claim.of(CLAIMED, home.id(), ClaimKind.ORDINARY, CivicFixture.NOW));
+            civic.remember(CivicFixture.facts(home));
+            civic.remember(CivicFixture.facts(abroad));
+            return new ProtectionQuery(
+                    territory, civic, FlagSettingsSource.builtInOnly(),
+                    net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty(), book);
+        }
+
+        private void declare(
+                final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook book,
+                final NationId declarer,
+                final NationId target) {
+            book.declare(new net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.Declaration(
+                    declarer, net.riftbreaker.rifttowny.domain.diplomacy.Relation.ALLY, target));
+        }
+
+        @Test
+        @DisplayName("a foreigner from an unallied nation is a visitor")
+        void unalliedNationsAreStrangers() {
+            final NationId valen = NationId.random();
+            final NationId ashmark = NationId.random();
+
+            assertThat(queryWith(
+                    net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty(), valen, ashmark)
+                    .mayAct(foreigner, CLAIMED, ProtectionFlag.BUILD).relationship())
+                    .isEqualTo(Relationship.VISITOR);
+        }
+
+        @Test
+        @DisplayName("a one-sided declaration does not reach the ally rung")
+        void oneSidedDeclarationsGrantNothing() {
+            // The reason declarations are stored one way: otherwise a nation could let itself into
+            // another's territory by declaring an alliance the other never agreed to.
+            final NationId valen = NationId.random();
+            final NationId ashmark = NationId.random();
+            final var book = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
+            declare(book, ashmark, valen);
+
+            assertThat(queryWith(book, valen, ashmark)
+                    .mayAct(foreigner, CLAIMED, ProtectionFlag.BUILD).relationship())
+                    .isEqualTo(Relationship.VISITOR);
+        }
+
+        @Test
+        @DisplayName("a mutual alliance does")
+        void mutualAlliancesAreAllies() {
+            final NationId valen = NationId.random();
+            final NationId ashmark = NationId.random();
+            final var book = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
+            declare(book, ashmark, valen);
+            declare(book, valen, ashmark);
+
+            assertThat(queryWith(book, valen, ashmark)
+                    .mayAct(foreigner, CLAIMED, ProtectionFlag.BUILD).relationship())
+                    .isEqualTo(Relationship.ALLY);
+        }
+
+        @Test
+        @DisplayName("a player in no nation is never an ally, however the nations stand")
+        void nationlessPlayersAreNotAllies() {
+            final NationId valen = NationId.random();
+            final NationId ashmark = NationId.random();
+            final var book = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
+            declare(book, ashmark, valen);
+            declare(book, valen, ashmark);
+
+            assertThat(queryWith(book, valen, ashmark)
+                    .mayAct(STRANGER, CLAIMED, ProtectionFlag.BUILD).relationship())
+                    .isEqualTo(Relationship.VISITOR);
+        }
+    }
+
+    @Nested
     @DisplayName("wilderness")
     class Wilderness {
 

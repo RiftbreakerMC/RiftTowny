@@ -37,6 +37,7 @@ public final class ProtectionQuery {
     private final CivicCache civic;
     private final FlagSettingsSource settings;
     private final RuinIndex ruins;
+    private final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy;
 
     /** Uses built-in flag defaults and knows of no ruins. */
     public ProtectionQuery(final TerritoryIndex territory, final CivicCache civic) {
@@ -61,10 +62,28 @@ public final class ProtectionQuery {
             final FlagSettingsSource settings,
             final RuinIndex ruins
     ) {
+        this(territory, civic, settings, ruins,
+                net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty());
+    }
+
+    /**
+     * @param diplomacy what nations have declared about each other, which is what makes the
+     *        {@link Relationship#ALLY} rung real. An empty book answers "not allied" to everything,
+     *        which is the correct reading of a server with no diplomacy — and was the hard-coded
+     *        answer before this module existed
+     */
+    public ProtectionQuery(
+            final TerritoryIndex territory,
+            final CivicCache civic,
+            final FlagSettingsSource settings,
+            final RuinIndex ruins,
+            final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy
+    ) {
         this.territory = Objects.requireNonNull(territory, "territory");
         this.civic = Objects.requireNonNull(civic, "civic");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.ruins = Objects.requireNonNull(ruins, "ruins");
+        this.diplomacy = Objects.requireNonNull(diplomacy, "diplomacy");
     }
 
     // --- asking --------------------------------------------------------------------------------
@@ -205,13 +224,24 @@ public final class ProtectionQuery {
     private RelationshipResolver.TerritoryView viewOf(
             final ResidentId who, final TownFacts owning, final boolean holdsPlot) {
         final Optional<TownFacts> actorTown = civic.townFactsOf(who);
-        return RelationshipResolver.TerritoryView.claim(
+        final var owningNation = owning.nation().orElse(null);
+        final var actorNation = actorTown.flatMap(TownFacts::nation).orElse(null);
+
+        // Two map lookups, on the hottest path in the plugin. Allied-ness is between NATIONS, so a
+        // player in no nation is never allied to anything and the book is not asked.
+        final boolean allied = actorNation != null
+                && owningNation != null
+                && diplomacy.areAllied(actorNation, owningNation);
+
+        return new RelationshipResolver.TerritoryView(
+                true,
                 owning.id(),
-                owning.nation().orElse(null),
+                owningNation,
                 actorTown.map(TownFacts::id).orElse(null),
-                actorTown.flatMap(TownFacts::nation).orElse(null),
+                actorNation,
                 owning.trusts(who),
-                holdsPlot);
+                holdsPlot,
+                allied);
     }
 
     /**

@@ -81,6 +81,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions;
     private net.riftbreaker.rifttowny.domain.directory.TownyPlaceholders placeholders;
     private net.riftbreaker.rifttowny.domain.service.CivicImporter importer;
+    private net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacyBook;
+    private net.riftbreaker.rifttowny.domain.service.DiplomacyService diplomacy;
     private net.riftbreaker.rifttowny.domain.chat.ActiveChannels activeChannels;
     private net.riftbreaker.rifttowny.domain.chat.ChannelAudience channelAudience;
     private net.riftbreaker.rifttowny.integrations.chat.RiftChatAdapter chatAdapter;
@@ -385,6 +387,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     clock,
                     civicCacheService,
                     worldId -> getServer().getWorld(worldId) != null);
+            this.diplomacyBook = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
+            this.diplomacy = new net.riftbreaker.rifttowny.domain.service.DiplomacyService(
+                    civicStore, clock, diplomacyBook);
             this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();
             this.activeChannels = net.riftbreaker.rifttowny.domain.chat.ActiveChannels.empty();
             this.channelAudience = new net.riftbreaker.rifttowny.domain.chat.ChannelAudience(
@@ -428,6 +433,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + spawns + " town spawn(s) into memory.");
 
+            // Waited on for the same reason as the rest: the ALLY rung is answered from this, so a
+            // listener running before it finished would refuse an ally who is entitled to build.
+            final int declarations = diplomacy.loadAll()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + declarations + " diplomatic declaration(s) into memory.");
+
             final int named = residentNameService.loadAll()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + named + " resident name(s) into memory.");
@@ -456,7 +467,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
         // The loaded overrides are the settings source, so admin, claim, organisation and world
         // layers all answer. Area and war supply their own layers when those modules land.
         final var query = new net.riftbreaker.rifttowny.domain.flag.ProtectionQuery(
-                territoryIndex, civicCache, flagOverrides, ruinIndex);
+                territoryIndex, civicCache, flagOverrides, ruinIndex, diplomacyBook);
         this.protection = new net.riftbreaker.rifttowny.paper.protection.ProtectionService(
                 query, messenger);
 
