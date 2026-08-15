@@ -121,6 +121,14 @@ public enum ChangeDenial {
     /** The colour was not six hex digits. */
     NOT_A_COLOUR,
 
+    // --- diplomacy ------------------------------------------------------------------------------
+
+    /** A nation cannot declare a relation with itself. */
+    CANNOT_DECLARE_ON_SELF,
+
+    /** No such declaration stands, so there is nothing to withdraw. */
+    NO_SUCH_DECLARATION,
+
     /** The town has not declared itself open, so joining it needs an invitation. */
     TOWN_IS_NOT_OPEN,
 

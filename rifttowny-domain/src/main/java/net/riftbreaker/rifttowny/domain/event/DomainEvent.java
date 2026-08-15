@@ -91,6 +91,44 @@ public sealed interface DomainEvent {
         }
     }
 
+    /**
+     * One nation declared something about another.
+     *
+     * <p>Carries the declarer, the target and the kind — never "these two are now allied", because
+     * a single declaration does not make an alliance. A subscriber that wants to know whether the
+     * pair is actually allied asks the diplomacy book, which is the only thing that can answer.</p>
+     */
+    record RelationDeclared(NationId declarer, NationId target, String relation)
+            implements DomainEvent {
+
+        public RelationDeclared {
+            Objects.requireNonNull(declarer, "declarer");
+            Objects.requireNonNull(target, "target");
+            Objects.requireNonNull(relation, "relation");
+        }
+
+        @Override
+        public String type() {
+            return "nation.relation-declared";
+        }
+    }
+
+    /** One nation took a declaration back. */
+    record RelationWithdrawn(NationId declarer, NationId target, String relation)
+            implements DomainEvent {
+
+        public RelationWithdrawn {
+            Objects.requireNonNull(declarer, "declarer");
+            Objects.requireNonNull(target, "target");
+            Objects.requireNonNull(relation, "relation");
+        }
+
+        @Override
+        public String type() {
+            return "nation.relation-withdrawn";
+        }
+    }
+
     /** The same, one level up. */
     record NationProfileChanged(NationId nation) implements DomainEvent {
         public NationProfileChanged {

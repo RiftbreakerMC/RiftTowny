@@ -275,6 +275,8 @@ denial:
   name-unchanged: 'That is already the name.'
   nothing-to-change: 'That is already set to exactly that.'
   not-a-colour: 'A colour is six hex digits, like #a1b2c3.'
+  cannot-declare-on-self: 'A nation cannot declare a relation with itself.'
+  no-such-declaration: 'Your nation has not declared that.'
   town-is-not-open: 'That town is not open, so you need an invitation.'
   town-spawn-is-not-public: 'That town''s spawn is not public.'
   name-taken: 'That name is already taken.'

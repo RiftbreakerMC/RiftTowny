@@ -53,6 +53,9 @@ public interface CivicTransaction {
 
     TaxStore taxes();
 
+    /** What nations have declared about each other. */
+    RelationStore relations();
+
     /**
      * Queues an event for delivery.
      *
@@ -338,6 +341,40 @@ public interface CivicTransaction {
 
         /** Removes an account's balance and history, as when its organisation is disbanded. */
         int forget(java.util.UUID accountId);
+    }
+
+    /**
+     * Diplomatic declarations.
+     *
+     * <p>One row per declaration, never per relationship — see
+     * {@link net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook} for why an alliance is two
+     * rows and an enmity is one.</p>
+     */
+    interface RelationStore {
+
+        /** Records a declaration. Idempotent: declaring twice leaves one row. */
+        void declare(net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.Declaration declaration,
+                     java.time.Instant when);
+
+        /** Removes one. @return whether a row actually went */
+        boolean withdraw(
+                net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.Declaration declaration);
+
+        /** Whether this exact declaration stands. */
+        boolean holds(
+                net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.Declaration declaration);
+
+        /** Every declaration on the server, for filling the cache at startup. */
+        java.util.List<net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.Declaration> all();
+
+        /**
+         * Everything one nation has declared, and everything declared about it.
+         *
+         * <p>Both directions, because a nation's relations screen has to show an alliance it has
+         * offered and one it has been offered, and those are different rows.</p>
+         */
+        java.util.List<net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.Declaration> involving(
+                net.riftbreaker.rifttowny.domain.org.NationId nation);
     }
 
     /** Tax runs and the debt they leave behind, inside the transaction. */
