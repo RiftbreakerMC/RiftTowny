@@ -662,4 +662,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
     public net.riftbreaker.rifttowny.domain.civic.CivicCache civicCache() {
         return civicCache;
     }
+
+    /** The flag layers. Reached by {@code /rifttowny flag} for the two no town can set. */
+    public net.riftbreaker.rifttowny.domain.service.FlagService flags() {
+        return flagService;
+    }
 }

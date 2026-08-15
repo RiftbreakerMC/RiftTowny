@@ -35,7 +35,7 @@ softdepend:
 commands:
   rifttowny:
     description: RiftTowny administration and diagnostics.
-    usage: /rifttowny <status|migrate|help>
+    usage: /rifttowny <status|migrate|flag|help>
     permission: rifttowny.admin
   town:
     aliases: [t]
@@ -69,6 +69,7 @@ permissions:
     children:
       rifttowny.admin.status: true
       rifttowny.admin.migrate: true
+      rifttowny.admin.flag: true
   rifttowny.admin.status:
     description: View platform, storage, outbox and integration state.
     default: op
@@ -77,6 +78,13 @@ permissions:
   # irreversible bulk operation in the plugin - it can create hundreds of towns in one command.
   rifttowny.admin.migrate:
     description: Import an existing Towny database.
+    default: op
+
+  # The two flag layers no town can reach. The ADMIN layer is resolved first and beats every town's
+  # own setting, so this is the node that decides who may forbid something server-wide - a different
+  # question from who may read diagnostics, and it keeps its own node for that reason.
+  rifttowny.admin.flag:
+    description: Set the server-wide and per-world protection layers.
     default: op
 
   # Deliberately not a child of rifttowny.admin. Ignoring every claim on the server is a distinct

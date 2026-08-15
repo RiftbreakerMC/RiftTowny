@@ -183,6 +183,8 @@ flag:
   list-empty: '<gray>Nothing is overridden for <white><target></white>, so the built-in defaults apply.</gray>'
   unknown: '<red>Unknown flag <white><input></white>. One of: <white><options></white></red>'
   unknown-relationship: '<red>Unknown relationship <white><input></white>. One of: <white><options></white></red>'
+  nothing-to-clear: '<gray>Nothing was set for <white><flag></white> / <white><relationship></white> at <white><scope></white>, so nothing changed.</gray>'
+  unknown-world: '<red>No world called <white><input></white> is loaded.</red>'
 
 protection:
   denied: '<red>You cannot do that in <white><town></white>.</red>'

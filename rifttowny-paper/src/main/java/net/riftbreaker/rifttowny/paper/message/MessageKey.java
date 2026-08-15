@@ -330,6 +330,14 @@ public enum MessageKey {
             "<gray>Nothing is overridden for <white><target></white>, "
                     + "so the built-in defaults apply.</gray>"),
 
+    /** Clearing something that was never set. Distinct from a clear that removed a rule. */
+    FLAG_NOTHING_TO_CLEAR("flag.nothing-to-clear",
+            "<gray>Nothing was set for <white><flag></white> / <white><relationship></white> at "
+                    + "<white><scope></white>, so nothing changed.</gray>"),
+
+    FLAG_UNKNOWN_WORLD("flag.unknown-world",
+            "<red>No world called <white><input></white> is loaded.</red>"),
+
     FLAG_UNKNOWN("flag.unknown",
             "<red>Unknown flag <white><input></white>. One of: <white><options></white></red>"),
 
