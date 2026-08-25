@@ -28,11 +28,13 @@ import java.util.Set;
  * families are now closed by vanilla tag rather than by name, so a wood type added in a later
  * release arrives already covered instead of arriving unprotected.</p>
  *
- * <p><strong>The branches are ordered, and the order is the rule.</strong> Theft is tested before
- * toggling, because a shelf is both a thing you click and a thing you can empty, and answering
- * {@code INTERACT} for it would let a town that opened its gates lose its stock. What is in the hand
- * is tested last, because a block that already means something means that thing whatever the player
- * happens to be carrying — an axe does not turn a door into a build.</p>
+ * <p><strong>The branches are ordered, and the order is the rule.</strong> The tool in hand comes
+ * first, because where a (block, tool) pair matches, the tool is what the game does — an axe on a
+ * copper door scrapes it rather than opening it, so testing the door first would judge a permanent
+ * rewrite as a toggle. Only genuine pairs match, so an axe carried past a wooden door still leaves
+ * the door a door. After that, theft is tested before toggling, because a shelf is both a thing you
+ * click and a thing you can empty, and answering {@code INTERACT} for it would let a town that
+ * opened its gates lose its stock.</p>
  */
 public final class BlockActions {
 
@@ -51,8 +53,7 @@ public final class BlockActions {
             Material.BEACON, Material.JUKEBOX,
             // A right-click hands the clicker items out of the block, which is the definition this
             // set is drawn on, whether or not the block looks like a chest.
-            Material.VAULT, Material.SUSPICIOUS_SAND, Material.SUSPICIOUS_GRAVEL,
-            Material.SWEET_BERRY_BUSH);
+            Material.VAULT, Material.SUSPICIOUS_SAND, Material.SUSPICIOUS_GRAVEL);
 
     /** Blocks that toggle or open without moving anything of value. */
     private static final Set<Material> SWITCHES = EnumSet.of(
@@ -63,9 +64,7 @@ public final class BlockActions {
             Material.DAMAGED_ANVIL, Material.BELL, Material.FLOWER_POT, Material.COMPOSTER,
             Material.CAULDRON, Material.WATER_CAULDRON, Material.LAVA_CAULDRON,
             Material.POWDER_SNOW_CAULDRON, Material.RESPAWN_ANCHOR, Material.CAKE,
-            // An eye of ender put into a frame cannot be taken back out, and a completed ring opens
-            // a portal inside somebody's claim. Nothing leaves the block, so it is not theft.
-            Material.END_PORTAL_FRAME, Material.LODESTONE);
+            Material.LODESTONE);
 
     /** Blocks a held tool rewrites in place, with no break and no place event to catch it. */
     private static final Set<Material> SHEARABLE = EnumSet.of(Material.PUMPKIN);
@@ -83,24 +82,49 @@ public final class BlockActions {
      * block is a {@code BlockPlaceEvent}, and hitting one is a break.</p>
      *
      * @param block what was clicked
-     * @param inHand what the player was holding, or {@code null} for an empty hand. Only consulted
-     *        when the block itself means nothing, and only for the tools that rewrite a block
+     * @param inHand what the player was holding, or {@code null} for an empty hand. Consulted first,
+     *        and only for the tools that genuinely rewrite the block they are used on
      */
     public Optional<Action> forRightClick(final Material block, final Material inHand) {
         if (block == null) {
             return Optional.empty();
         }
+        // Tested before the block's own meaning, because where a pair matches, the tool is what
+        // the game actually does: an axe on a copper door scrapes it rather than opening it. Only
+        // genuine pairs match, so an axe carried past a wooden door still leaves it a door.
+        final Optional<Action> rewritten = transformation(block, inHand);
+        if (rewritten.isPresent()) {
+            return rewritten;
+        }
         if (CONTAINERS.contains(block)
                 || tags.has(BlockTags.Kind.SHULKER_BOXES, block)
-                // Copper chests and shelves are ordinary containers with a new name; a beehive and a
-                // glow-berry vine are harvested by right-click, which is the same act by another.
+                // Copper chests and shelves are ordinary containers with a new name. A beehive is not
+                // an inventory - org.bukkit.block.Beehive is an EntityBlockStorage - but what comes
+                // out of it is the town's, and a bottle or shears is how it leaves.
                 || tags.has(BlockTags.Kind.COPPER_CHESTS, block)
                 || tags.has(BlockTags.Kind.WOODEN_SHELVES, block)
-                || tags.has(BlockTags.Kind.BEEHIVES, block)
-                || tags.has(BlockTags.Kind.CAVE_VINES, block)) {
+                || tags.has(BlockTags.Kind.BEEHIVES, block)) {
             // The ender chest is here for a different reason than the rest: its contents are the
             // player's own, but opening one still needs the town's consent to stand there doing it.
             return Optional.of(new Action(ProtectionFlag.CONTAINER, Permission.CONTAINER));
+        }
+        if (block == Material.DRAGON_EGG) {
+            // Using it teleports it exactly as hitting it does, so the right-click needs the same
+            // answer as forLeftClick. Protecting only the punch would have left the block this
+            // was written for reachable by the other hand.
+            return Optional.of(new Action(ProtectionFlag.BREAK, Permission.BREAK));
+        }
+        if (block == Material.END_PORTAL_FRAME) {
+            // An eye of ender put in cannot be taken out, and a completed ring opens a portal
+            // inside the claim. The block ends up permanently different, which is this file's own
+            // definition of a build rather than of a toggle.
+            return Optional.of(new Action(ProtectionFlag.BUILD, Permission.BUILD));
+        }
+        if (block == Material.SWEET_BERRY_BUSH || tags.has(BlockTags.Kind.CAVE_VINES, block)) {
+            // Picking, not stealing. Permission.FARMLAND is documented as covering exactly this -
+            // "trampling farmland, harvesting crops" - and filing it under CONTAINER would have
+            // made "may pick berries" and "may open chests" the same grant.
+            return Optional.of(new Action(ProtectionFlag.FARMLAND, Permission.FARMLAND));
         }
         if (block == Material.SPAWNER) {
             // Its own flag rather than the switch permission. Re-egging a town's mob farm is not the
@@ -123,7 +147,7 @@ public final class BlockActions {
                 || tags.has(BlockTags.Kind.CAMPFIRES, block)) {
             return Optional.of(new Action(ProtectionFlag.INTERACT, Permission.SWITCH));
         }
-        return transformation(block, inHand);
+        return Optional.empty();
     }
 
     /**

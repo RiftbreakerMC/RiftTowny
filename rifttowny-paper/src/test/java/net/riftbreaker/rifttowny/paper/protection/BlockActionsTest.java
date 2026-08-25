@@ -58,7 +58,7 @@ class BlockActionsTest {
                 .with(BlockTags.Kind.WOODEN_SHELVES, Material.OAK_SHELF, Material.BAMBOO_SHELF)
                 .with(BlockTags.Kind.BEEHIVES, Material.BEEHIVE, Material.BEE_NEST)
                 .with(BlockTags.Kind.CAVE_VINES, Material.CAVE_VINES, Material.CAVE_VINES_PLANT)
-                .with(BlockTags.Kind.DOORS, Material.OAK_DOOR)
+                .with(BlockTags.Kind.DOORS, Material.OAK_DOOR, Material.COPPER_DOOR)
                 .with(BlockTags.Kind.TRAPDOORS, Material.OAK_TRAPDOOR)
                 .with(BlockTags.Kind.FENCE_GATES, Material.OAK_FENCE_GATE)
                 .with(BlockTags.Kind.BUTTONS, Material.STONE_BUTTON)
@@ -72,7 +72,7 @@ class BlockActionsTest {
                 .with(BlockTags.Kind.PRESSURE_PLATES, Material.STONE_PRESSURE_PLATE)
                 .with(BlockTags.Kind.LOGS, Material.OAK_LOG)
                 .with(BlockTags.Kind.DIRT, Material.GRASS_BLOCK, Material.DIRT)
-                .with(BlockTags.Kind.COPPER, Material.COPPER_BLOCK)
+                .with(BlockTags.Kind.COPPER, Material.COPPER_BLOCK, Material.COPPER_DOOR)
                 .with(BlockTags.Kind.AXES, Material.IRON_AXE, Material.NETHERITE_AXE)
                 .with(BlockTags.Kind.SHOVELS, Material.IRON_SHOVEL)
                 .with(BlockTags.Kind.HOES, Material.IRON_HOE);
@@ -116,17 +116,28 @@ class BlockActionsTest {
         }
 
         @Test
-        @DisplayName("things harvested by right-click count as taking, not touching")
+        @DisplayName("things that hand the clicker the town's goods count as taking")
         void harvests() {
-            // Honey out of a hive, berries off a bush or a vine, loot out of a vault, and the one
-            // buried item in suspicious sand. In each the block hands the clicker something.
+            // Honey out of a hive, loot out of a vault, the one buried item in suspicious sand.
             for (final Material block : new Material[] {
-                    Material.BEEHIVE, Material.BEE_NEST, Material.CAVE_VINES,
-                    Material.CAVE_VINES_PLANT, Material.SWEET_BERRY_BUSH, Material.VAULT,
+                    Material.BEEHIVE, Material.BEE_NEST, Material.VAULT,
                     Material.SUSPICIOUS_SAND, Material.SUSPICIOUS_GRAVEL }) {
                 assertThat(click(block).orElseThrow().flag())
                         .as("%s", block)
                         .isEqualTo(ProtectionFlag.CONTAINER);
+            }
+        }
+
+        @Test
+        @DisplayName("picking a crop is farmland, not theft")
+        void cropsAreNotContainers() {
+            // Permission.FARMLAND is documented as "trampling farmland, harvesting crops", so this
+            // is the flag that already means this. Filing it under CONTAINER would have made "may
+            // pick berries" and "may open every chest in town" the same grant.
+            for (final Material crop : new Material[] {
+                    Material.SWEET_BERRY_BUSH, Material.CAVE_VINES, Material.CAVE_VINES_PLANT }) {
+                assertThat(click(crop)).as("%s", crop).contains(
+                        new BlockActions.Action(ProtectionFlag.FARMLAND, Permission.FARMLAND));
             }
         }
     }
@@ -156,7 +167,7 @@ class BlockActionsTest {
                     Material.OAK_FENCE_GATE, Material.STONE_BUTTON, Material.RED_BED,
                     Material.CANDLE, Material.CANDLE_CAKE, Material.FLOWER_POT,
                     Material.POTTED_CACTUS, Material.CAMPFIRE, Material.SOUL_CAMPFIRE,
-                    Material.END_PORTAL_FRAME, Material.LODESTONE }) {
+                    Material.LODESTONE }) {
                 assertThat(click(block).orElseThrow().flag())
                         .as("%s", block)
                         .isEqualTo(ProtectionFlag.INTERACT);
@@ -212,16 +223,32 @@ class BlockActionsTest {
         }
 
         @Test
-        @DisplayName("a block that already means something means it whatever is being held")
-        void theBlockWins() {
-            // An axe does not turn a door into a build, and holding one near a chest does not
-            // downgrade the chest. The tool branch is last for exactly this reason.
+        @DisplayName("a tool that does nothing to the block leaves the block's own meaning")
+        void theBlockWinsWhenThereIsNoPair() {
+            // An axe does not turn a wooden door into a build, and holding one near a chest does
+            // not downgrade the chest: neither is a pair the game does anything with.
             assertThat(click(Material.OAK_DOOR, Material.IRON_AXE).orElseThrow().flag())
                     .isEqualTo(ProtectionFlag.INTERACT);
             assertThat(click(Material.CHEST, Material.IRON_AXE).orElseThrow().flag())
                     .isEqualTo(ProtectionFlag.CONTAINER);
             assertThat(click(Material.SPAWNER, Material.IRON_HOE).orElseThrow().flag())
                     .isEqualTo(ProtectionFlag.SPAWNER_USE);
+        }
+
+        @Test
+        @DisplayName("but a tool that does rewrite the block beats what the block otherwise means")
+        void thePairWinsWhenThereIsOne() {
+            // A copper door is a door and is also scrapeable, and in the game the axe wins - using
+            // one on it strips the oxidation rather than opening it. Judging it as INTERACT would
+            // let anybody who may open a gate permanently restyle the town's copper.
+            assertThat(click(Material.COPPER_DOOR, Material.IRON_AXE).orElseThrow().flag())
+                    .isEqualTo(ProtectionFlag.BUILD);
+            assertThat(click(Material.COPPER_DOOR, Material.HONEYCOMB).orElseThrow().flag())
+                    .isEqualTo(ProtectionFlag.BUILD);
+
+            // With an empty hand it is still just a door.
+            assertThat(click(Material.COPPER_DOOR).orElseThrow().flag())
+                    .isEqualTo(ProtectionFlag.INTERACT);
         }
     }
 
@@ -236,6 +263,24 @@ class BlockActionsTest {
             // break listener never sees it leave.
             assertThat(blocks.forLeftClick(Material.DRAGON_EGG)).contains(
                     new BlockActions.Action(ProtectionFlag.BREAK, Permission.BREAK));
+        }
+
+        @Test
+        @DisplayName("and by using it, which teleports it exactly the same way")
+        void dragonEggBothWays() {
+            // Protecting only the punch would have left the block this was written for reachable
+            // by the other hand.
+            assertThat(click(Material.DRAGON_EGG)).contains(
+                    new BlockActions.Action(ProtectionFlag.BREAK, Permission.BREAK));
+        }
+
+        @Test
+        @DisplayName("an end portal frame is a permanent rewrite, not a toggle")
+        void endPortalFrame() {
+            // An eye of ender put in cannot be taken out, and a completed ring opens a portal in
+            // the claim. The block ends up permanently different, which is a build.
+            assertThat(click(Material.END_PORTAL_FRAME)).contains(
+                    new BlockActions.Action(ProtectionFlag.BUILD, Permission.BUILD));
         }
 
         @Test
