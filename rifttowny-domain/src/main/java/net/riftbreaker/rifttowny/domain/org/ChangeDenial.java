@@ -108,6 +108,21 @@ public enum ChangeDenial {
     /** Not trusted by this town. */
     NOT_TRUSTED,
 
+    /**
+     * Outlawing a resident of the declaring town.
+     *
+     * <p>Refused rather than silently ignored. Membership already supersedes outlawry when the
+     * relationship is resolved, so an outlawed member would have been harmless — but a mayor who
+     * typed it and saw nothing happen would reasonably conclude the feature was broken.</p>
+     */
+    CANNOT_OUTLAW_A_RESIDENT,
+
+    /** Already outlawed by this town. */
+    ALREADY_OUTLAWED,
+
+    /** Not outlawed by this town. */
+    NOT_OUTLAWED,
+
     // --- presentation ---------------------------------------------------------------------------
 
     /**

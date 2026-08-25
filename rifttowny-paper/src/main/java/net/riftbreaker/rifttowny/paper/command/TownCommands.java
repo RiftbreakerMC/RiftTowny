@@ -68,6 +68,7 @@ public final class TownCommands {
     private final CivicDirectory directory;
     private final TerritoryMap maps;
     private final Listings listings;
+    private final net.riftbreaker.rifttowny.domain.service.OutlawService outlaws;
     private final MessageService messages;
     private final DenialText denials;
 
@@ -80,6 +81,7 @@ public final class TownCommands {
             final net.riftbreaker.rifttowny.domain.service.SpawnService spawns,
             final net.riftbreaker.rifttowny.paper.spawn.TeleportService teleports,
             final net.riftbreaker.rifttowny.domain.service.BankService banks,
+            final net.riftbreaker.rifttowny.domain.service.OutlawService outlaws,
             final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final ResidentRepository residents,
             final net.riftbreaker.rifttowny.domain.org.TownRepository townRepository,
@@ -97,6 +99,7 @@ public final class TownCommands {
         this.spawns = Objects.requireNonNull(spawns, "spawns");
         this.teleports = Objects.requireNonNull(teleports, "teleports");
         this.banks = Objects.requireNonNull(banks, "banks");
+        this.outlaws = Objects.requireNonNull(outlaws, "outlaws");
         this.names = Objects.requireNonNull(names, "names");
         this.residents = Objects.requireNonNull(residents, "residents");
         this.townRepository = Objects.requireNonNull(townRepository, "townRepository");
@@ -271,6 +274,7 @@ public final class TownCommands {
                         .runs(this::joinOpen, Surface.CHAT))
                 .child(roleTree())
                 .child(flagTree())
+                .child(outlawTree())
                 .child(settingsTree())
                 .build();
     }
@@ -334,6 +338,74 @@ public final class TownCommands {
                 .build();
     }
 
+
+    /**
+     * {@code /town outlaw} — who this town will not have.
+     *
+     * <p>{@code MANAGE_TRUST}, the same node the trust list uses, because the two are one decision
+     * from opposite ends: which outsiders this town treats differently from other outsiders.</p>
+     */
+    private CommandNode outlawTree() {
+        return CommandNode.group("outlaw")
+                .permission("rifttowny.town.outlaw")
+                .usage("town outlaw")
+                .describedAs("Declare a player unwelcome, or take it back")
+                .child(CommandNode.action("add")
+                        .permission("rifttowny.town.outlaw")
+                        .usage("town outlaw add <player>")
+                        .describedAs("Declare a player unwelcome. MANAGE_TRUST decides who can")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? onlinePlayerNames() : List.of())
+                        .runs(this::outlawAdd, Surface.CHAT))
+                .child(CommandNode.action("remove")
+                        .aliases("pardon")
+                        .permission("rifttowny.town.outlaw")
+                        .usage("town outlaw remove <player>")
+                        .describedAs("Take an outlawry back")
+                        .runs(this::outlawRemove, Surface.CHAT))
+                .child(CommandNode.action("list")
+                        .permission("rifttowny.town.outlaw")
+                        .usage("town outlaw list")
+                        .describedAs("Who this town has outlawed")
+                        .runs(this::outlawList, Surface.CHAT))
+                .runs(this::outlawList, Surface.CHAT);
+    }
+
+    private void outlawAdd(final CommandActor actor, final List<String> args) {
+        withTownAndTarget(actor, args, "town outlaw add <player>", (who, town, target) ->
+                reply(actor, outlaws.declare(who, town.id(), target), ignored ->
+                        messages.send(actor::send, MessageKey.TOWN_OUTLAWED,
+                                MessageService.value("resident", names.describe(target)),
+                                MessageService.value("town", town.name().display()))));
+    }
+
+    private void outlawRemove(final CommandActor actor, final List<String> args) {
+        withTownAndTarget(actor, args, "town outlaw remove <player>", (who, town, target) ->
+                reply(actor, outlaws.pardon(who, town.id(), target), ignored ->
+                        messages.send(actor::send, MessageKey.TOWN_OUTLAW_PARDONED,
+                                MessageService.value("resident", names.describe(target)),
+                                MessageService.value("town", town.name().display()))));
+    }
+
+    /** Answered from the cache, so a town's own list costs nothing to look at. */
+    private void outlawList(final CommandActor actor, final List<String> args) {
+        withTown(actor, (who, town) -> {
+            final var listed = outlaws.of(town.id());
+            if (listed.isEmpty()) {
+                messages.send(actor::send, MessageKey.TOWN_OUTLAW_LIST_EMPTY,
+                        MessageService.value("town", town.name().display()));
+                return;
+            }
+            final List<String> named = new ArrayList<>(listed.size());
+            listed.forEach(one -> named.add(names.describe(one)));
+            named.sort(String.CASE_INSENSITIVE_ORDER);
+            messages.send(actor::send, MessageKey.TOWN_OUTLAW_LIST_HEADER,
+                    MessageService.value("town", town.name().display()),
+                    MessageService.value("count", named.size()));
+            messages.sendRaw(actor::send, MessageKey.TOWN_OUTLAW_LIST_LINE,
+                    MessageService.value("residents", String.join(", ", named)));
+        });
+    }
     /**
      * The {@code /town flag} tree.
      *

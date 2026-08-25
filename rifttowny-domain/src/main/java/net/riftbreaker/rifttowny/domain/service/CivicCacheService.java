@@ -33,6 +33,7 @@ public final class CivicCacheService implements CivicCacheRefresher {
     private final CivicCache cache;
     private final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache;
     private final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy;
+    private final net.riftbreaker.rifttowny.domain.justice.Outlaws outlaws;
     private final Consumer<String> warn;
 
     /**
@@ -77,6 +78,28 @@ public final class CivicCacheService implements CivicCacheRefresher {
             final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy,
             final Consumer<String> warn
     ) {
+        this(store, cache, nationCache, diplomacy,
+                net.riftbreaker.rifttowny.domain.justice.Outlaws.empty(), warn);
+    }
+
+    /**
+     * The same, keeping the outlaw book in step too.
+     *
+     * <p>Here for the same reason the diplomacy book is: the event that matters is a town
+     * <em>disbanding</em>, and this is the one thing already told about that on every path that can
+     * cause it. A book cleaned up by whoever happened to disband the town would be cleaned up on
+     * some paths and not others — which is precisely the gap that let a dissolved nation stay
+     * somebody's ally until the next restart.</p>
+     */
+    public CivicCacheService(
+            final CivicStore store,
+            final CivicCache cache,
+            final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache,
+            final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy,
+            final net.riftbreaker.rifttowny.domain.justice.Outlaws outlaws,
+            final Consumer<String> warn
+    ) {
+        this.outlaws = Objects.requireNonNull(outlaws, "outlaws");
         this.store = Objects.requireNonNull(store, "store");
         this.cache = Objects.requireNonNull(cache, "cache");
         this.nationCache = Objects.requireNonNull(nationCache, "nationCache");
@@ -143,6 +166,7 @@ public final class CivicCacheService implements CivicCacheRefresher {
             if (found.isEmpty()) {
                 // Disbanded between the change and this read, or disbanded by the change itself.
                 cache.forget(town);
+                outlaws.forget(town);
                 return null;
             }
             final Optional<RoleBook> roles = rolesOf(transaction, town);
@@ -188,6 +212,9 @@ public final class CivicCacheService implements CivicCacheRefresher {
     /** Drops a town without reading anything, for a caller that already knows it is gone. */
     public void forget(final TownId town) {
         cache.forget(town);
+        // The rows cascade with the town; this is the cache being told, and forgetting it here is
+        // what stops a disbanded town's grudges outliving it until the next restart.
+        outlaws.forget(town);
     }
 
     private static Optional<RoleBook> rolesOf(

@@ -41,7 +41,7 @@ rows as the truth.
 | `last_known_name` follows renames | `ResidentPresenceListener` updates it on join | DONE |
 | `/resident` — view your own record | `/resident`, `/res` | DONE |
 | `/resident <name>` — view another | `/resident <name>` | DONE |
-| `/resident list` | — | **MISSING** — a list of every account is a different screen from a list of towns, and rarely the one somebody wants |
+| `/resident list` | `/resident list [page]` | PARTIAL — lists residents **of towns**, from the membership index protection already keeps. Somebody who has never joined one has a database row and no place here; the individual lookup answers for them |
 | `/resident set mode …` — chat modes, map modes, spy | — | **MISSING** |
 | `/resident friend add|remove` | — | **MISSING** — the town trust list exists, personal friends do not |
 | `/resident toggle` — bordertitles, plotborder, etc. | — | **MISSING** |
@@ -80,7 +80,7 @@ rows as the truth.
 | `/town deposit`, `/town withdraw` | `/town deposit`, `/town withdraw`, `/town bank` | DONE — bound to RiftEco. Refuses with a clear message when no economy plugin is installed |
 | Town upkeep, bankruptcy, ruin on unpaid upkeep | `taxes.upkeep-per-chunk`, a grace period, then a fall into a ruin | DONE |
 | Resident tax, and eviction of residents who cannot pay | Resident tax charged; **no eviction** | **DIFFERENT** — eviction is a punishment applied by a timer to somebody who may simply have been away. A town that wants somebody gone has `/town kick` and a person to decide it |
-| `/town outlaw add|remove` | — | **MISSING** |
+| `/town outlaw add|remove` | — | **DONE** — `/town outlaw add|remove|list`, gated by MANAGE_TRUST. An outlaw resolves as the lowest rung of the relationship ladder, so a town configures what they may do exactly as it does for a visitor |
 | `/town merge` | — | **MISSING** |
 | `/town online` | `/town online [town]` | DONE — with each person's roles beside them |
 | `/town list` with sorting | `/town list [page] [name\|residents\|land\|age]` | DONE — page and order in either order, since players type both |
@@ -92,7 +92,7 @@ rows as the truth.
 | Towny behaviour | RiftTowny | Status |
 |---|---|---|
 | `/nation new <name>` | `/nation new` | DONE |
-| `/nation` — info screen | `/nation info [nation]` | PARTIAL — leader, founding date, towns, residents, land, capital and the member list; no bank balance until the nation account can be spent |
+| `/nation` — info screen | `/nation info [nation]` | DONE — leader, founding date, towns, residents, land, capital, treasury and the member list |
 | `/nation add <town>` invites; town accepts | `/nation invite`, `/nation join`, `/nation withdraw`, `/nation invites` | DONE |
 | `/nation kick <town>` | `/nation expel` | DONE |
 | `/nation leave` (town side) | `/nation leave` | DONE |

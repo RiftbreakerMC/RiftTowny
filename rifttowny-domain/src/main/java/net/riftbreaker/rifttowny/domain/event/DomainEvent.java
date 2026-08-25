@@ -315,6 +315,39 @@ public sealed interface DomainEvent {
         ASSIGNED, UNASSIGNED
     }
 
+
+    /**
+     * A town declared somebody unwelcome.
+     *
+     * <p>Carries who did it, unlike most events here, because this one is a sanction and the
+     * question that follows it is always "who". The same reason the column exists.</p>
+     */
+    record OutlawDeclared(TownId town, ResidentId outlaw, ResidentId by) implements DomainEvent {
+
+        public OutlawDeclared {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(outlaw, "outlaw");
+        }
+
+        @Override
+        public String type() {
+            return "town.outlaw-declared";
+        }
+    }
+
+    /** A town lifted one. */
+    record OutlawPardoned(TownId town, ResidentId outlaw, ResidentId by) implements DomainEvent {
+
+        public OutlawPardoned {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(outlaw, "outlaw");
+        }
+
+        @Override
+        public String type() {
+            return "town.outlaw-pardoned";
+        }
+    }
     /**
      * @param chunk rendered rather than structured, because an outbox payload is read by Discord
      *        templates and map links, and both want it as text

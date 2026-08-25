@@ -83,6 +83,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.CivicImporter importer;
     private net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacyBook;
     private net.riftbreaker.rifttowny.domain.service.DiplomacyService diplomacy;
+    private net.riftbreaker.rifttowny.domain.justice.Outlaws outlawBook;
+    private net.riftbreaker.rifttowny.domain.service.OutlawService outlawService;
     private net.riftbreaker.rifttowny.domain.chat.ActiveChannels activeChannels;
     private net.riftbreaker.rifttowny.domain.chat.ChannelAudience channelAudience;
     private net.riftbreaker.rifttowny.integrations.chat.RiftChatAdapter chatAdapter;
@@ -222,7 +224,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("town", new net.riftbreaker.rifttowny.paper.command.TownCommands(
                 townService, townRoleService, territoryService, flagService, ruinService,
-                spawnService, teleportService, bankService, residentNames, residentRepository,
+                spawnService, teleportService, bankService, outlawService, residentNames, residentRepository,
                 townRepository, nationRepository, directory, territoryMap, messages,
                 denialText).tree());
 
@@ -309,8 +311,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.civicCache = net.riftbreaker.rifttowny.domain.civic.CivicCache.empty();
             this.nationCache = net.riftbreaker.rifttowny.domain.civic.NationCache.empty();
             this.diplomacyBook = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
+            this.outlawBook = net.riftbreaker.rifttowny.domain.justice.Outlaws.empty();
             this.civicCacheService = new net.riftbreaker.rifttowny.domain.service.CivicCacheService(
-                    civicStore, civicCache, nationCache, diplomacyBook, getLogger()::warning);
+                    civicStore, civicCache, nationCache, diplomacyBook, outlawBook,
+                    getLogger()::warning);
             this.flagOverrides = net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty();
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
@@ -390,6 +394,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     worldId -> getServer().getWorld(worldId) != null);
             this.diplomacy = new net.riftbreaker.rifttowny.domain.service.DiplomacyService(
                     civicStore, clock, diplomacyBook);
+            this.outlawService = new net.riftbreaker.rifttowny.domain.service.OutlawService(
+                    civicStore, clock, outlawBook);
             this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();
             this.activeChannels = net.riftbreaker.rifttowny.domain.chat.ActiveChannels.empty();
             this.channelAudience = new net.riftbreaker.rifttowny.domain.chat.ChannelAudience(
@@ -439,6 +445,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + declarations + " diplomatic declaration(s) into memory.");
 
+            // Same reason again: the OUTLAW rung is answered from this, and a listener running
+            // before it finished would let somebody a town has barred build in it.
+            final int outlawries = outlawService.loadAll()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + outlawries + " outlawry(ies) into memory.");
+
             final int named = residentNameService.loadAll()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + named + " resident name(s) into memory.");
@@ -467,7 +479,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
         // The loaded overrides are the settings source, so admin, claim, organisation and world
         // layers all answer. Area and war supply their own layers when those modules land.
         final var query = new net.riftbreaker.rifttowny.domain.flag.ProtectionQuery(
-                territoryIndex, civicCache, flagOverrides, ruinIndex, diplomacyBook);
+                territoryIndex, civicCache, flagOverrides, ruinIndex, diplomacyBook, outlawBook);
         this.protection = new net.riftbreaker.rifttowny.paper.protection.ProtectionService(
                 query, messenger);
 

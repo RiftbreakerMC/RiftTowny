@@ -56,6 +56,30 @@ public interface CivicTransaction {
     /** What nations have declared about each other. */
     RelationStore relations();
 
+    /** Who each town has declared unwelcome. */
+    OutlawStore outlaws();
+
+    /**
+     * The outlaw list.
+     *
+     * <p>Rows cascade when a town is disbanded, so nothing here removes them on that path — the
+     * cache is told separately, which is the same split every other book in this plugin uses.</p>
+     */
+    interface OutlawStore {
+
+        /** Records one. Idempotent, and re-declaring does not move the original date. */
+        void declare(TownId town, ResidentId who, ResidentId by, java.time.Instant when);
+
+        /** Lifts one. @return whether a row actually went */
+        boolean pardon(TownId town, ResidentId who);
+
+        /** Whether this town has declared this player unwelcome. */
+        boolean holds(TownId town, ResidentId who);
+
+        /** Every declaration on the server, for filling the cache at startup. */
+        java.util.List<net.riftbreaker.rifttowny.domain.justice.Outlaws.Declaration> all();
+    }
+
     /**
      * Queues an event for delivery.
      *

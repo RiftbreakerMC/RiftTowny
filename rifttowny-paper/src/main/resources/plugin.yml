@@ -40,7 +40,7 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|list|online|map|bank|deposit|withdraw|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|spawn|setspawn|reclaim|delete|role|flag>
+    usage: /town <new|info|list|online|outlaw|map|bank|deposit|withdraw|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|spawn|setspawn|reclaim|delete|role|flag>
   resident:
     aliases: [res]
     description: Look at a player's town record.
@@ -118,6 +118,7 @@ permissions:
       rifttowny.town.setspawn: true
       rifttowny.town.reclaim: true
       rifttowny.town.flag: true
+      rifttowny.town.outlaw: true
       rifttowny.town.set: true
       rifttowny.role.view: true
       rifttowny.role.manage: true
@@ -185,6 +186,9 @@ permissions:
     default: true
   rifttowny.town.reclaim:
     description: Found a town on the ruins of a fallen one.
+    default: true
+  rifttowny.town.outlaw:
+    description: Declare a player unwelcome in your town, and take it back. The MANAGE_TRUST role permission decides who really can.
     default: true
   rifttowny.town.flag:
     description: Change what your town allows. The MANAGE_FLAGS role permission decides who really can.

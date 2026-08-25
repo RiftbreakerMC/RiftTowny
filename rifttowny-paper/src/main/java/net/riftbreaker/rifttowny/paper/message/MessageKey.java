@@ -475,6 +475,23 @@ public enum MessageKey {
     TOWN_RESIDENTS_LINE("town.residents-line",
             "  <gray><residents></gray>"),
 
+    TOWN_OUTLAWED("town.outlawed",
+            "<yellow><white><resident></white> is no longer welcome in "
+                    + "<white><town></white>.</yellow>"),
+
+    TOWN_OUTLAW_PARDONED("town.outlaw-pardoned",
+            "<green><white><resident></white> is welcome in <white><town></white> "
+                    + "again.</green>"),
+
+    TOWN_OUTLAW_LIST_HEADER("town.outlaw-list-header",
+            "<gray>Outlawed by <white><town></white> <dark_gray>(<count>)</dark_gray></gray>"),
+
+    TOWN_OUTLAW_LIST_LINE("town.outlaw-list-line",
+            "  <gray><residents></gray>"),
+
+    TOWN_OUTLAW_LIST_EMPTY("town.outlaw-list-empty",
+            "<gray><white><town></white> has outlawed nobody.</gray>"),
+
     TOWN_ONLINE_HEADER("town.online-header",
             "<gray>Online in <white><town></white>: <white><count></white> of "
                     + "<white><residents></white></gray>"),
