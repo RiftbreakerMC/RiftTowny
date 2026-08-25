@@ -4,6 +4,8 @@ import net.riftbreaker.rifttowny.domain.bank.LedgerEntry;
 import net.riftbreaker.rifttowny.domain.bank.Money;
 import net.riftbreaker.rifttowny.domain.bank.PlayerWallet;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
+import net.riftbreaker.rifttowny.domain.org.Nation;
+import net.riftbreaker.rifttowny.domain.org.NationId;
 import net.riftbreaker.rifttowny.domain.org.OrganisationScope;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.Town;
@@ -67,9 +69,7 @@ public final class BankService {
     public CompletableFuture<Money> balanceOf(final TownId townId) {
         Objects.requireNonNull(townId, "townId");
         return store.inTransaction(transaction -> {
-            final Town town = town(transaction, townId);
-            return transaction.bank().balance(town.bankAccountId(), wallet.currency())
-                    .orElseGet(() -> Money.zero(wallet.currency()));
+            return currentBalance(transaction, of(townId).in(transaction).id());
         });
     }
 
@@ -77,8 +77,7 @@ public final class BankService {
     public CompletableFuture<List<LedgerEntry>> historyOf(final TownId townId, final int limit) {
         Objects.requireNonNull(townId, "townId");
         return store.inTransaction(transaction -> {
-            final Town town = town(transaction, townId);
-            return transaction.bank().history(town.bankAccountId(), limit);
+            return transaction.bank().history(of(townId).in(transaction).id(), limit);
         });
     }
 
@@ -113,7 +112,7 @@ public final class BankService {
                 if (!taken) {
                     return completed(ServiceResult.<Money>refused(ChangeDenial.INSUFFICIENT_FUNDS));
                 }
-                return credit(actor, townId, amount, LedgerEntry.Reason.DEPOSIT, null)
+                return credit(actor, of(townId), amount, LedgerEntry.Reason.DEPOSIT, null)
                         .thenCompose(result -> refundIfRefused(actor, amount, result));
             });
         });
@@ -141,7 +140,7 @@ public final class BankService {
         // Debited first, and the player is paid only once it has committed. A failure to pay them
         // afterwards leaves the money in the town, which is recoverable; paying first and failing to
         // debit would create money.
-        return debit(actor, townId, amount, LedgerEntry.Reason.WITHDRAWAL, null)
+        return debit(actor, of(townId), amount, LedgerEntry.Reason.WITHDRAWAL, null)
                 .thenCompose(result -> {
                     if (!result.succeeded()) {
                         return completed(result);
@@ -150,7 +149,7 @@ public final class BankService {
                             ? completed(result)
                             // Put back, in its own transaction, and recorded: the ledger is what an
                             // operator reads when a player says the money vanished.
-                            : credit(actor, townId, amount, LedgerEntry.Reason.ADMIN,
+                            : credit(actor, of(townId), amount, LedgerEntry.Reason.ADMIN,
                                     "returned: wallet refused payment")
                             .thenApply(ignored ->
                                     ServiceResult.<Money>refused(ChangeDenial.ECONOMY_REFUSED)));
@@ -170,7 +169,7 @@ public final class BankService {
             final LedgerEntry.Reason reason,
             final String detail
     ) {
-        return debit(null, townId, amount, reason, detail);
+        return debit(null, of(townId), amount, reason, detail);
     }
 
     /** Pays a town, with no player involved. */
@@ -180,9 +179,120 @@ public final class BankService {
             final LedgerEntry.Reason reason,
             final String detail
     ) {
-        return credit(null, townId, amount, reason, detail);
+        return credit(null, of(townId), amount, reason, detail);
     }
 
+
+    // --- the same, for a nation ------------------------------------------------------------------
+
+    /**
+     * What a nation holds.
+     *
+     * <p>Nations have had a treasury since taxes did: the nation share of a town's tax bill is
+     * credited to {@code nation.bankAccountId()} in the same transaction that takes it. Until now
+     * nothing could show that money or spend it, so it accumulated where nobody could see it — which
+     * is the worst state for a balance to be in, because it is indistinguishable from a tax that is
+     * quietly not working.</p>
+     */
+    public CompletableFuture<Money> balanceOf(final NationId nationId) {
+        Objects.requireNonNull(nationId, "nationId");
+        return store.inTransaction(transaction ->
+                currentBalance(transaction, of(nationId).in(transaction).id()));
+    }
+
+    /** The most recent movements, newest first. */
+    public CompletableFuture<List<LedgerEntry>> historyOf(final NationId nationId, final int limit) {
+        Objects.requireNonNull(nationId, "nationId");
+        return store.inTransaction(transaction ->
+                transaction.bank().history(of(nationId).in(transaction).id(), limit));
+    }
+
+    /**
+     * A citizen putting their own money into the nation.
+     *
+     * <p>{@link Permission#BANK_DEPOSIT}, resolved against the <em>nation's</em> role book and the
+     * actor's standing in it — which needs their town, because a nation has no residents of its own.
+     * Everything else is the town path exactly: the wallet is debited first, and the money is handed
+     * back if the civic half then refuses.</p>
+     */
+    public CompletableFuture<ServiceResult<Money>> deposit(
+            final ResidentId actor, final NationId nationId, final Money amount) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(nationId, "nationId");
+        Objects.requireNonNull(amount, "amount");
+
+        if (!wallet.available()) {
+            return completed(ServiceResult.refused(ChangeDenial.NO_ECONOMY));
+        }
+        if (amount.isZero()) {
+            return completed(ServiceResult.refused(ChangeDenial.AMOUNT_MUST_BE_POSITIVE));
+        }
+        return permitted(actor, nationId, Permission.BANK_DEPOSIT).thenCompose(allowed -> {
+            if (!allowed) {
+                return completed(ServiceResult.<Money>refused(ChangeDenial.MISSING_PERMISSION));
+            }
+            return wallet.take(actor, amount).thenCompose(taken -> {
+                if (!taken) {
+                    return completed(ServiceResult.<Money>refused(ChangeDenial.INSUFFICIENT_FUNDS));
+                }
+                return credit(actor, of(nationId), amount, LedgerEntry.Reason.DEPOSIT, null)
+                        .thenCompose(result -> refundIfRefused(actor, amount, result));
+            });
+        });
+    }
+
+    /**
+     * A citizen taking money out.
+     *
+     * <p>{@link Permission#BANK_WITHDRAW}, which no default role but the king's holds — and it is
+     * worth more care in a nation than in a town, because the treasury a king can empty was paid for
+     * by every member town's taxes rather than by the people standing in front of them.</p>
+     */
+    public CompletableFuture<ServiceResult<Money>> withdraw(
+            final ResidentId actor, final NationId nationId, final Money amount) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(nationId, "nationId");
+        Objects.requireNonNull(amount, "amount");
+
+        if (!wallet.available()) {
+            return completed(ServiceResult.refused(ChangeDenial.NO_ECONOMY));
+        }
+        if (amount.isZero()) {
+            return completed(ServiceResult.refused(ChangeDenial.AMOUNT_MUST_BE_POSITIVE));
+        }
+        return debit(actor, of(nationId), amount, LedgerEntry.Reason.WITHDRAWAL, null)
+                .thenCompose(result -> {
+                    if (!result.succeeded()) {
+                        return completed(result);
+                    }
+                    return wallet.give(actor, amount).thenCompose(given -> given
+                            ? completed(result)
+                            : credit(actor, of(nationId), amount, LedgerEntry.Reason.ADMIN,
+                                    "returned: wallet refused payment")
+                            .thenApply(ignored ->
+                                    ServiceResult.<Money>refused(ChangeDenial.ECONOMY_REFUSED)));
+                });
+    }
+
+    /** Charges a nation for something, with no player involved. */
+    public CompletableFuture<ServiceResult<Money>> charge(
+            final NationId nationId,
+            final Money amount,
+            final LedgerEntry.Reason reason,
+            final String detail
+    ) {
+        return debit(null, of(nationId), amount, reason, detail);
+    }
+
+    /** Pays a nation, with no player involved. */
+    public CompletableFuture<ServiceResult<Money>> pay(
+            final NationId nationId,
+            final Money amount,
+            final LedgerEntry.Reason reason,
+            final String detail
+    ) {
+        return credit(null, of(nationId), amount, reason, detail);
+    }
     /** Forgets a disbanded organisation's money. Settlement is the caller's decision, not this. */
     public CompletableFuture<Integer> forget(final UUID accountId) {
         Objects.requireNonNull(accountId, "accountId");
@@ -191,19 +301,63 @@ public final class BankService {
 
     // --- internals -----------------------------------------------------------------------------
 
+    /**
+     * Whose money this is.
+     *
+     * <p>The ledger has always been keyed on a plain account id, so the storage never cared whether
+     * a treasury belonged to a town or a nation. Only this service did, and only because every
+     * method named a {@code TownId}. Resolving to an account instead is what lets one credit and one
+     * debit serve both — the alternative was a second copy of the money-moving code, which is the
+     * last place in the plugin where two implementations should be allowed to drift apart.</p>
+     *
+     * @param id the ledger key
+     * @param gate throws if this actor may not move this money; a system movement never calls it
+     */
+    private record Account(UUID id, PermissionGate gate) {
+    }
+
+    @FunctionalInterface
+    private interface PermissionGate {
+        void require(ResidentId actor, Permission permission);
+    }
+
+    /** Resolved inside the transaction, because the town it names may be gone by the time it runs. */
+    @FunctionalInterface
+    private interface Holder {
+        Account in(CivicTransaction transaction);
+    }
+
+    private static Holder of(final TownId townId) {
+        Objects.requireNonNull(townId, "townId");
+        return transaction -> {
+            final Town town = CivicPermissions.town(transaction, townId);
+            return new Account(town.bankAccountId(), (actor, permission) ->
+                    CivicPermissions.requireTown(transaction, town, actor, permission));
+        };
+    }
+
+    private static Holder of(final NationId nationId) {
+        Objects.requireNonNull(nationId, "nationId");
+        return transaction -> {
+            final Nation nation = CivicPermissions.nation(transaction, nationId);
+            return new Account(nation.bankAccountId(), (actor, permission) ->
+                    CivicPermissions.requireNation(transaction, nationId, actor, permission));
+        };
+    }
+
     private CompletableFuture<ServiceResult<Money>> credit(
             final ResidentId actor,
-            final TownId townId,
+            final Holder holder,
             final Money amount,
             final LedgerEntry.Reason reason,
             final String detail
     ) {
         return transaction(transaction -> {
-            final Town town = town(transaction, townId);
-            final Money before = currentBalance(transaction, town.bankAccountId());
+            final Account account = holder.in(transaction);
+            final Money before = currentBalance(transaction, account.id());
             final Money after = before.plus(amount);
             transaction.bank().record(
-                    LedgerEntry.of(town.bankAccountId(), amount, after, reason, actor, detail,
+                    LedgerEntry.of(account.id(), amount, after, reason, actor, detail,
                             clock.instant()),
                     clock.instant());
             return after;
@@ -212,22 +366,22 @@ public final class BankService {
 
     private CompletableFuture<ServiceResult<Money>> debit(
             final ResidentId actor,
-            final TownId townId,
+            final Holder holder,
             final Money amount,
             final LedgerEntry.Reason reason,
             final String detail
     ) {
         return transaction(transaction -> {
-            final Town town = town(transaction, townId);
+            final Account account = holder.in(transaction);
             if (actor != null) {
-                requirePermission(transaction, town, actor, Permission.BANK_WITHDRAW);
+                account.gate().require(actor, Permission.BANK_WITHDRAW);
             }
-            final Money before = currentBalance(transaction, town.bankAccountId());
+            final Money before = currentBalance(transaction, account.id());
             final Money after = before.minus(amount)
                     .orElseThrow(() ->
                             new ChangeRefusedException(ChangeDenial.INSUFFICIENT_CIVIC_FUNDS));
             transaction.bank().record(
-                    LedgerEntry.of(town.bankAccountId(), amount, after, reason, actor, detail,
+                    LedgerEntry.of(account.id(), amount, after, reason, actor, detail,
                             clock.instant()),
                     clock.instant());
             return after;
@@ -254,33 +408,22 @@ public final class BankService {
                 .orElseGet(() -> Money.zero(wallet.currency()));
     }
 
+    /**
+     * The advisory check, made before a player's wallet is touched.
+     *
+     * <p>Not the authoritative one: that is taken inside the transaction, while the row is held. A
+     * refusal here costs the player nothing, which is the whole reason it exists.</p>
+     */
     private CompletableFuture<Boolean> permitted(
             final ResidentId actor, final TownId townId, final Permission permission) {
-        return store.inTransaction(transaction -> {
-            final Town town = town(transaction, townId);
-            return transaction.roles().find(OrganisationScope.TOWN, townId.value())
-                    .map(book -> book.allows(actor, permission, town.standingOf(actor)))
-                    .orElse(false);
-        });
+        return store.inTransaction(transaction -> CivicPermissions.allowsTown(
+                transaction, CivicPermissions.town(transaction, townId), actor, permission));
     }
 
-    private static void requirePermission(
-            final CivicTransaction transaction,
-            final Town town,
-            final ResidentId actor,
-            final Permission permission
-    ) {
-        final RoleBook book = transaction.roles()
-                .find(OrganisationScope.TOWN, town.id().value())
-                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.ROLE_NOT_FOUND));
-        if (!book.allows(actor, permission, town.standingOf(actor))) {
-            throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
-        }
-    }
-
-    private static Town town(final CivicTransaction transaction, final TownId townId) {
-        return transaction.towns().find(townId)
-                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.TOWN_NOT_FOUND));
+    private CompletableFuture<Boolean> permitted(
+            final ResidentId actor, final NationId nationId, final Permission permission) {
+        return store.inTransaction(transaction -> CivicPermissions.allowsNation(
+                transaction, CivicPermissions.nation(transaction, nationId), actor, permission));
     }
 
     private static <T> CompletableFuture<ServiceResult<T>> completed(final ServiceResult<T> result) {

@@ -304,6 +304,112 @@ class BankServiceTest extends SqliteFixture {
         }).join();
     }
 
+
+    /**
+     * A nation's money.
+     *
+     * <p>Nations have been paid by the tax run since it was written and had no way to show or spend
+     * it. What is worth testing is not that the arithmetic works — one credit and one debit serve
+     * both kinds of treasury now, and the town tests above cover them — but that the
+     * <em>permission</em> question is answered the nation's way. A nation has no residents of its
+     * own, so its standing depends on the actor's town, and a check that forgot to load it would
+     * read every officer as an outsider.</p>
+     */
+    @Nested
+    @DisplayName("a nation's treasury")
+    class NationTreasury {
+
+        private net.riftbreaker.rifttowny.domain.service.NationService nations;
+        private net.riftbreaker.rifttowny.domain.org.Nation valen;
+
+        @BeforeEach
+        void foundANation() {
+            nations = new net.riftbreaker.rifttowny.domain.service.NationService(
+                    store, NamePolicy.defaults(), CLOCK,
+                    new CivicCacheService(store, CivicCache.empty(), warning -> { }));
+            final Town capital = riftholm();
+            valen = nations.found(MAYOR, capital.id(), "Valen").join().value().orElseThrow();
+        }
+
+        @Test
+        @DisplayName("starts empty and takes what the system pays it")
+        void paidBySystem() {
+            assertThat(bank.balanceOf(valen.id()).join()).isEqualTo(Money.zero(CURRENCY));
+
+            bank.pay(valen.id(), coins("40"), LedgerEntry.Reason.TAX, "nation tax").join();
+
+            assertThat(bank.balanceOf(valen.id()).join()).isEqualTo(coins("40"));
+            assertThat(bank.historyOf(valen.id(), 10).join()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("is not the capital's treasury, however much they look alike")
+        void separateFromTheTown() {
+            // The bug this exists for: resolving the nation to its capital's account, which would
+            // let a king spend his own town's money and would balance perfectly while doing it.
+            final net.riftbreaker.rifttowny.domain.org.TownId capital = valen.capital();
+            bank.pay(valen.id(), coins("40"), LedgerEntry.Reason.TAX, null).join();
+
+            assertThat(bank.balanceOf(capital).join()).isEqualTo(Money.zero(CURRENCY));
+            assertThat(bank.balanceOf(valen.id()).join()).isEqualTo(coins("40"));
+        }
+
+        @Test
+        @DisplayName("the king may put money in and take it out")
+        void kingMovesMoney() {
+            wallet.give(MAYOR, coins("100")).join();
+
+            assertThat(bank.deposit(MAYOR, valen.id(), coins("30")).join().succeeded()).isTrue();
+            assertThat(bank.balanceOf(valen.id()).join()).isEqualTo(coins("30"));
+
+            assertThat(bank.withdraw(MAYOR, valen.id(), coins("10")).join().succeeded()).isTrue();
+            assertThat(bank.balanceOf(valen.id()).join()).isEqualTo(coins("20"));
+            assertThat(wallet.balances.get(MAYOR)).isEqualTo(coins("80"));
+        }
+
+        @Test
+        @DisplayName("a citizen of a member town may donate but may not withdraw")
+        void citizenMayOnlyDonate() {
+            // The whole reason the nation check needs the actor's town: CITIZEN is a resident of a
+            // member town and is therefore a citizen of the nation, which nothing about the nation
+            // record itself can tell.
+            wallet.give(CITIZEN, coins("50")).join();
+
+            assertThat(bank.deposit(CITIZEN, valen.id(), coins("20")).join().succeeded()).isTrue();
+
+            final var refused = bank.withdraw(CITIZEN, valen.id(), coins("5")).join();
+            assertThat(refused.succeeded()).isFalse();
+            assertThat(refused.denial()).contains(ChangeDenial.MISSING_PERMISSION);
+            assertThat(bank.balanceOf(valen.id()).join()).isEqualTo(coins("20"));
+        }
+
+        @Test
+        @DisplayName("somebody in no town of the nation is refused, and keeps their money")
+        void outsidersRefused() {
+            final ResidentId outsider = ResidentId.of(UUID.randomUUID());
+            residents.save(Resident.newcomer(outsider, "Outsider", NOW)).join();
+            wallet.give(outsider, coins("50")).join();
+
+            final var refused = bank.deposit(outsider, valen.id(), coins("20")).join();
+
+            assertThat(refused.succeeded()).isFalse();
+            assertThat(refused.denial()).contains(ChangeDenial.MISSING_PERMISSION);
+            // Refused before the wallet was touched, so it cost them nothing.
+            assertThat(wallet.balances.get(outsider)).isEqualTo(coins("50"));
+        }
+
+        @Test
+        @DisplayName("it cannot be overdrawn")
+        void noOverdraft() {
+            bank.pay(valen.id(), coins("10"), LedgerEntry.Reason.TAX, null).join();
+
+            final var refused = bank.withdraw(MAYOR, valen.id(), coins("25")).join();
+
+            assertThat(refused.denial())
+                    .contains(ChangeDenial.INSUFFICIENT_CIVIC_FUNDS);
+            assertThat(bank.balanceOf(valen.id()).join()).isEqualTo(coins("10"));
+        }
+    }
     /** A wallet that behaves, so the service's own ordering is what is under test. */
     private static final class FakeWallet implements PlayerWallet {
 

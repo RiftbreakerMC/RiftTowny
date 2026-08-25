@@ -514,6 +514,18 @@ public enum MessageKey {
     RESIDENT_LIST_EMPTY("resident.list-empty",
             "<gray>Nobody has joined a town yet.</gray>"),
 
+    NATION_BANK_HEADER("nation.bank-header",
+            "<gray>Treasury of <white><nation></white> <dark_gray>-</dark_gray> "
+                    + "<white><balance></white></gray>"),
+
+    NATION_BANK_DEPOSITED("nation.bank-deposited",
+            "<green>Deposited <white><amount></white>. The nation holds "
+                    + "<white><balance></white>.</green>"),
+
+    NATION_BANK_WITHDREW("nation.bank-withdrew",
+            "<green>Withdrew <white><amount></white>. The nation holds "
+                    + "<white><balance></white>.</green>"),
+
     NATION_ONLINE_HEADER("nation.online-header",
             "<gray>Online in <white><nation></white>: <white><count></white> of "
                     + "<white><residents></white></gray>"),

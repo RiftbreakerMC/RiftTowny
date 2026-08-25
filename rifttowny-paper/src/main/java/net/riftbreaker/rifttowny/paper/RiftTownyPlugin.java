@@ -232,7 +232,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("nation", new net.riftbreaker.rifttowny.paper.command.NationCommands(
                 nationService, nationRoleService, residentNames, residentRepository, townRepository,
-                nationRepository, directory, diplomacy, messages, denialText).tree());
+                nationRepository, directory, diplomacy, bankService, messages, denialText).tree());
 
         registerTree("resident", new net.riftbreaker.rifttowny.paper.command.ResidentCommands(
                 residentRepository, plotService, directory, residentNames, messages, clock).tree());

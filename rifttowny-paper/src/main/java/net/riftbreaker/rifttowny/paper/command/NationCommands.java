@@ -61,6 +61,7 @@ public final class NationCommands {
     private final NationRepository nationRepository;
     private final CivicDirectory directory;
     private final net.riftbreaker.rifttowny.domain.service.DiplomacyService diplomacy;
+    private final net.riftbreaker.rifttowny.domain.service.BankService banks;
     private final Listings listings;
     private final MessageService messages;
     private final DenialText denials;
@@ -74,6 +75,7 @@ public final class NationCommands {
             final NationRepository nationRepository,
             final CivicDirectory directory,
             final net.riftbreaker.rifttowny.domain.service.DiplomacyService diplomacy,
+            final net.riftbreaker.rifttowny.domain.service.BankService banks,
             final MessageService messages,
             final DenialText denials
     ) {
@@ -85,6 +87,7 @@ public final class NationCommands {
         this.nationRepository = Objects.requireNonNull(nationRepository, "nationRepository");
         this.directory = Objects.requireNonNull(directory, "directory");
         this.diplomacy = Objects.requireNonNull(diplomacy, "diplomacy");
+        this.banks = Objects.requireNonNull(banks, "banks");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.denials = Objects.requireNonNull(denials, "denials");
         this.listings = new Listings(messages);
@@ -117,6 +120,24 @@ public final class NationCommands {
                         .usage("nation online [nation]")
                         .describedAs("Who from a nation is on the server")
                         .runs(this::online, Surface.CHAT))
+                .child(CommandNode.group("bank")
+                        .permission("rifttowny.nation.bank")
+                        .usage("nation bank")
+                        .describedAs("See the nation treasury and move its money")
+                        // Nested rather than flat, because /nation withdraw already means
+                        // withdrawing an invitation. Two meanings on one word is how somebody
+                        // aiming to cancel an offer empties the treasury instead.
+                        .child(CommandNode.action("deposit")
+                                .permission("rifttowny.nation.bank")
+                                .usage("nation bank deposit <amount>")
+                                .describedAs("Put your own money into the nation")
+                                .runs(this::bankDeposit, Surface.CHAT))
+                        .child(CommandNode.action("withdraw")
+                                .permission("rifttowny.nation.bank")
+                                .usage("nation bank withdraw <amount>")
+                                .describedAs("Take money out. BANK_WITHDRAW decides who really can")
+                                .runs(this::bankWithdraw, Surface.CHAT))
+                        .runs(this::bank, Surface.CHAT))
                 .child(CommandNode.action("invite")
                         .permission("rifttowny.nation.invite")
                         .usage("nation invite <town>")
@@ -552,6 +573,81 @@ public final class NationCommands {
                     MessageService.value("town", homes.get(resident)));
         }
     }
+
+    /**
+     * The nation treasury.
+     *
+     * <p>The same screen as a town's, deliberately: a king who has run a town already knows how to
+     * read this one. What differs is where the money comes from — a town's treasury is mostly
+     * deposits, and a nation's is mostly the nation share of its member towns' tax.</p>
+     */
+    private void bank(final CommandActor actor, final List<String> args) {
+        withNation(actor, (who, nation) -> then(actor, banks.balanceOf(nation.id()), balance -> {
+            messages.send(actor::send, MessageKey.NATION_BANK_HEADER,
+                    MessageService.value("nation", nation.name().display()),
+                    MessageService.value("balance", balance.describe()));
+            if (!banks.economyAvailable()) {
+                messages.sendRaw(actor::send, MessageKey.TOWN_BANK_NO_ECONOMY);
+            }
+            then(actor, banks.historyOf(nation.id(),
+                    net.riftbreaker.rifttowny.domain.service.BankService.DEFAULT_HISTORY),
+                    history -> {
+                        if (history.isEmpty()) {
+                            messages.sendRaw(actor::send, MessageKey.TOWN_BANK_NO_HISTORY);
+                            return;
+                        }
+                        for (final var entry : history) {
+                            messages.sendRaw(actor::send, MessageKey.TOWN_BANK_LINE,
+                                    MessageService.value("movement", entry.describe()),
+                                    MessageService.value("by",
+                                            entry.author().map(names::describe)
+                                                    .orElse("the server")));
+                        }
+                    });
+        }));
+    }
+
+    private void bankDeposit(final CommandActor actor, final List<String> args) {
+        withAmount(actor, args, "nation bank deposit <amount>", (who, nation, amount) ->
+                reply(actor, banks.deposit(who, nation.id(), amount), balance ->
+                        messages.send(actor::send, MessageKey.NATION_BANK_DEPOSITED,
+                                MessageService.value("amount", amount.describe()),
+                                MessageService.value("balance", balance.describe()))));
+    }
+
+    private void bankWithdraw(final CommandActor actor, final List<String> args) {
+        withAmount(actor, args, "nation bank withdraw <amount>", (who, nation, amount) ->
+                reply(actor, banks.withdraw(who, nation.id(), amount), balance ->
+                        messages.send(actor::send, MessageKey.NATION_BANK_WITHDREW,
+                                MessageService.value("amount", amount.describe()),
+                                MessageService.value("balance", balance.describe()))));
+    }
+
+    /** Reads an amount, refusing anything that is not one rather than guessing at it. */
+    private void withAmount(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final AmountWork work
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        final var amount = net.riftbreaker.rifttowny.domain.bank.Money.parse(
+                args.getFirst(), banks.currency());
+        if (amount.isEmpty()) {
+            messages.send(actor::send, MessageKey.TOWN_BANK_BAD_AMOUNT,
+                    MessageService.value("input", args.getFirst()));
+            return;
+        }
+        withNation(actor, (who, nation) -> work.accept(who, nation, amount.get()));
+    }
+
+    @FunctionalInterface
+    private interface AmountWork {
+        void accept(ResidentId who, Nation nation, net.riftbreaker.rifttowny.domain.bank.Money amount);
+    }
     private void info(final CommandActor actor, final List<String> args) {
         if (!args.isEmpty()) {
             then(actor, nationRepository.findByName(args.getFirst()), found -> found.ifPresentOrElse(
@@ -582,6 +678,11 @@ public final class NationCommands {
             line(actor, "Residents", String.valueOf(summary.residents()));
             line(actor, "Land", summary.chunks() + " chunk(s)");
         }
+
+        // Read once for the screen and printed in its callback, like the town treasury: a balance
+        // is the one line here a cache cannot answer.
+        then(actor, banks.balanceOf(nation.id()), balance ->
+                line(actor, "Treasury", balance.describe()));
         line(actor, "Capital", directory.facts(nation.capital())
                 .map(facts -> facts.displayName())
                 .orElse("unknown"));

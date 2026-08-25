@@ -451,18 +451,7 @@ public final class NationService {
             final ResidentId actor,
             final Permission permission
     ) {
-        Objects.requireNonNull(nationId, "nationId");
-        Objects.requireNonNull(actor, "actor");
-        final Nation nation = nation(transaction, nationId);
-        final RoleBook book = transaction.roles()
-                .find(OrganisationScope.NATION, nationId.value())
-                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.ROLE_NOT_FOUND));
-        final SystemRole standing =
-                nation.standingOf(actor, townOf(transaction, actor).orElse(null));
-        if (!book.allows(actor, permission, standing)) {
-            throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
-        }
-        return nation;
+        return CivicPermissions.requireNation(transaction, nationId, actor, permission);
     }
 
     private static void requireTownPermission(
@@ -471,13 +460,7 @@ public final class NationService {
             final ResidentId actor,
             final Permission permission
     ) {
-        Objects.requireNonNull(actor, "actor");
-        final RoleBook book = transaction.roles()
-                .find(OrganisationScope.TOWN, town.id().value())
-                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.ROLE_NOT_FOUND));
-        if (!book.allows(actor, permission, town.standingOf(actor))) {
-            throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
-        }
+        CivicPermissions.requireTown(transaction, town, actor, permission);
     }
 
     private static Optional<TownId> townOf(

@@ -187,18 +187,9 @@ public final class DiplomacyService {
 
     private static void requireDiplomat(
             final CivicTransaction transaction, final NationId nation, final ResidentId actor) {
-        final Nation found = transaction.nations().find(Objects.requireNonNull(nation, "nation"))
-                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.NATION_NOT_FOUND));
-        final var roles = transaction.roles().find(
-                net.riftbreaker.rifttowny.domain.org.OrganisationScope.NATION, found.id().value())
-                .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION));
-
-        final var theirTown = transaction.residents().find(actor)
-                .flatMap(net.riftbreaker.rifttowny.domain.org.Resident::town)
-                .orElse(null);
-        if (!roles.allows(actor, Permission.MANAGE_DIPLOMACY, found.standingOf(actor, theirTown))) {
-            throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
-        }
+        CivicPermissions.requireNation(
+                transaction, Objects.requireNonNull(nation, "nation"), actor,
+                Permission.MANAGE_DIPLOMACY);
     }
 
     private static void requireExists(final CivicTransaction transaction, final NationId nation) {

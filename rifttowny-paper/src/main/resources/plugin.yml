@@ -60,7 +60,7 @@ commands:
   nation:
     aliases: [n]
     description: Found and manage a nation.
-    usage: /nation <new|info|list|online|invite|withdraw|invites|join|leave|expel|capital|king|rename|delete>
+    usage: /nation <new|info|list|online|bank|invite|withdraw|invites|join|leave|expel|capital|king|rename|delete>
 
 permissions:
   rifttowny.admin:
@@ -239,6 +239,7 @@ permissions:
       rifttowny.nation.delete: true
       rifttowny.nation.set: true
       rifttowny.nation.diplomacy: true
+      rifttowny.nation.bank: true
       rifttowny.nation.role.view: true
       rifttowny.nation.role.manage: true
       rifttowny.nation.role.assign: true
@@ -274,6 +275,9 @@ permissions:
     default: true
   rifttowny.nation.set:
     description: Set your nation's board, tag, map colour and neutrality. The MANAGE_SETTINGS role permission decides who really can.
+    default: true
+  rifttowny.nation.bank:
+    description: See the nation treasury, deposit and withdraw. BANK_DEPOSIT and BANK_WITHDRAW decide who really can.
     default: true
   rifttowny.nation.diplomacy:
     description: See and change who your nation is allied to and at odds with. The MANAGE_DIPLOMACY role permission decides who really can declare.
