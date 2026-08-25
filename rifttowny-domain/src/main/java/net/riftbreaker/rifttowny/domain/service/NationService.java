@@ -356,11 +356,20 @@ public final class NationService {
      *
      * <p>Lapsed offers are filtered rather than shown greyed out. A player told about an invitation
      * they cannot accept would try, and be refused, and reasonably call that a bug.</p>
+     *
+     * <p><strong>Offers from other towns are filtered too.</strong> The invitation table is shared:
+     * its inviter column holds an {@code OrganisationId}, which is a town or a nation, and
+     * {@code to(...)} answers with every offer addressed to this town whatever made it. Without this
+     * filter a town-to-town offer would appear on {@code /nation invites} as though a nation had
+     * invited them — and it could not be accepted there either, because the accept path deletes the
+     * offer by nation id and would find nothing.</p>
      */
     public CompletableFuture<List<Invitation>> invitationsFor(final TownId townId) {
         Objects.requireNonNull(townId, "townId");
         return store.inTransaction(transaction ->
-                standing(transaction.invitations().to(Invitation.Invitee.of(townId))));
+                standing(transaction.invitations().to(Invitation.Invitee.of(townId))).stream()
+                        .filter(offer -> offer.inviter() instanceof NationId)
+                        .toList());
     }
 
     /** Everything a nation has outstanding, lapsed offers excluded. */

@@ -162,6 +162,36 @@ class NationServiceTest extends SqliteFixture {
         }
 
         @Test
+        @DisplayName("an offer from a town is not shown as a nation's")
+        void townOffersAreNotNationOffers() {
+            // The invitation table is shared: its inviter column holds an OrganisationId, so a
+            // town-to-town offer is addressed to the same invitee a nation's would be. Without the
+            // filter this screen would name a town as though it were a nation inviting them - and
+            // the accept path could not consume it either, because it deletes by nation id.
+            final Nation nation = valen();
+            final TownId ashford = ashford();
+            final TownId riftholm = nation.capital();
+
+            nations.invite(KING, nation.id(), ashford).join();
+            store.inTransaction(t -> {
+                t.invitations().save(net.riftbreaker.rifttowny.domain.org.Invitation.offer(
+                        riftholm,
+                        net.riftbreaker.rifttowny.domain.org.Invitation.Invitee.of(ashford),
+                        KING, NOW));
+                return null;
+            }).join();
+
+            // Both rows exist; only the nation's is a nation invitation.
+            assertThat(store.inTransaction(t -> t.invitations().to(
+                    net.riftbreaker.rifttowny.domain.org.Invitation.Invitee.of(ashford))).join())
+                    .hasSize(2);
+            assertThat(nations.invitationsFor(ashford).join())
+                    .singleElement()
+                    .extracting(net.riftbreaker.rifttowny.domain.org.Invitation::inviter)
+                    .isEqualTo(nation.id());
+        }
+
+        @Test
         @DisplayName("a town cannot join a nation that has not invited it")
         void joiningNeedsAnInvitation() {
             final Nation nation = valen();
