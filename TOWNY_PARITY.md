@@ -84,7 +84,7 @@ rows as the truth.
 | `/town merge` | — | **MISSING** |
 | `/town online` | `/town online [town]` | DONE — with each person's roles beside them |
 | `/town list` with sorting | `/town list [page] [name\|residents\|land\|age]` | DONE — page and order in either order, since players type both |
-| `/town trust add|remove` | Trust exists in the domain and has no command | PARTIAL |
+| `/town trust add|remove` | `/town trust add|remove|list` | DONE — gated by MANAGE_TRUST, the same node as `/town outlaw`. Trust lifts an outsider from `VISITOR` to `TRUSTED` and nothing more; what that is worth is the town's own flag settings |
 | `/town purge` | — | **MISSING** |
 
 ## 3. Nations

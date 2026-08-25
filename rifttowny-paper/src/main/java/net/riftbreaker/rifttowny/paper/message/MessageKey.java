@@ -475,6 +475,23 @@ public enum MessageKey {
     TOWN_RESIDENTS_LINE("town.residents-line",
             "  <gray><residents></gray>"),
 
+    TOWN_TRUSTED("town.trusted",
+            "<green><white><resident></white> is now trusted in "
+                    + "<white><town></white>.</green>"),
+
+    TOWN_UNTRUSTED("town.untrusted",
+            "<yellow><white><resident></white> is no longer trusted in "
+                    + "<white><town></white>.</yellow>"),
+
+    TOWN_TRUST_LIST_HEADER("town.trust-list-header",
+            "<gray>Trusted by <white><town></white> <dark_gray>(<count>)</dark_gray></gray>"),
+
+    TOWN_TRUST_LIST_LINE("town.trust-list-line",
+            "  <gray><residents></gray>"),
+
+    TOWN_TRUST_LIST_EMPTY("town.trust-list-empty",
+            "<gray><white><town></white> trusts nobody outside it.</gray>"),
+
     TOWN_OUTLAWED("town.outlawed",
             "<yellow><white><resident></white> is no longer welcome in "
                     + "<white><town></white>.</yellow>"),

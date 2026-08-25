@@ -274,6 +274,7 @@ public final class TownCommands {
                         .runs(this::joinOpen, Surface.CHAT))
                 .child(roleTree())
                 .child(flagTree())
+                .child(trustTree())
                 .child(outlawTree())
                 .child(settingsTree())
                 .build();
@@ -339,6 +340,80 @@ public final class TownCommands {
     }
 
 
+
+    /**
+     * {@code /town trust} — the one grant a town can make to somebody who is not in it.
+     *
+     * <p>The mirror of {@link #outlawTree()} and gated by the same node, because they are the two
+     * ends of one decision. Both were reachable only from the domain until now: the table, the
+     * aggregate rules, the events and the {@code TRUSTED} rung have existed since {@code V2}, and
+     * nothing could put a name in the list.</p>
+     */
+    private CommandNode trustTree() {
+        return CommandNode.group("trust")
+                .permission("rifttowny.town.trust")
+                .usage("town trust")
+                .describedAs("Trust an outsider, or take it back")
+                .child(CommandNode.action("add")
+                        .permission("rifttowny.town.trust")
+                        .usage("town trust add <player>")
+                        .describedAs("Trust an outsider. MANAGE_TRUST decides who can")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? onlinePlayerNames() : List.of())
+                        .runs(this::trustAdd, Surface.CHAT))
+                .child(CommandNode.action("remove")
+                        .permission("rifttowny.town.trust")
+                        .usage("town trust remove <player>")
+                        .describedAs("Take trust back")
+                        .runs(this::trustRemove, Surface.CHAT))
+                .child(CommandNode.action("list")
+                        .permission("rifttowny.town.trust")
+                        .usage("town trust list")
+                        .describedAs("Who this town trusts")
+                        .runs(this::trustList, Surface.CHAT))
+                .runs(this::trustList, Surface.CHAT);
+    }
+
+    private void trustAdd(final CommandActor actor, final List<String> args) {
+        withTownAndTarget(actor, args, "town trust add <player>", (who, town, target) ->
+                reply(actor, towns.trust(who, town.id(), target), updated ->
+                        messages.send(actor::send, MessageKey.TOWN_TRUSTED,
+                                MessageService.value("resident", names.describe(target)),
+                                MessageService.value("town", updated.name().display()))));
+    }
+
+    private void trustRemove(final CommandActor actor, final List<String> args) {
+        withTownAndTarget(actor, args, "town trust remove <player>", (who, town, target) ->
+                reply(actor, towns.untrust(who, town.id(), target), updated ->
+                        messages.send(actor::send, MessageKey.TOWN_UNTRUSTED,
+                                MessageService.value("resident", names.describe(target)),
+                                MessageService.value("town", updated.name().display()))));
+    }
+
+    /**
+     * Answered from the town the actor already holds, so it costs no query.
+     *
+     * <p>Read from the aggregate rather than a cache, unlike the outlaw list: trust lives on the
+     * town itself, which the command has in hand by the time it gets here.</p>
+     */
+    private void trustList(final CommandActor actor, final List<String> args) {
+        withTown(actor, (who, town) -> {
+            final var listed = town.trustedOutsiders();
+            if (listed.isEmpty()) {
+                messages.send(actor::send, MessageKey.TOWN_TRUST_LIST_EMPTY,
+                        MessageService.value("town", town.name().display()));
+                return;
+            }
+            final List<String> named = new ArrayList<>(listed.size());
+            listed.forEach(one -> named.add(names.describe(one)));
+            named.sort(String.CASE_INSENSITIVE_ORDER);
+            messages.send(actor::send, MessageKey.TOWN_TRUST_LIST_HEADER,
+                    MessageService.value("town", town.name().display()),
+                    MessageService.value("count", named.size()));
+            messages.sendRaw(actor::send, MessageKey.TOWN_TRUST_LIST_LINE,
+                    MessageService.value("residents", String.join(", ", named)));
+        });
+    }
     /**
      * {@code /town outlaw} — who this town will not have.
      *

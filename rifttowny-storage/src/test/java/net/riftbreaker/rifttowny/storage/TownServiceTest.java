@@ -484,4 +484,94 @@ class TownServiceTest extends SqliteFixture {
             assertThat(loaded.standingOf(OFFICER)).isEqualTo(SystemRole.VISITOR);
         }
     }
+
+    /**
+     * Trust, through real storage.
+     *
+     * <p>The aggregate's own rules are covered where they live. What only a database shows is that
+     * the set survives the round trip at all — trust is written by {@code ConnectionTownStore} as a
+     * delete-and-reinsert of the whole list beside the town row, which is the kind of write that
+     * silently loses everything if the town is saved by a path that did not load it.</p>
+     */
+    @Nested
+    @DisplayName("trusting an outsider")
+    class Trusting {
+
+        private Town riftholm;
+
+        @BeforeEach
+        void found() {
+            seeAsNewcomer(MAYOR, "Mayor");
+            seeAsNewcomer(OFFICER, "Officer");
+            seeAsNewcomer(CITIZEN, "Citizen");
+            riftholm = foundRiftholm();
+        }
+
+        @Test
+        @DisplayName("is written, survives a reload, and lifts them off the visitor rung")
+        void survivesAReload() {
+            assertThat(service.trust(MAYOR, riftholm.id(), OFFICER).join().succeeded()).isTrue();
+
+            final Town loaded = towns.find(riftholm.id()).join().orElseThrow();
+            assertThat(loaded.trustedOutsiders()).containsExactly(OFFICER);
+            // The point of the whole thing: this is what the protection ladder reads.
+            assertThat(net.riftbreaker.rifttowny.domain.civic.TownFacts
+                    .of(loaded, net.riftbreaker.rifttowny.domain.role.RoleBook.defaultsFor(
+                            net.riftbreaker.rifttowny.domain.org.OrganisationScope.TOWN,
+                            riftholm.id().value(), CLOCK.instant()))
+                    .trusts(OFFICER)).isTrue();
+        }
+
+        @Test
+        @DisplayName("revoking it takes them straight back off")
+        void revoking() {
+            service.trust(MAYOR, riftholm.id(), OFFICER).join();
+
+            assertThat(service.untrust(MAYOR, riftholm.id(), OFFICER).join().succeeded()).isTrue();
+            assertThat(towns.find(riftholm.id()).join().orElseThrow().trustedOutsiders()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a resident cannot be trusted, because they already outrank it")
+        void residentsCannotBeTrusted() {
+            service.join(MAYOR, CITIZEN, riftholm.id()).join();
+
+            assertThat(service.trust(MAYOR, riftholm.id(), CITIZEN).join().denial())
+                    .contains(ChangeDenial.CANNOT_TRUST_A_RESIDENT);
+        }
+
+        @Test
+        @DisplayName("admitting a trusted outsider clears their trust, so nobody holds both")
+        void admissionClearsTrust() {
+            // The aggregate does this; what this proves is that it reaches storage. A member still
+            // carrying outsider trust would be the overlap CANNOT_TRUST_A_RESIDENT exists to stop.
+            service.trust(MAYOR, riftholm.id(), OFFICER).join();
+
+            service.join(MAYOR, OFFICER, riftholm.id()).join();
+
+            final Town loaded = towns.find(riftholm.id()).join().orElseThrow();
+            assertThat(loaded.residents()).contains(OFFICER);
+            assertThat(loaded.trustedOutsiders()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("twice is refused, and so is revoking what was never granted")
+        void refusals() {
+            service.trust(MAYOR, riftholm.id(), OFFICER).join();
+
+            assertThat(service.trust(MAYOR, riftholm.id(), OFFICER).join().denial())
+                    .contains(ChangeDenial.ALREADY_TRUSTED);
+            assertThat(service.untrust(MAYOR, riftholm.id(), CITIZEN).join().denial())
+                    .contains(ChangeDenial.NOT_TRUSTED);
+        }
+
+        @Test
+        @DisplayName("somebody with no standing in the town cannot grant it")
+        void needsThePermission() {
+            final var refused = service.trust(OFFICER, riftholm.id(), CITIZEN).join();
+
+            assertThat(refused.denial()).contains(ChangeDenial.MISSING_PERMISSION);
+            assertThat(towns.find(riftholm.id()).join().orElseThrow().trustedOutsiders()).isEmpty();
+        }
+    }
 }

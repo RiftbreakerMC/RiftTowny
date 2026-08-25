@@ -453,6 +453,63 @@ public final class TownService {
     }
 
     /**
+     * Trusts an outsider. Requires {@link Permission#MANAGE_TRUST}.
+     *
+     * <p>Trust is the one grant a town can make to somebody who is not in it, and it is deliberately
+     * narrow: it lifts the holder from {@code VISITOR} to {@code TRUSTED} on the relationship ladder
+     * and nothing more. What that is worth is entirely the town's own flag settings — trust is not a
+     * fixed set of powers, it is a rung a town decides the meaning of.</p>
+     *
+     * <p>The aggregate refuses trusting a resident, because a member already outranks a trusted
+     * outsider and holding both would create a second, weaker path to rights they already have.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> trust(
+            final ResidentId actor, final TownId townId, final ResidentId outsider) {
+        return changeTrust(actor, townId, outsider, true);
+    }
+
+    /**
+     * Revokes it.
+     *
+     * <p>Takes effect the moment the transaction commits and the cache is refreshed — there is no
+     * grace period, because the point of revoking trust is usually that it is being abused.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> untrust(
+            final ResidentId actor, final TownId townId, final ResidentId outsider) {
+        return changeTrust(actor, townId, outsider, false);
+    }
+
+    /**
+     * Both halves, since only one line differs.
+     *
+     * <p>Written once rather than twice for the reason the whole codebase keeps saying: the two are
+     * a permission check away from being the same method, and two copies is how the check ends up on
+     * one of them.</p>
+     */
+    private CompletableFuture<ServiceResult<Town>> changeTrust(
+            final ResidentId actor,
+            final TownId townId,
+            final ResidentId outsider,
+            final boolean granting
+    ) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(townId, "townId");
+        Objects.requireNonNull(outsider, "outsider");
+
+        return refreshing(transaction(transaction -> {
+            final Town town = town(transaction, townId);
+            requirePermission(transaction, town, actor, Permission.MANAGE_TRUST);
+
+            final Outcome<Town> changed =
+                    granting ? town.trust(outsider) : town.untrust(outsider);
+            final Town updated = require(changed);
+            transaction.towns().save(updated);
+            transaction.publishAll(changed.events(), correlation("trust", townId));
+            return updated;
+        }), Town::id);
+    }
+
+    /**
      * Changes what a town says about itself, and who it lets in.
      * Requires {@link Permission#MANAGE_SETTINGS}.
      *
