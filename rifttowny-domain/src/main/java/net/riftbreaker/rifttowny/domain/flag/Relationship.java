@@ -9,6 +9,21 @@ package net.riftbreaker.rifttowny.domain.flag;
  */
 public enum Relationship {
 
+    /**
+     * Declared unwelcome by the town whose land this is.
+     *
+     * <p>Below every other rung, so the defaults already answer correctly for it without a line
+     * changing: {@link #isMember} is false and {@link #isAtLeast} fails against every rung, which
+     * leaves an outlaw able to walk through a town and do nothing else. A town that wants to soften
+     * that configures it like any other relationship — which is the reason this is a rung at all
+     * rather than a boolean short-circuit bolted on outside the flag system.</p>
+     *
+     * <p>Ranked below zero rather than renumbering everything above it. The only comparison that
+     * has to hold is that an outlaw ranks under a visitor, and keeping the other seven numbers
+     * where they were means adding this constant cannot have changed an answer anywhere else.</p>
+     */
+    OUTLAW(-1),
+
     /** Unclaimed land. Nobody owns it, so almost everything is allowed. */
     WILDERNESS(0),
 

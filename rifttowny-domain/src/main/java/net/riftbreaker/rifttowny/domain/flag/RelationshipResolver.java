@@ -37,6 +37,19 @@ public final class RelationshipResolver {
         if (sameTown(view)) {
             return Relationship.TOWN;
         }
+        // After membership and before every outsider rung, which is the whole of the design.
+        //
+        // Placing it above RESIDENT and TOWN would let a town strip its own member by outlawing
+        // them, and would make an outlawed player who is later admitted a resident with no rights -
+        // a state nothing in the join path would notice. Placing it at the bottom, beside VISITOR,
+        // would let an outlaw who happens to be in an allied nation keep the ALLY rung and walk in
+        // regardless, which is the one case outlawry most obviously has to answer.
+        //
+        // Between the two, membership supersedes an outlawry because it is the same town's later
+        // and more specific decision, and everything else gives way to it.
+        if (view.outlawed()) {
+            return Relationship.OUTLAW;
+        }
         if (sameNation(view)) {
             return Relationship.NATION;
         }
@@ -69,6 +82,8 @@ public final class RelationshipResolver {
      * @param actorNation the actor's nation, or null
      * @param trustedByOwner whether the owning town trusts them
      * @param ownsPlot whether they hold this particular plot
+     * @param outlawed whether the owning town has declared this player unwelcome. Consulted only
+     *        for somebody who is not one of its members — see the ordering in {@link #resolve}
      * @param allied whether the two towns are allied. Always false until diplomacy exists —
      *        {@code RT-MOD-DIPLOMACY} supplies it, and until then an ally resolves as a visitor,
      *        which is the safe direction to be wrong in
@@ -81,12 +96,13 @@ public final class RelationshipResolver {
             NationId actorNation,
             boolean trustedByOwner,
             boolean ownsPlot,
+            boolean outlawed,
             boolean allied
     ) {
 
         /** Unclaimed land. */
         public static TerritoryView wilderness() {
-            return new TerritoryView(false, null, null, null, null, false, false, false);
+            return new TerritoryView(false, null, null, null, null, false, false, false, false);
         }
 
         /** A claim, with the actor's own affiliations. */
@@ -111,7 +127,7 @@ public final class RelationshipResolver {
         ) {
             return new TerritoryView(
                     true, owningTown, owningNation, actorTown, actorNation,
-                    trustedByOwner, holdsPlot, false);
+                    trustedByOwner, holdsPlot, false, false);
         }
     }
 }

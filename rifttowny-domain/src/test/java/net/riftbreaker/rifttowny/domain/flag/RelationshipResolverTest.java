@@ -75,7 +75,7 @@ class RelationshipResolverTest {
     @DisplayName("a plot owner outranks an ordinary member of the same town")
     void plotOwnerIsResident() {
         final TerritoryView view = new TerritoryView(
-                true, RIFTHOLM, VALEN, RIFTHOLM, VALEN, false, true, false);
+                true, RIFTHOLM, VALEN, RIFTHOLM, VALEN, false, true, false, false);
 
         assertThat(RelationshipResolver.resolve(view)).isEqualTo(Relationship.RESIDENT);
     }
@@ -84,7 +84,7 @@ class RelationshipResolverTest {
     @DisplayName("an ally sits between nation and trusted")
     void allyIsBetweenNationAndTrusted() {
         final TerritoryView view = new TerritoryView(
-                true, RIFTHOLM, VALEN, ASHFORD, KORATH, false, false, true);
+                true, RIFTHOLM, VALEN, ASHFORD, KORATH, false, false, false, true);
 
         assertThat(RelationshipResolver.resolve(view)).isEqualTo(Relationship.ALLY);
     }
@@ -93,7 +93,7 @@ class RelationshipResolverTest {
     @DisplayName("nation membership beats an alliance, since it is the closer tie")
     void nationBeatsAlly() {
         final TerritoryView view = new TerritoryView(
-                true, RIFTHOLM, VALEN, ASHFORD, VALEN, false, false, true);
+                true, RIFTHOLM, VALEN, ASHFORD, VALEN, false, false, false, true);
 
         assertThat(RelationshipResolver.resolve(view)).isEqualTo(Relationship.NATION);
     }
@@ -102,13 +102,95 @@ class RelationshipResolverTest {
     @DisplayName("two townless players do not become nation-mates through null matching")
     void nullAffiliationsDoNotMatch() {
         final TerritoryView view = new TerritoryView(
-                true, RIFTHOLM, null, null, null, false, false, false);
+                true, RIFTHOLM, null, null, null, false, false, false, false);
 
         assertThat(RelationshipResolver.resolve(view))
                 .as("a null nation on both sides must not read as the same nation")
                 .isEqualTo(Relationship.VISITOR);
     }
 
+
+    /** A view with the outlaw flag set, since the convenience factories do not take it. */
+    private static TerritoryView outlawedIn(
+            final TownId owner, final NationId ownerNation,
+            final TownId actorTown, final NationId actorNation, final boolean trusted) {
+        return new TerritoryView(
+                true, owner, ownerNation, actorTown, actorNation, trusted, false, true, false);
+    }
+
+    @Test
+    @DisplayName("an outlawed stranger is an outlaw, not a visitor")
+    void outlawedStranger() {
+        assertThat(RelationshipResolver.resolve(outlawedIn(RIFTHOLM, null, null, null, false)))
+                .isEqualTo(Relationship.OUTLAW);
+    }
+
+    @Test
+    @DisplayName("outlawry beats every rung an outsider could otherwise claim")
+    void outlawryBeatsOutsiderRungs() {
+        // The case the placement exists for. An outlaw who is in the owning town's own nation, or
+        // in an allied one, or on its trust list, would otherwise keep that rung and walk in - and
+        // an ally who cannot be barred is an outlawry that does not work.
+        assertThat(RelationshipResolver.resolve(outlawedIn(RIFTHOLM, VALEN, ASHFORD, VALEN, false)))
+                .as("same nation")
+                .isEqualTo(Relationship.OUTLAW);
+        assertThat(RelationshipResolver.resolve(outlawedIn(RIFTHOLM, VALEN, ASHFORD, KORATH, true)))
+                .as("on the trust list")
+                .isEqualTo(Relationship.OUTLAW);
+
+        final TerritoryView alliedOutlaw = new TerritoryView(
+                true, RIFTHOLM, VALEN, ASHFORD, KORATH, false, false, true, true);
+        assertThat(RelationshipResolver.resolve(alliedOutlaw))
+                .as("allied nation")
+                .isEqualTo(Relationship.OUTLAW);
+    }
+
+    @Test
+    @DisplayName("but a member of the town is not stripped by it")
+    void membershipSupersedes() {
+        // The other half of the placement. Membership is the same town's later and more specific
+        // decision, so it wins - and an admitted player left with no rights would be a state
+        // nothing in the join path would notice.
+        assertThat(RelationshipResolver.resolve(outlawedIn(RIFTHOLM, VALEN, RIFTHOLM, VALEN, false)))
+                .as("a member of the owning town")
+                .isEqualTo(Relationship.TOWN);
+
+        final TerritoryView plotHolder = new TerritoryView(
+                true, RIFTHOLM, VALEN, RIFTHOLM, VALEN, false, true, true, false);
+        assertThat(RelationshipResolver.resolve(plotHolder))
+                .as("holding their own plot")
+                .isEqualTo(Relationship.RESIDENT);
+    }
+
+    @Test
+    @DisplayName("an outlaw ranks under everyone, so the shipped defaults already refuse them")
+    void outlawIsTheLowestRung() {
+        // No default had to change for this rung: the defaults ask isMember and isAtLeast, and an
+        // outlaw fails both. What that buys is that adding the constant cannot have granted
+        // anything anywhere.
+        assertThat(Relationship.OUTLAW.isMember()).isFalse();
+        assertThat(Relationship.OUTLAW.isAtLeast(Relationship.VISITOR)).isFalse();
+        assertThat(Relationship.OUTLAW.isAtLeast(Relationship.WILDERNESS)).isFalse();
+        assertThat(Relationship.VISITOR.isAtLeast(Relationship.OUTLAW)).isTrue();
+
+        for (final ProtectionFlag flag : ProtectionFlag.values()) {
+            if (flag.allowedByDefault(Relationship.OUTLAW, LandState.CLAIMED)) {
+                // Only the flags that are on for everybody, and none of them moves a block.
+                assertThat(flag)
+                        .as("%s is allowed to an outlaw by default", flag)
+                        .isIn(ProtectionFlag.SHOP_USE, ProtectionFlag.REDSTONE,
+                                ProtectionFlag.MOB_SPAWNING);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("OUTLAW is declared first, which is what the monotonicity check reads")
+    void declaredFirst() {
+        // firstNonMonotonic walks values() in declaration order rather than by rank, so a rung
+        // ranked lowest but declared elsewhere would be compared in the wrong place.
+        assertThat(Relationship.values()[0]).isEqualTo(Relationship.OUTLAW);
+    }
     @Test
     @DisplayName("the ladder is ordered, so a higher rung really does outrank a lower one")
     void ladderIsOrdered() {

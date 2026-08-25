@@ -38,6 +38,7 @@ public final class ProtectionQuery {
     private final FlagSettingsSource settings;
     private final RuinIndex ruins;
     private final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy;
+    private final net.riftbreaker.rifttowny.domain.justice.Outlaws outlaws;
 
     /** Uses built-in flag defaults and knows of no ruins. */
     public ProtectionQuery(final TerritoryIndex territory, final CivicCache civic) {
@@ -79,11 +80,28 @@ public final class ProtectionQuery {
             final RuinIndex ruins,
             final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy
     ) {
+        this(territory, civic, settings, ruins, diplomacy,
+                net.riftbreaker.rifttowny.domain.justice.Outlaws.empty());
+    }
+
+    /**
+     * @param outlaws who each town has declared unwelcome. An empty book answers "nobody", which is
+     *        the correct reading of a server where no town has ever outlawed anyone
+     */
+    public ProtectionQuery(
+            final TerritoryIndex territory,
+            final CivicCache civic,
+            final FlagSettingsSource settings,
+            final RuinIndex ruins,
+            final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy,
+            final net.riftbreaker.rifttowny.domain.justice.Outlaws outlaws
+    ) {
         this.territory = Objects.requireNonNull(territory, "territory");
         this.civic = Objects.requireNonNull(civic, "civic");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.ruins = Objects.requireNonNull(ruins, "ruins");
         this.diplomacy = Objects.requireNonNull(diplomacy, "diplomacy");
+        this.outlaws = Objects.requireNonNull(outlaws, "outlaws");
     }
 
     // --- asking --------------------------------------------------------------------------------
@@ -241,6 +259,9 @@ public final class ProtectionQuery {
                 actorNation,
                 owning.trusts(who),
                 holdsPlot,
+                // A third lookup, and the cheapest of the three: a town with no grudges holds no set
+                // at all, so this is one miss on a map for almost every player who ever asks.
+                outlaws.isOutlawed(owning.id(), who),
                 allied);
     }
 
