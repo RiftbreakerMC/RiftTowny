@@ -1,7 +1,9 @@
 package net.riftbreaker.rifttowny.paper.command;
 
 import net.riftbreaker.rifttowny.domain.directory.CivicDirectory;
+import net.riftbreaker.rifttowny.domain.directory.Page;
 import net.riftbreaker.rifttowny.domain.directory.ResidentProfile;
+import net.riftbreaker.rifttowny.domain.directory.ResidentSummary;
 import net.riftbreaker.rifttowny.domain.org.Resident;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
@@ -18,6 +20,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -40,6 +43,7 @@ public final class ResidentCommands {
     private final CivicDirectory directory;
     private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final MessageService messages;
+    private final Listings listings;
     private final Clock clock;
 
     public ResidentCommands(
@@ -55,6 +59,7 @@ public final class ResidentCommands {
         this.directory = Objects.requireNonNull(directory, "directory");
         this.names = Objects.requireNonNull(names, "names");
         this.messages = Objects.requireNonNull(messages, "messages");
+        this.listings = new Listings(messages);
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -78,9 +83,48 @@ public final class ResidentCommands {
                         .describedAs("Show a player's record, or your own")
                         .completer((actor, args) -> args.size() <= 1 ? onlinePlayerNames() : List.of())
                         .runs(this::info, Surface.CHAT))
+                .child(CommandNode.action("list")
+                        .permission("rifttowny.resident.info")
+                        .usage("resident list [page]")
+                        .describedAs("List everybody who belongs to a town")
+                        .completer((actor, args) -> args.size() <= 1 ? List.of("1") : List.of())
+                        .runs(this::list, Surface.CHAT))
                 .runs(this::info, Surface.CHAT);
     }
 
+
+    /**
+     * Everybody in a town, paged.
+     *
+     * <p>A child rather than an argument of the root, which costs one thing worth naming: a player
+     * called {@code list} can no longer be looked up as {@code /resident list}. {@code /resident
+     * info list} still finds them, which is the reason that child exists.</p>
+     */
+    public void list(final CommandActor actor, final List<String> args) {
+        final Optional<Listings.Request> request = listings.parse(actor, args);
+        if (request.isEmpty()) {
+            return;
+        }
+        final int wanted = request.get().page();
+        final Page<ResidentSummary> page =
+                directory.residents(names, wanted, Listings.PAGE_SIZE);
+        if (page.isEmpty()) {
+            messages.send(actor::send, MessageKey.RESIDENT_LIST_EMPTY);
+            return;
+        }
+        messages.send(actor::send, MessageKey.RESIDENT_LIST_HEADER,
+                MessageService.value("count", page.total()),
+                MessageService.value("page", page.number()),
+                MessageService.value("pages", page.pages()));
+        int index = page.firstIndex();
+        for (final ResidentSummary row : page.items()) {
+            messages.sendRaw(actor::send, MessageKey.RESIDENT_LIST_LINE,
+                    MessageService.value("index", index++),
+                    MessageService.value("resident", row.name()),
+                    MessageService.value("town", row.townName()));
+        }
+        listings.more(actor, page, "/resident list " + (page.number() + 1));
+    }
     /** One player's record, named or your own. */
     public void info(final CommandActor actor, final List<String> args) {
         if (args.isEmpty()) {

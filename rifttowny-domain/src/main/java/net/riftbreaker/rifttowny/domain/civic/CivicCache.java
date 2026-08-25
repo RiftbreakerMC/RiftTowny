@@ -167,6 +167,21 @@ public final class CivicCache {
         return Set.copyOf(towns.keySet());
     }
 
+    /**
+     * Every resident held, with the town they belong to.
+     *
+     * <p>A live unmodifiable view rather than a copy, unlike {@link #townIds()}: this map has one
+     * entry per resident on the server rather than one per town, and a listing that copies all of
+     * them to show ten is the wrong shape. Iterating it is safe from any thread — the map underneath
+     * is concurrent, so a reader sees a consistent entry for each resident it reaches, and a town
+     * founded halfway through a listing may or may not appear in it. For a directory of who lives
+     * where, that is the right trade; for a protection decision it would not be, which is why
+     * nothing on that path reads this.</p>
+     */
+    public Map<ResidentId, TownId> membership() {
+        return java.util.Collections.unmodifiableMap(membership);
+    }
+
     // --- diagnostics ---------------------------------------------------------------------------
 
     public int cachedTowns() {

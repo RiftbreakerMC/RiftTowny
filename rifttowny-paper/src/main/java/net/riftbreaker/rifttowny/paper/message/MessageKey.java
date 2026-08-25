@@ -502,6 +502,28 @@ public enum MessageKey {
 
     // --- one player ----------------------------------------------------------------------------
 
+    /** The directory of everybody who belongs to a town. */
+    RESIDENT_LIST_HEADER("resident.list-header",
+            "<dark_gray>---</dark_gray> <white>Residents</white> <gray>(<count>)</gray> "
+                    + "<dark_gray>-</dark_gray> <gray>page <page> of <pages></gray>"),
+
+    RESIDENT_LIST_LINE("resident.list-line",
+            "  <dark_gray><index>.</dark_gray> <green><resident></green> "
+                    + "<dark_gray>-</dark_gray> <gray><town></gray>"),
+
+    RESIDENT_LIST_EMPTY("resident.list-empty",
+            "<gray>Nobody has joined a town yet.</gray>"),
+
+    NATION_ONLINE_HEADER("nation.online-header",
+            "<gray>Online in <white><nation></white>: <white><count></white> of "
+                    + "<white><residents></white></gray>"),
+
+    NATION_ONLINE_LINE("nation.online-line",
+            "  <green><resident></green> <dark_gray>-</dark_gray> <gray><town></gray>"),
+
+    NATION_ONLINE_NONE("nation.online-none",
+            "<gray>Nobody from <white><nation></white> is online.</gray>"),
+
     RESIDENT_HEADER("resident.header",
             "<dark_gray>---</dark_gray> <white><resident></white> <dark_gray>---</dark_gray>"),
 

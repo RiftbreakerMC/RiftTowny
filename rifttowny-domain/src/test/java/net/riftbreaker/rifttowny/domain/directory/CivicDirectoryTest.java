@@ -286,4 +286,81 @@ class CivicDirectoryTest {
 
         assertThat(directory.townNames()).containsExactlyInAnyOrder("Ashford", "Highholm");
     }
+
+    @Test
+    @DisplayName("the resident directory names everybody with the town they belong to")
+    void residentsAreListedWithTheirTown() {
+        final ResidentId bede = CivicFixture.resident();
+        final ResidentId ada = CivicFixture.resident();
+        final ResidentId cato = CivicFixture.resident();
+        final var names = net.riftbreaker.rifttowny.domain.civic.ResidentNames.empty();
+        names.remember(bede, "Bede");
+        names.remember(ada, "Ada");
+        names.remember(cato, "Cato");
+
+        remember(foundedTown("Ashford", CivicFixture.NOW, bede, ada));
+        remember(foundedTown("Highholm", CivicFixture.NOW, cato));
+
+        final Page<ResidentSummary> page = directory.residents(names, 1, 10);
+
+        assertThat(page.total()).isEqualTo(3);
+        // Name order, not insertion order and not town order.
+        assertThat(page.items()).extracting(ResidentSummary::name)
+                .containsExactly("Ada", "Bede", "Cato");
+        assertThat(page.items()).extracting(ResidentSummary::townName)
+                .containsExactly("Ashford", "Ashford", "Highholm");
+    }
+
+    @Test
+    @DisplayName("it pages, and the order holds across the boundary")
+    void residentsPage() {
+        // The bug this is here for: sorting after paging, which puts a name on page two that
+        // belongs on page one and shows another twice.
+        final var names = net.riftbreaker.rifttowny.domain.civic.ResidentNames.empty();
+        final List<ResidentId> people = new java.util.ArrayList<>();
+        for (int index = 0; index < 7; index++) {
+            final ResidentId who = CivicFixture.resident();
+            people.add(who);
+            // Deliberately reverse-named: the insertion order is the opposite of the sort order.
+            names.remember(who, "Player" + (char) ('G' - index));
+        }
+        remember(foundedTown("Ashford", CivicFixture.NOW, people.toArray(new ResidentId[0])));
+
+        final Page<ResidentSummary> first = directory.residents(names, 1, 3);
+        final Page<ResidentSummary> second = directory.residents(names, 2, 3);
+        final Page<ResidentSummary> third = directory.residents(names, 3, 3);
+
+        assertThat(first.items()).extracting(ResidentSummary::name)
+                .containsExactly("PlayerA", "PlayerB", "PlayerC");
+        assertThat(second.items()).extracting(ResidentSummary::name)
+                .containsExactly("PlayerD", "PlayerE", "PlayerF");
+        assertThat(third.items()).extracting(ResidentSummary::name).containsExactly("PlayerG");
+        assertThat(third.hasNext()).isFalse();
+    }
+
+    @Test
+    @DisplayName("somebody with no town is not in it, because the cache behind it never held them")
+    void townlessAreAbsent() {
+        // Stated as a test rather than left to be discovered: the individual lookup reads storage
+        // and answers for a townless player, but this directory is bounded by town membership and
+        // cannot. A listing that quietly omitted them would read as a bug.
+        final ResidentId homeless = CivicFixture.resident();
+        final var names = net.riftbreaker.rifttowny.domain.civic.ResidentNames.empty();
+        names.remember(homeless, "Wanderer");
+
+        assertThat(directory.residents(names, 1, 10).isEmpty()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a resident whose town has gone from the cache is not listed against nothing")
+    void danglingMembershipIsSkipped() {
+        final ResidentId bede = CivicFixture.resident();
+        final var names = net.riftbreaker.rifttowny.domain.civic.ResidentNames.empty();
+        names.remember(bede, "Bede");
+        final Town ashford = foundedTown("Ashford", CivicFixture.NOW, bede);
+        remember(ashford);
+        towns.forget(ashford.id());
+
+        assertThat(directory.residents(names, 1, 10).isEmpty()).isTrue();
+    }
 }

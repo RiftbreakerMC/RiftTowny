@@ -109,6 +109,9 @@ listing:
   unknown-sort: '<red>Unknown order <white><input></white>. One of: <white><options></white></red>'
 
 nation:
+  online-header: '<gray>Online in <white><nation></white>: <white><count></white> of <white><residents></white></gray>'
+  online-line: '  <green><resident></green> <dark_gray>-</dark_gray> <gray><town></gray>'
+  online-none: '<gray>Nobody from <white><nation></white> is online.</gray>'
   founded: '<green>Founded <white><nation></white>. Your town is its capital.</green>'
   info-header: '<gray>Nation <white><nation></white></gray>'
   invited: '<green>Invited <white><town></white> to <white><nation></white>. They must accept before anything changes.</green>'
@@ -143,6 +146,9 @@ resident:
   unknown: '<red>RiftTowny has never seen a player called <white><name></white>.</red>'
   online-now: 'online now'
   townless: 'no town'
+  list-header: '<dark_gray>---</dark_gray> <white>Residents</white> <gray>(<count>)</gray> <dark_gray>-</dark_gray> <gray>page <page> of <pages></gray>'
+  list-line: '  <dark_gray><index>.</dark_gray> <green><resident></green> <dark_gray>-</dark_gray> <gray><town></gray>'
+  list-empty: '<gray>Nobody has joined a town yet.</gray>'
 
 # The chunk map. Colours mean who, shapes mean what.
 map:

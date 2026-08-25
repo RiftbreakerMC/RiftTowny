@@ -44,7 +44,7 @@ commands:
   resident:
     aliases: [res]
     description: Look at a player's town record.
-    usage: /resident [player]
+    usage: /resident <list|[player]>
   townchat:
     aliases: [tc]
     description: Speak to your town, or switch to its channel.
@@ -60,7 +60,7 @@ commands:
   nation:
     aliases: [n]
     description: Found and manage a nation.
-    usage: /nation <new|info|list|invite|withdraw|invites|join|leave|expel|capital|king|rename|delete>
+    usage: /nation <new|info|list|online|invite|withdraw|invites|join|leave|expel|capital|king|rename|delete>
 
 permissions:
   rifttowny.admin:
@@ -132,7 +132,7 @@ permissions:
   # Looking at somebody's town record. Separate from rifttowny.town.info because it is about a
   # person rather than a place, and a server that wants to hide one may not want to hide the other.
   rifttowny.resident.info:
-    description: View a player's town record.
+    description: View a player's town record, and list everybody who belongs to a town.
     default: true
 
   # Speaking to your own town or nation. Granted to everyone: the channel a player reaches is the
@@ -246,7 +246,7 @@ permissions:
     description: Found a nation.
     default: true
   rifttowny.nation.info:
-    description: View a nation and its invitations.
+    description: View a nation, list every nation, and see who is online in one.
     default: true
   rifttowny.nation.invite:
     description: Offer membership to a town, and withdraw the offer.

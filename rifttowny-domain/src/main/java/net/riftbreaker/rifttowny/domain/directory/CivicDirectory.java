@@ -1,6 +1,7 @@
 package net.riftbreaker.rifttowny.domain.directory;
 
 import net.riftbreaker.rifttowny.domain.civic.CivicCache;
+import net.riftbreaker.rifttowny.domain.civic.ResidentNames;
 import net.riftbreaker.rifttowny.domain.civic.TownFacts;
 import net.riftbreaker.rifttowny.domain.org.Nation;
 import net.riftbreaker.rifttowny.domain.org.NationId;
@@ -10,7 +11,9 @@ import net.riftbreaker.rifttowny.domain.territory.TerritoryIndex;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -194,6 +197,36 @@ public final class CivicDirectory {
     }
 
     // --- people --------------------------------------------------------------------------------
+
+    /**
+     * Everybody who belongs to a town, in name order, one page at a time.
+     *
+     * <p>Answered from the membership index the protection path already maintains, so it costs no
+     * query however many residents a server has. Sorted before it is paged, which is the only order
+     * in which page two means anything.</p>
+     *
+     * <p><strong>It lists residents of towns, and that is the whole of what it lists.</strong>
+     * Somebody who has logged in and never joined one has a row in the database and no place in
+     * this directory, because the cache behind it is bounded by town membership. Naming it
+     * otherwise would promise a census the plugin does not hold — and the individual lookup, which
+     * does read storage, answers for them perfectly well.</p>
+     *
+     * @param names resolves the display names, and therefore the order
+     */
+    public Page<ResidentSummary> residents(
+            final ResidentNames names, final int page, final int pageSize) {
+        Objects.requireNonNull(names, "names");
+        final List<ResidentSummary> rows = new ArrayList<>();
+        towns.membership().forEach((who, town) -> towns.town(town).ifPresent(facts ->
+                rows.add(new ResidentSummary(
+                        who, names.describe(who), town, facts.displayName()))));
+        rows.sort(Comparator
+                .comparing((ResidentSummary row) -> row.name().toLowerCase(Locale.ROOT))
+                // A tiebreak that cannot tie: two players may share a last known name after a
+                // rename, and an unstable order would move them between pages on every call.
+                .thenComparing(row -> row.id().value()));
+        return Page.of(rows, page, pageSize);
+    }
 
     /**
      * Which town somebody belongs to, and how much of it, without a query.

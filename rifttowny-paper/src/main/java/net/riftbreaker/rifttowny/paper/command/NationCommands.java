@@ -1,5 +1,6 @@
 package net.riftbreaker.rifttowny.paper.command;
 
+import net.riftbreaker.rifttowny.domain.civic.TownFacts;
 import net.riftbreaker.rifttowny.domain.diplomacy.Relation;
 import net.riftbreaker.rifttowny.domain.directory.CivicDirectory;
 import net.riftbreaker.rifttowny.domain.directory.NationSummary;
@@ -25,9 +26,13 @@ import net.riftbreaker.rifttowny.paper.command.tree.Surface;
 import net.riftbreaker.rifttowny.paper.message.DenialText;
 import net.riftbreaker.rifttowny.paper.message.MessageKey;
 import net.riftbreaker.rifttowny.paper.message.MessageService;
+import org.bukkit.Bukkit;
 
-import java.util.Locale;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -107,6 +112,11 @@ public final class NationCommands {
                                 ? List.of("1", "name", "residents", "land", "age")
                                 : List.of("name", "residents", "land", "age"))
                         .runs(this::list, Surface.CHAT))
+                .child(CommandNode.action("online")
+                        .permission("rifttowny.nation.info")
+                        .usage("nation online [nation]")
+                        .describedAs("Who from a nation is on the server")
+                        .runs(this::online, Surface.CHAT))
                 .child(CommandNode.action("invite")
                         .permission("rifttowny.nation.invite")
                         .usage("nation invite <town>")
@@ -485,6 +495,63 @@ public final class NationCommands {
                                 MessageService.value("nation", nation.name().display()))));
     }
 
+
+    /**
+     * Who from a nation is on the server, named or your own.
+     *
+     * <p>Grouped by nothing and labelled by town, because a nation is towns rather than people: the
+     * useful question when a king types this is not only how many are on, but which member towns
+     * they are on <em>from</em>. A nation with forty online and all of them in one town is a
+     * different situation from forty spread across eight.</p>
+     *
+     * <p>Read entirely from the caches, like the rest of the listing surface, so a nation of a
+     * thousand costs the same as a nation of ten and nobody can stall the server by asking.</p>
+     */
+    private void online(final CommandActor actor, final List<String> args) {
+        if (!args.isEmpty()) {
+            then(actor, nationRepository.findByName(args.getFirst()), found -> found.ifPresentOrElse(
+                    nation -> showOnline(actor, nation),
+                    () -> denied(actor, ChangeDenial.NATION_NOT_FOUND)));
+            return;
+        }
+        withNation(actor, (who, nation) -> showOnline(actor, nation));
+    }
+
+    private void showOnline(final CommandActor actor, final Nation nation) {
+        final List<ResidentId> here = new ArrayList<>();
+        final Map<ResidentId, String> homes = new HashMap<>();
+        int residents = 0;
+        for (final TownId town : nation.towns()) {
+            final Optional<TownFacts> facts = directory.facts(town);
+            if (facts.isEmpty()) {
+                continue;
+            }
+            residents += facts.get().town().residentCount();
+            for (final ResidentId resident : directory.residentsOf(town)) {
+                if (Bukkit.getPlayer(resident.value()) != null) {
+                    here.add(resident);
+                    homes.put(resident, facts.get().displayName());
+                }
+            }
+        }
+        if (here.isEmpty()) {
+            messages.send(actor::send, MessageKey.NATION_ONLINE_NONE,
+                    MessageService.value("nation", nation.name().display()));
+            return;
+        }
+        messages.sendRaw(actor::send, MessageKey.NATION_ONLINE_HEADER,
+                MessageService.value("nation", nation.name().display()),
+                MessageService.value("count", here.size()),
+                MessageService.value("residents", residents));
+        here.sort(java.util.Comparator
+                .comparing((ResidentId who) -> homes.get(who).toLowerCase(java.util.Locale.ROOT))
+                .thenComparing(who -> names.describe(who).toLowerCase(java.util.Locale.ROOT)));
+        for (final ResidentId resident : here) {
+            messages.sendRaw(actor::send, MessageKey.NATION_ONLINE_LINE,
+                    MessageService.value("resident", names.describe(resident)),
+                    MessageService.value("town", homes.get(resident)));
+        }
+    }
     private void info(final CommandActor actor, final List<String> args) {
         if (!args.isEmpty()) {
             then(actor, nationRepository.findByName(args.getFirst()), found -> found.ifPresentOrElse(
