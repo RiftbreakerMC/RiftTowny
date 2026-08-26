@@ -130,6 +130,26 @@ final class ConnectionBankStore implements CivicTransaction.BankStore {
         });
     }
 
+
+    @Override
+    public List<Money> balancesOf(final UUID accountId) {
+        Objects.requireNonNull(accountId, "accountId");
+        return StorageFailure.wrapping(() -> {
+            final List<Money> found = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT currency, amount FROM rt_organisation_balance WHERE account_id = ? "
+                            + "ORDER BY currency")) {
+                statement.setString(1, accountId.toString());
+                try (ResultSet results = statement.executeQuery()) {
+                    while (results.next()) {
+                        found.add(Money.fromStorage(
+                                results.getString("amount"), results.getString("currency")));
+                    }
+                }
+            }
+            return List.copyOf(found);
+        });
+    }
     @Override
     public int forget(final UUID accountId) {
         Objects.requireNonNull(accountId, "accountId");

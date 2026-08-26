@@ -403,6 +403,17 @@ public interface CivicTransaction {
         List<net.riftbreaker.rifttowny.domain.bank.LedgerEntry> history(
                 java.util.UUID accountId, int limit);
 
+        /**
+         * Every balance an account holds, whatever the currency.
+         *
+         * <p>{@link #balance} can only answer for a currency you already know the name of, which is
+         * fine for a deposit and wrong for anything that has to move a treasury wholesale: the table
+         * is keyed on {@code (account_id, currency)} and a town that has held two currencies has two
+         * rows. Reading one and assuming it is all of them strands the rest.</p>
+         */
+        java.util.List<net.riftbreaker.rifttowny.domain.bank.Money> balancesOf(
+                java.util.UUID accountId);
+
         /** Removes an account's balance and history, as when its organisation is disbanded. */
         int forget(java.util.UUID accountId);
     }

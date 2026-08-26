@@ -6,6 +6,7 @@ import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
 import net.riftbreaker.rifttowny.api.ChunkKey;
 import net.riftbreaker.rifttowny.domain.bank.LedgerEntry;
 import net.riftbreaker.rifttowny.domain.bank.Money;
+import net.riftbreaker.rifttowny.domain.territory.ClaimKind;
 import net.riftbreaker.rifttowny.domain.org.OrganisationScope;
 import net.riftbreaker.rifttowny.domain.org.Resident;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
@@ -67,7 +68,18 @@ class TownServiceTest extends SqliteFixture {
         return service.found(MAYOR, "Mayor", "Riftholm").join().value().orElseThrow();
     }
 
+
     private static final java.util.UUID WORLD = java.util.UUID.randomUUID();
+    /** A homeblock for a town, since found() does not claim one. */
+    private void giveHomeblock(final net.riftbreaker.rifttowny.domain.org.TownId town, final ChunkKey chunk) {
+        final var claim = net.riftbreaker.rifttowny.domain.territory.Claim.of(
+                chunk, town, ClaimKind.HOMEBLOCK, CLOCK.instant());
+        store.inTransaction(t -> {
+            t.claims().insert(claim);
+            return null;
+        }).join();
+        index.put(claim);
+    }
 
     /** Land straight into the store and the index, since the merge is what is under test. */
     private void giveLand(final net.riftbreaker.rifttowny.domain.org.TownId town, final ChunkKey... chunks) {
@@ -679,6 +691,81 @@ class TownServiceTest extends SqliteFixture {
             assertThat(absorbedLedger.getFirst().note()).contains("merged into Riftholm");
         }
 
+
+        @Test
+        @DisplayName("the survivor is left with exactly one homeblock")
+        void oneHomeblockAfterwards() {
+            // The defect this exists for: reassigning the claims without demoting the absorbed
+            // homeblock left the survivor holding two. TownClaims.unclaim then refuses BOTH with
+            // HOMEBLOCK_MUST_BE_UNCLAIMED_LAST while the town holds more than one chunk, so the
+            // absorbed town's old home chunk could never be released again - and homeblock() is a
+            // findFirst, so which one answered depended on database order.
+            giveHomeblock(riftholm.id(), new ChunkKey(WORLD, 0, 0));
+            giveHomeblock(ashford.id(), new ChunkKey(WORLD, 40, 40));
+
+            offerAndAccept();
+
+            final var kinds = store.inTransaction(t -> t.claims().of(riftholm.id())).join().stream()
+                    .collect(java.util.stream.Collectors.groupingBy(
+                            net.riftbreaker.rifttowny.domain.territory.Claim::kind,
+                            java.util.stream.Collectors.counting()));
+            assertThat(kinds.get(ClaimKind.HOMEBLOCK))
+                    .as("a town holds exactly one homeblock, however many it absorbed")
+                    .isEqualTo(1L);
+            assertThat(kinds.get(ClaimKind.OUTPOST))
+                    .as("the absorbed homeblock becomes an outpost, which still anchors its cluster")
+                    .isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("and that homeblock can still be released once it stands alone")
+        void theSurvivorCanStillUnclaim() {
+            // The consequence of the two-homeblock state, tested through the behaviour rather than
+            // the data: with two, neither could ever be unclaimed.
+            giveHomeblock(riftholm.id(), new ChunkKey(WORLD, 0, 0));
+            giveHomeblock(ashford.id(), new ChunkKey(WORLD, 40, 40));
+            offerAndAccept();
+
+            final var territory = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
+                    store, CLOCK, index);
+            final var released = territory.unclaim(
+                    MAYOR, riftholm.id(), store.inTransaction(t -> t.claims().of(riftholm.id()))
+                            .join().stream()
+                            .filter(claim -> claim.kind() == ClaimKind.OUTPOST)
+                            .findFirst().orElseThrow().chunk()).join();
+
+            assertThat(released.succeeded()).as("%s", released.denial()).isTrue();
+        }
+
+        @Test
+        @DisplayName("every currency moves, not just the one the account last used")
+        void everyCurrencyMoves() {
+            // rt_organisation_balance is keyed (account_id, currency) and RiftEco is multi-currency,
+            // which any server that changes its configured currency ends up with. Moving only the
+            // most recent left the rest on an account whose town row is deleted moments later, where
+            // no command could reach it again.
+            final var bank = new net.riftbreaker.rifttowny.domain.service.BankService(
+                    store, CLOCK, net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent());
+            bank.pay(ashford.id(), money("60"), LedgerEntry.Reason.TAX, null).join();
+            store.inTransaction(t -> {
+                final var older = Money.of(new java.math.BigDecimal("25"), "shards");
+                t.bank().record(LedgerEntry.of(ashford.bankAccountId(), older, older,
+                        LedgerEntry.Reason.TAX, null, null, CLOCK.instant()), CLOCK.instant());
+                return null;
+            }).join();
+
+            offerAndAccept();
+
+            final var moved = store.inTransaction(
+                    t -> t.bank().balancesOf(riftholm.bankAccountId())).join();
+            assertThat(moved)
+                    .as("both currencies reached the survivor")
+                    .extracting(Money::currency)
+                    .containsExactlyInAnyOrder("coins", "shards");
+            assertThat(store.inTransaction(t -> t.bank().balancesOf(ashford.bankAccountId())).join())
+                    .as("and nothing was left behind on the account that is about to be unreachable")
+                    .allSatisfy(left -> assertThat(left.isZero()).isTrue());
+        }
         @Test
         @DisplayName("an outlawry against somebody being absorbed is lifted, not left standing")
         void outlawriesAreLifted() {

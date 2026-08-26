@@ -23,6 +23,9 @@ import net.riftbreaker.rifttowny.domain.store.CivicStore;
 import net.riftbreaker.rifttowny.domain.store.CivicTransaction;
 
 import java.time.Clock;
+import net.riftbreaker.rifttowny.api.ChunkKey;
+import net.riftbreaker.rifttowny.domain.territory.ClaimKind;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -1037,14 +1040,38 @@ public final class TownService {
             moveTreasury(transaction, absorbed, survivor);
 
             // 3. The land, before the town row goes. One statement, whatever the size of the town.
+            //
+            // The absorbed homeblock is demoted first, because a town may hold exactly one and the
+            // survivor already has its own. Two would be a state TownClaims.moveHomeblock's own
+            // javadoc calls out: "a moment with two homeblocks, or none, would make unclaim refuse
+            // or permit the wrong thing". Concretely, unclaim would then refuse BOTH with
+            // HOMEBLOCK_MUST_BE_UNCLAIMED_LAST for as long as the town held more than one chunk, so
+            // the absorbed town's old home chunk could never be released again, and homeblock()
+            // - a findFirst - would answer with whichever the database happened to return.
+            //
+            // OUTPOST rather than ORDINARY, and that is not cosmetic: ClaimKind.anchorsConnectivity
+            // is HOMEBLOCK or OUTPOST, so if the absorbed land does not touch the survivor's, an
+            // ordinary demotion would leave that whole cluster unreachable from any anchor and the
+            // next unclaim anywhere in the town would fail UNCLAIM_WOULD_DISCONNECT.
+            final ChunkKey demoted = transaction.claims().of(absorbedId).stream()
+                    .filter(claim -> claim.kind() == ClaimKind.HOMEBLOCK)
+                    .map(net.riftbreaker.rifttowny.domain.territory.Claim::chunk)
+                    .findFirst()
+                    .orElse(null);
             final int chunksMoved = transaction.claims().reassignAllOf(absorbedId, survivorId);
+            if (demoted != null) {
+                transaction.claims().updateKind(demoted, ClaimKind.OUTPOST);
+            }
 
             // 4. What the absorbed town alone owned. Its organisation-level flag overrides name a
             // town that is about to stop existing; its per-chunk overrides describe chunks that
             // survive and are deliberately left standing, since dropping them could throw open land
             // whose owner had locked it.
+            // The organisation-level overrides name a town that is about to stop existing. The spawn
+            // is NOT deleted here: rt_town_spawn cascades from rt_town, and a second delete beside
+            // the cascade reads as though the cascade were absent - which is exactly the wrong
+            // thing to imply three lines under a comment about working around one.
             transaction.flags().clearAll(FlagTarget.organisation(absorbedId));
-            transaction.spawns().clear(absorbedId);
             transaction.invitations().deleteAllFor(absorbedId);
 
             final List<String> rolesLost = new java.util.ArrayList<>();
@@ -1069,7 +1096,7 @@ public final class TownService {
                             moved.size(), chunksMoved, rolesLost),
                     correlation("merge", survivorId));
             return new Merged(survivorId, absorbedId, absorbed.name(), survivor.name(),
-                    moved.size(), chunksMoved, List.copyOf(rolesLost));
+                    moved.size(), chunksMoved, List.copyOf(rolesLost), demoted);
         }).thenCompose(result -> {
             // After the commit, never inside it. Until the index is corrected it still points every
             // one of those chunks at a town that no longer exists, and protection would answer for
@@ -1079,6 +1106,14 @@ public final class TownService {
             }
             final Merged merged = result.value().orElseThrow();
             index.reassignAllOf(merged.absorbed(), merged.survivor());
+            // The index keeps its own copy of the kind, so the demotion has to be repeated here or
+            // protection and the map would go on seeing two homeblocks until the next restart.
+            if (merged.demotedHomeblock() != null) {
+                index.at(merged.demotedHomeblock()).ifPresent(claim -> index.put(
+                        new net.riftbreaker.rifttowny.domain.territory.Claim(
+                                claim.id(), claim.chunk(), claim.town(), ClaimKind.OUTPOST,
+                                claim.type(), claim.owner(), claim.claimedAt())));
+            }
             overrides.clearAll(FlagTarget.organisation(merged.absorbed()));
             return civic.refresh(merged.survivor())
                     .thenCompose(ignored -> civic.refresh(merged.absorbed()))
@@ -1089,38 +1124,40 @@ public final class TownService {
     /**
      * Moves everything one treasury holds into another.
      *
-     * <p>A debit and a credit rather than a silent rewrite, because the ledger is what an operator
-     * reads when somebody asks where a town's money went — and a merge is exactly when they ask.</p>
+     * <p>A debit and a credit per currency rather than a silent rewrite, because the ledger is what
+     * an operator reads when somebody asks where a town's money went — and a merge is exactly when
+     * they ask.</p>
+     *
+     * <p><strong>Every currency, not the one the account last used.</strong>
+     * {@code rt_organisation_balance} is keyed on {@code (account_id, currency)} and RiftEco is
+     * multi-currency, so a town that has held two of them holds two rows — which happens to any
+     * server that changes its configured currency, since the old balances stay under the old name.
+     * Moving only one and then deleting the town row leaves the rest on an account no command can
+     * reach again, because a balance is looked up through the town that owns it.</p>
      */
     private void moveTreasury(
             final CivicTransaction transaction, final Town absorbed, final Town survivor) {
-        // The currency is taken from what the account last did, because a balance can only be read
-        // by naming one and this service has no configured currency of its own.
-        final var lastMovement = transaction.bank().history(absorbed.bankAccountId(), 1);
-        if (lastMovement.isEmpty()) {
-            return;
+        for (final var moving : transaction.bank().balancesOf(absorbed.bankAccountId())) {
+            if (moving.isZero()) {
+                continue;
+            }
+            final String currency = moving.currency();
+            final var before = transaction.bank().balance(survivor.bankAccountId(), currency)
+                    .orElseGet(() -> net.riftbreaker.rifttowny.domain.bank.Money.zero(currency));
+            transaction.bank().record(
+                    net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                            absorbed.bankAccountId(), moving,
+                            net.riftbreaker.rifttowny.domain.bank.Money.zero(currency),
+                            net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.ADMIN,
+                            null, "merged into " + survivor.name().display(), clock.instant()),
+                    clock.instant());
+            transaction.bank().record(
+                    net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                            survivor.bankAccountId(), moving, before.plus(moving),
+                            net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.ADMIN,
+                            null, "merged from " + absorbed.name().display(), clock.instant()),
+                    clock.instant());
         }
-        final String currency = lastMovement.getFirst().balance().currency();
-        final var held = transaction.bank().balance(absorbed.bankAccountId(), currency);
-        if (held.isEmpty() || held.get().isZero()) {
-            return;
-        }
-        final var moving = held.get();
-        final var before = transaction.bank().balance(survivor.bankAccountId(), currency)
-                .orElseGet(() -> net.riftbreaker.rifttowny.domain.bank.Money.zero(currency));
-        transaction.bank().record(
-                net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
-                        absorbed.bankAccountId(), moving,
-                        net.riftbreaker.rifttowny.domain.bank.Money.zero(currency),
-                        net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.ADMIN,
-                        null, "merged into " + survivor.name().display(), clock.instant()),
-                clock.instant());
-        transaction.bank().record(
-                net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
-                        survivor.bankAccountId(), moving, before.plus(moving),
-                        net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.ADMIN,
-                        null, "merged from " + absorbed.name().display(), clock.instant()),
-                clock.instant());
     }
 
     /**
@@ -1136,7 +1173,13 @@ public final class TownService {
         }
     }
 
-    /** What a merge did, for the message and for the caches. */
+    /**
+     * What a merge did, for the message and for the caches.
+     *
+     * @param demotedHomeblock the absorbed town's old home chunk, now an outpost of the survivor,
+     *        or null if it had none. Carried so the in-memory index can be corrected after the
+     *        commit - it holds its own copy of the kind
+     */
     public record Merged(
             TownId survivor,
             TownId absorbed,
@@ -1144,9 +1187,11 @@ public final class TownService {
             OrganisationName survivorName,
             int residentsMoved,
             int chunksMoved,
-            List<String> rolesLost
+            List<String> rolesLost,
+            ChunkKey demotedHomeblock
     ) {
     }
+
     /**
      * The town's roles.
      *
