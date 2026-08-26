@@ -488,7 +488,7 @@ public final class TownCommands {
                     messages.send(actor::send, MessageKey.TOWN_MERGED,
                             MessageService.value("absorbed", merged.absorbedName().display()),
                             MessageService.value("survivor", merged.survivorName().display()),
-                            MessageService.value("residents", merged.residentsMoved()),
+                            MessageService.value("residents", merged.movedCount()),
                             MessageService.value("chunks", merged.chunksMoved()));
                     if (!merged.rolesLost().isEmpty()) {
                         // Named because nothing else records them: the role book went with the town,

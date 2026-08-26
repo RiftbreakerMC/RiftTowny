@@ -370,7 +370,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     settings.ruinReclaimDelay(),
                     settings.ruinLifetime(),
                     settings.prices(),
-                    economyAdapter);
+                    economyAdapter,
+                    outlawBook);
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(

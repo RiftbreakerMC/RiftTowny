@@ -65,6 +65,7 @@ public final class TownService {
     private final Duration ruinLifetime;
     private final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices;
     private final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet;
+    private final net.riftbreaker.rifttowny.domain.justice.Outlaws outlaws;
 
     /**
      * @param index needed only so disbanding can drop the town's chunks from the in-memory cache.
@@ -153,6 +154,32 @@ public final class TownService {
             final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
             final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet
     ) {
+        this(store, namePolicy, clock, index, civic, overrides, ruins, ruinReclaimDelay,
+                ruinLifetime, prices, wallet,
+                net.riftbreaker.rifttowny.domain.justice.Outlaws.empty());
+    }
+
+    /**
+     * @param outlaws the in-memory outlaw book. A merge lifts the survivor's outlawries against the
+     *        people it is absorbing, and the book has to be told or it goes on naming them - the
+     *        listing would show members as outlawed, and a pardon would be refused as NOT_OUTLAWED
+     *        because the row is already gone
+     */
+    public TownService(
+            final CivicStore store,
+            final NamePolicy namePolicy,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
+            final CivicCacheRefresher civic,
+            final FlagOverrides overrides,
+            final net.riftbreaker.rifttowny.domain.territory.RuinIndex ruins,
+            final Duration ruinReclaimDelay,
+            final Duration ruinLifetime,
+            final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
+            final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet,
+            final net.riftbreaker.rifttowny.domain.justice.Outlaws outlaws
+    ) {
+        this.outlaws = Objects.requireNonNull(outlaws, "outlaws");
         this.store = Objects.requireNonNull(store, "store");
         this.namePolicy = Objects.requireNonNull(namePolicy, "namePolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -1096,7 +1123,7 @@ public final class TownService {
                             moved.size(), chunksMoved, rolesLost),
                     correlation("merge", survivorId));
             return new Merged(survivorId, absorbedId, absorbed.name(), survivor.name(),
-                    moved.size(), chunksMoved, List.copyOf(rolesLost), demoted);
+                    List.copyOf(moved), chunksMoved, List.copyOf(rolesLost), demoted);
         }).thenCompose(result -> {
             // After the commit, never inside it. Until the index is corrected it still points every
             // one of those chunks at a town that no longer exists, and protection would answer for
@@ -1108,6 +1135,11 @@ public final class TownService {
             index.reassignAllOf(merged.absorbed(), merged.survivor());
             // The index keeps its own copy of the kind, so the demotion has to be repeated here or
             // protection and the map would go on seeing two homeblocks until the next restart.
+            // The pardons the merge performed are in the database; the book is a separate thing and
+            // is told here. Without this the survivor's listing would keep naming people who are
+            // now its own members, and a mayor trying to clear that would be refused NOT_OUTLAWED
+            // because the row it looks for is already gone - unclearable until a restart.
+            merged.residentsMoved().forEach(who -> outlaws.pardon(merged.survivor(), who));
             if (merged.demotedHomeblock() != null) {
                 index.at(merged.demotedHomeblock()).ifPresent(claim -> index.put(
                         new net.riftbreaker.rifttowny.domain.territory.Claim(
@@ -1185,11 +1217,16 @@ public final class TownService {
             TownId absorbed,
             OrganisationName absorbedName,
             OrganisationName survivorName,
-            int residentsMoved,
+            List<ResidentId> residentsMoved,
             int chunksMoved,
             List<String> rolesLost,
             ChunkKey demotedHomeblock
     ) {
+
+        /** How many people moved. Derived, so it cannot disagree with the list. */
+        public int movedCount() {
+            return residentsMoved.size();
+        }
     }
 
     /**

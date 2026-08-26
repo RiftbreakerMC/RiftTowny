@@ -18,6 +18,8 @@ import net.riftbreaker.rifttowny.domain.role.RoleBook;
 import net.riftbreaker.rifttowny.domain.role.RoleId;
 import net.riftbreaker.rifttowny.domain.role.SystemRole;
 import net.riftbreaker.rifttowny.domain.service.ServiceResult;
+import net.riftbreaker.rifttowny.domain.flag.FlagOverrides;
+import net.riftbreaker.rifttowny.domain.service.CivicCacheRefresher;
 import net.riftbreaker.rifttowny.domain.service.TownService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,11 +56,18 @@ class TownServiceTest extends SqliteFixture {
     private JdbcTownRepository towns;
     private JdbcResidentRepository residents;
     private JdbcOutboxRepository outbox;
+    private final net.riftbreaker.rifttowny.domain.justice.Outlaws outlawBook =
+            net.riftbreaker.rifttowny.domain.justice.Outlaws.empty();
 
     @BeforeEach
     void createService() {
         store = new JdbcCivicStore(database, DIRECT, CLOCK);
-        service = new TownService(store, NamePolicy.defaults(), CLOCK, index);
+        service = new TownService(store, NamePolicy.defaults(), CLOCK, index,
+                CivicCacheRefresher.none(), FlagOverrides.empty(),
+                net.riftbreaker.rifttowny.domain.territory.RuinIndex.empty(),
+                java.time.Duration.ZERO, java.time.Duration.ZERO,
+                net.riftbreaker.rifttowny.domain.bank.CivicPrices.free(),
+                net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent(), outlawBook);
         towns = new JdbcTownRepository(database, DIRECT);
         residents = new JdbcResidentRepository(database, DIRECT);
         outbox = new JdbcOutboxRepository(database, DIRECT);
@@ -775,10 +784,17 @@ class TownServiceTest extends SqliteFixture {
                 t.outlaws().declare(riftholm.id(), CITIZEN, MAYOR, CLOCK.instant());
                 return null;
             }).join();
+            outlawBook.declare(riftholm.id(), CITIZEN);
 
             offerAndAccept();
 
             assertThat(store.inTransaction(t -> t.outlaws().holds(riftholm.id(), CITIZEN)).join())
+                    .isFalse();
+            // And the in-memory book, which is a separate thing and is what every reader actually
+            // consults. Left standing it would list a member of the town as outlawed by it, and a
+            // mayor trying to clear that would be refused NOT_OUTLAWED because the row is gone.
+            assertThat(outlawBook.isOutlawed(riftholm.id(), CITIZEN))
+                    .as("the book is told, not just the table")
                     .isFalse();
         }
 
