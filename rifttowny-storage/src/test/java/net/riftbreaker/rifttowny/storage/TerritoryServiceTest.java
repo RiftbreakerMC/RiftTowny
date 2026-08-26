@@ -27,6 +27,10 @@ import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
 
+import net.riftbreaker.rifttowny.domain.flag.ProtectionFlag;
+import net.riftbreaker.rifttowny.domain.flag.Relationship;
+import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TerritoryServiceTest extends SqliteFixture {
@@ -291,6 +295,92 @@ class TerritoryServiceTest extends SqliteFixture {
                     .contains(ChangeDenial.UNCLAIM_WOULD_DISCONNECT);
             assertThat(territory.previewUnclaim(riftholm.id(), at(2, 0)).join().delta())
                     .isEqualTo(-1);
+        }
+    }
+
+    @Nested
+    @DisplayName("releasing everything but the homeblock")
+    class UnclaimAll {
+
+        @Test
+        @DisplayName("keeps the homeblock and releases the rest")
+        void keepsTheHomeblock() {
+            settle(at(1, 0), at(2, 0), at(3, 0));
+            final Town town = riftholm;
+
+            final var released = territory.unclaimAll(MAYOR, town.id()).join();
+
+            assertThat(released.succeeded()).as("%s", released.denial()).isTrue();
+            assertThat(released.value().orElseThrow().count()).isEqualTo(3);
+            final var remaining = store.inTransaction(t -> t.claims().of(town.id())).join();
+            assertThat(remaining).singleElement()
+                    .extracting(net.riftbreaker.rifttowny.domain.territory.Claim::kind)
+                    .isEqualTo(ClaimKind.HOMEBLOCK);
+            assertThat(index.countForTownScanning(town.id())).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("works on a shape that a chunk-at-a-time release would refuse")
+        void worksWhereALoopWouldNot() {
+            // The reason this is not a loop over unclaim(). A corridor town cannot give up its
+            // middle chunk - UNCLAIM_WOULD_DISCONNECT - so releasing one at a time gets stuck on
+            // the first one that is not an end. Going straight to the homeblock never asks.
+            settle(at(1, 0), at(2, 0));
+            final Town town = riftholm;
+            assertThat(territory.unclaim(MAYOR, town.id(), at(1, 0)).join().denial())
+                    .as("the middle of a corridor, one at a time")
+                    .contains(ChangeDenial.UNCLAIM_WOULD_DISCONNECT);
+
+            assertThat(territory.unclaimAll(MAYOR, town.id()).join().succeeded()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a town that holds only its homeblock has nothing to release")
+        void nothingToRelease() {
+            settle();
+            final Town town = riftholm;
+
+            assertThat(territory.unclaimAll(MAYOR, town.id()).join().denial())
+                    .contains(ChangeDenial.NOTHING_TO_CHANGE);
+        }
+
+        @Test
+        @DisplayName("each released chunk's own flag overrides go with it")
+        void overridesGoToo() {
+            // Otherwise the override comes back into force against whoever claims the chunk next:
+            // a per-chunk override is keyed on the chunk, not on the town that set it.
+            settle(at(1, 0));
+            final Town town = riftholm;
+            final var target = net.riftbreaker.rifttowny.domain.flag.FlagTarget.claim(at(1, 0));
+            store.inTransaction(t -> {
+                t.flags().set(net.riftbreaker.rifttowny.domain.flag.FlagOverride.of(
+                        target, ProtectionFlag.BUILD, Relationship.VISITOR, true, MAYOR,
+                        CLOCK.instant()));
+                return null;
+            }).join();
+
+            territory.unclaimAll(MAYOR, town.id()).join();
+
+            assertThat(store.inTransaction(t -> t.flags().of(target)).join()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a single unclaim takes its chunk's overrides too")
+        void singleUnclaimClearsOverrides() {
+            // The same leak, on the path that had it first.
+            settle(at(1, 0));
+            final Town town = riftholm;
+            final var target = net.riftbreaker.rifttowny.domain.flag.FlagTarget.claim(at(1, 0));
+            store.inTransaction(t -> {
+                t.flags().set(net.riftbreaker.rifttowny.domain.flag.FlagOverride.of(
+                        target, ProtectionFlag.BUILD, Relationship.VISITOR, true, MAYOR,
+                        CLOCK.instant()));
+                return null;
+            }).join();
+
+            territory.unclaim(MAYOR, town.id(), at(1, 0)).join();
+
+            assertThat(store.inTransaction(t -> t.flags().of(target)).join()).isEmpty();
         }
     }
 }

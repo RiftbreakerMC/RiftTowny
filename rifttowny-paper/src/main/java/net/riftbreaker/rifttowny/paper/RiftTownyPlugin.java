@@ -369,7 +369,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.townRoleService = new net.riftbreaker.rifttowny.domain.service.TownRoleService(
                     civicStore, clock, lockedPermissions(), civicCacheService);
             this.territoryService = new net.riftbreaker.rifttowny.domain.service.TerritoryService(
-                    civicStore, clock, territoryIndex, settings.prices(), economyAdapter);
+                    civicStore, clock, territoryIndex, settings.prices(), economyAdapter,
+                    flagOverrides);
             this.nationRoleService =
                     new net.riftbreaker.rifttowny.domain.service.NationRoleService(
                             civicStore, clock, lockedPermissions());

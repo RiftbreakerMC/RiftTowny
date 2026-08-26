@@ -49,6 +49,7 @@ town:
   info-header: '<gray>Town <white><town></white></gray>'
   info-line: '  <gray><label></gray> <white><value></white>'
   claimed: '<green>Claimed <white><chunk></white> as <white><kind></white>. Your town now holds <white><total></white> chunk(s).</green>'
+  unclaimed-all: '<yellow>Released <white><chunks></white> chunk(s). <white><town></white> now holds only its home chunk.</yellow>'
   unclaimed: '<yellow>Released <white><chunk></white>.</yellow>'
   bank-header: '<gray>Treasury of <white><town></white> <dark_gray>-</dark_gray> <white><balance></white></gray>'
   bank-line: '  <white><movement></white> <dark_gray>-</dark_gray> <gray><by></gray>'

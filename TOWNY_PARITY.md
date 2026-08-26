@@ -61,7 +61,7 @@ rows as the truth.
 | `/town set mayor <player>` | `/town mayor` | DONE |
 | `/town delete` | `/town delete` | DONE — and leaves a ruin |
 | `/town claim`, `/town claim outpost` | `/town claim [outpost]` | DONE |
-| `/town unclaim`, `/town unclaim all` | `/town unclaim` | PARTIAL — no `all` |
+| `/town unclaim`, `/town unclaim all` | `/town unclaim [all]` | DONE — `all` keeps the homeblock and releases the rest in one transaction, which is what lets it work on shapes a chunk-at-a-time release would refuse |
 | `/town set homeblock` | `/town homeblock` | DONE |
 | `/town set spawn` / `/town spawn` | `/town setspawn`, `/town spawn [town]`, `/town delspawn` | DONE — priced, with travel to another town's spawn when that town has made it public |
 | Spawn warmup, cooldown, cancel on move/damage | Warmup and cooldown, cancelled by moving a block or being hit | DONE |

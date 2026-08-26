@@ -215,8 +215,9 @@ public final class TownCommands {
                         .runs(this::claim, Surface.CHAT))
                 .child(CommandNode.action("unclaim")
                         .permission("rifttowny.town.unclaim")
-                        .usage("town unclaim")
-                        .describedAs("Release the chunk you are standing in")
+                        .usage("town unclaim [all]")
+                        .describedAs("Release the chunk you are standing in, or all but the homeblock")
+                        .completer((actor, args) -> args.size() <= 1 ? List.of("all") : List.of())
                         .runs(this::unclaim, Surface.CHAT))
                 .child(CommandNode.action("preview")
                         .permission("rifttowny.town.claim")
@@ -1178,7 +1179,33 @@ public final class TownCommands {
         }));
     }
 
+    /**
+     * Releasing everything but the homeblock.
+     *
+     * <p>No confirmation word, unlike the import. This is reversible - the land can be claimed
+     * again, and the refund is what was paid for it - so a word to type would be ceremony rather
+     * than a safeguard. The message says how much went, which is what tells somebody who typed it
+     * by accident that they did.</p>
+     */
+    private void unclaimAll(final CommandActor actor) {
+        withTown(actor, (who, town) ->
+                reply(actor, territory.unclaimAll(who, town.id()), released -> {
+                    messages.send(actor::send, MessageKey.TOWN_UNCLAIMED_ALL,
+                            MessageService.value("chunks", released.count()),
+                            MessageService.value("town", town.name().display()));
+                    then(actor, spawns.clearIfOutsideTerritory(town.id()), lost -> {
+                        if (Boolean.TRUE.equals(lost)) {
+                            messages.send(actor::send, MessageKey.TOWN_SPAWN_LOST_WITH_LAND);
+                        }
+                    });
+                }));
+    }
+
     private void unclaim(final CommandActor actor, final List<String> args) {
+        if (!args.isEmpty() && "all".equalsIgnoreCase(args.getFirst())) {
+            unclaimAll(actor);
+            return;
+        }
         whereTheyStand(actor, chunk -> withTown(actor, (who, town) ->
                 reply(actor, territory.unclaim(who, town.id(), chunk), released -> {
                     messages.send(actor::send, MessageKey.TOWN_UNCLAIMED,

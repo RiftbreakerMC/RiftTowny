@@ -119,6 +119,39 @@ public final class TownClaims {
                 new DomainEvent.ChunkClaimed(town, chunk.toString(), kind.name()));
     }
 
+
+    /**
+     * Releases everything except the homeblock.
+     *
+     * <p><strong>Not a loop over {@link #unclaim}, and it cannot be one.</strong> A single unclaim
+     * refuses anything that would disconnect the remaining land, so releasing a town's chunks one at
+     * a time refuses on the first chunk of almost every real town shape — a ring, a cross, anything
+     * with a corridor. Going straight to the end state avoids the question entirely: one chunk is
+     * connected by definition, so the result is always valid however the town was shaped.</p>
+     *
+     * <p>The homeblock is what is kept rather than something the caller chooses, because a town
+     * without one is a state the aggregate refuses to be in.</p>
+     */
+    public Outcome<TownClaims> unclaimAllButHomeblock() {
+        final Optional<Claim> home = homeblock();
+        // Nothing to release when the homeblock is all there is - and a town holding land with no
+        // homeblock at all is a repair case, where releasing everything is not the repair.
+        if (home.isEmpty() || claims.size() == 1) {
+            return Outcome.denied(ChangeDenial.NOTHING_TO_CHANGE);
+        }
+
+        final Map<ChunkKey, Claim> kept = new LinkedHashMap<>();
+        kept.put(home.get().chunk(), home.get());
+
+        final List<DomainEvent> released = new java.util.ArrayList<>();
+        for (final Claim claim : claims.values()) {
+            if (!claim.chunk().equals(home.get().chunk())) {
+                released.add(new DomainEvent.ChunkUnclaimed(town, claim.chunk().toString()));
+            }
+        }
+        return Outcome.applied(
+                new TownClaims(town, kept), released.toArray(new DomainEvent[0]));
+    }
     /**
      * Releases a chunk.
      *

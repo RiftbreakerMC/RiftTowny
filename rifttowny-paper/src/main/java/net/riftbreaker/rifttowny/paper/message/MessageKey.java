@@ -135,6 +135,10 @@ public enum MessageKey {
     TOWN_UNCLAIMED("town.unclaimed",
             "<yellow>Released <white><chunk></white>.</yellow>"),
 
+    TOWN_UNCLAIMED_ALL("town.unclaimed-all",
+            "<yellow>Released <white><chunks></white> chunk(s). <white><town></white> now holds "
+                    + "only its home chunk.</yellow>"),
+
     TOWN_BANK_HEADER("town.bank-header",
             "<gray>Treasury of <white><town></white> <dark_gray>-</dark_gray> "
                     + "<white><balance></white></gray>"),

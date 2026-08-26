@@ -18,6 +18,7 @@ import net.riftbreaker.rifttowny.domain.territory.ClaimPreview;
 import net.riftbreaker.rifttowny.domain.territory.TownClaims;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -42,6 +43,7 @@ public final class TerritoryService {
     private final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index;
     private final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices;
     private final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet;
+    private final net.riftbreaker.rifttowny.domain.flag.FlagOverrides overrides;
 
     /**
      * @param index kept current by this service, and the only thing a protection listener is
@@ -73,11 +75,30 @@ public final class TerritoryService {
             final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
             final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet
     ) {
+        this(store, clock, index, prices, wallet,
+                net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty());
+    }
+
+    /**
+     * @param overrides the in-memory flag set, so a released chunk's own rules go with it.
+     *        A per-chunk override is keyed on the chunk and not on its owner, so one left behind
+     *        comes back into force against whoever claims that chunk next — which is a rule the new
+     *        owner never set and cannot see
+     */
+    public TerritoryService(
+            final CivicStore store,
+            final Clock clock,
+            final net.riftbreaker.rifttowny.domain.territory.TerritoryIndex index,
+            final net.riftbreaker.rifttowny.domain.bank.CivicPrices prices,
+            final net.riftbreaker.rifttowny.domain.bank.PlayerWallet wallet,
+            final net.riftbreaker.rifttowny.domain.flag.FlagOverrides overrides
+    ) {
         this.store = Objects.requireNonNull(store, "store");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.index = Objects.requireNonNull(index, "index");
         this.prices = Objects.requireNonNull(prices, "prices");
         this.wallet = Objects.requireNonNull(wallet, "wallet");
+        this.overrides = Objects.requireNonNull(overrides, "overrides");
     }
 
     /**
@@ -155,15 +176,91 @@ public final class TerritoryService {
                     net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.UNCLAIM_REFUND,
                     describe(chunk));
 
+            // The chunk's own rules go with it. An override is keyed on the chunk rather than on
+            // its owner, so one left behind comes back into force against whoever claims this
+            // chunk next - a rule the new owner never set and has no way to see.
+            transaction.flags().clearAll(
+                    net.riftbreaker.rifttowny.domain.flag.FlagTarget.claim(chunk));
             transaction.claims().delete(chunk);
             transaction.publishAll(outcome.events(), correlation("unclaim", townId));
             return chunk;
         }).thenApply(result -> {
-            result.value().ifPresent(index::remove);
+            result.value().ifPresent(released -> {
+                index.remove(released);
+                overrides.clearAll(
+                        net.riftbreaker.rifttowny.domain.flag.FlagTarget.claim(released));
+            });
             return result;
         });
     }
 
+
+    /**
+     * Releases everything but the homeblock. Requires {@link Permission#UNCLAIM_LAND}.
+     *
+     * <p>One transaction and one refund. The refund is paid as a single movement naming the count
+     * rather than one per chunk, because a five-hundred-chunk release would otherwise write five
+     * hundred ledger rows saying the same thing on the same tick, and a treasury history nobody can
+     * read is the same as no history.</p>
+     *
+     * <p>Each chunk's own flag overrides go with it, for the reason a disband sweeps them: an
+     * override is keyed on the chunk rather than on its owner, so one left behind comes back into
+     * force against whoever claims that chunk next.</p>
+     */
+    public CompletableFuture<ServiceResult<Released>> unclaimAll(
+            final ResidentId actor, final TownId townId) {
+        Objects.requireNonNull(townId, "townId");
+
+        return transaction(townId, actor, Permission.UNCLAIM_LAND, (transaction, town) -> {
+            final TownClaims claims = load(transaction, townId);
+            final List<ChunkKey> releasing = claims.all().stream()
+                    .filter(claim -> claim.kind() != ClaimKind.HOMEBLOCK)
+                    .map(Claim::chunk)
+                    .toList();
+
+            final Outcome<TownClaims> outcome = claims.unclaimAllButHomeblock();
+            require(outcome);
+
+            final var refund = prices.claimRefund(currency());
+            if (!refund.isZero()) {
+                civicPay(transaction, town,
+                        net.riftbreaker.rifttowny.domain.bank.Money.of(
+                                refund.amount().multiply(
+                                        java.math.BigDecimal.valueOf(releasing.size())),
+                                refund.currency()),
+                        net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.UNCLAIM_REFUND,
+                        releasing.size() + " chunk(s)");
+            }
+
+            for (final ChunkKey chunk : releasing) {
+                transaction.flags().clearAll(
+                        net.riftbreaker.rifttowny.domain.flag.FlagTarget.claim(chunk));
+                transaction.claims().delete(chunk);
+            }
+            transaction.publishAll(outcome.events(), correlation("unclaim-all", townId));
+            return new Released(townId, releasing);
+        }).thenApply(result -> {
+            result.value().ifPresent(released -> released.chunks().forEach(chunk -> {
+                index.remove(chunk);
+                overrides.clearAll(
+                        net.riftbreaker.rifttowny.domain.flag.FlagTarget.claim(chunk));
+            }));
+            return result;
+        });
+    }
+
+    /** What a bulk release gave up. */
+    public record Released(TownId town, List<ChunkKey> chunks) {
+
+        public Released {
+            Objects.requireNonNull(town, "town");
+            chunks = List.copyOf(chunks);
+        }
+
+        public int count() {
+            return chunks.size();
+        }
+    }
     /**
      * Moves the homeblock to another chunk the town owns. Requires {@link Permission#SET_HOMEBLOCK}.
      *
