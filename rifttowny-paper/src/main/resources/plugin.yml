@@ -40,7 +40,7 @@ commands:
   town:
     aliases: [t]
     description: Found and manage a town.
-    usage: /town <new|info|list|online|merge|trust|outlaw|map|bank|deposit|withdraw|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|spawn|setspawn|reclaim|delete|role|flag>
+    usage: /town <new|info|list|online|purge|merge|trust|outlaw|map|bank|deposit|withdraw|add|uninvite|invites|accept|deny|kick|leave|rename|mayor|claim|unclaim|preview|homeblock|spawn|setspawn|reclaim|delete|role|flag>
   resident:
     aliases: [res]
     description: Look at a player's town record.

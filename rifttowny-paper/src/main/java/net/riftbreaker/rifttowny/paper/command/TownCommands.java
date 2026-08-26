@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -52,6 +53,14 @@ import java.util.function.Consumer;
  * parity test wants to see: no action is reachable only through a menu.</p>
  */
 public final class TownCommands {
+
+    /**
+     * The word that turns a preview into a purge.
+     *
+     * <p>The same word the importer uses, for the same reason: these are the two commands that
+     * change many rows on one keystroke, and one word to learn is better than two.</p>
+     */
+    private static final String CONFIRM = "confirm";
 
     private final TownService towns;
     private final TownRoleService roles;
@@ -277,6 +286,13 @@ public final class TownCommands {
                 .child(flagTree())
                 .child(trustTree())
                 .child(mergeTree())
+                .child(CommandNode.action("purge")
+                        .permission("rifttowny.town.kick")
+                        .usage("town purge <days> [confirm]")
+                        .describedAs("Remove residents nobody has seen for that long")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of("30", "60", "90") : List.of())
+                        .runs(this::purge, Surface.CHAT))
                 .child(outlawTree())
                 .child(settingsTree())
                 .build();
@@ -344,6 +360,76 @@ public final class TownCommands {
 
 
 
+
+    /**
+     * {@code /town purge <days> [confirm]} — clearing out residents nobody has seen.
+     *
+     * <p>A preview unless the confirmation word is typed, like the importer, and for the same
+     * reason: this is the other command in the plugin that changes many rows on one keystroke. The
+     * preview lists who would go, so the number a mayor confirms is one they have read names
+     * against.</p>
+     *
+     * <p>The day count is validated here rather than in the service, so a mistyped number is a
+     * message about the number instead of a refusal about a town. One day is the floor: a purge with
+     * no floor is a way to empty a town by typing a zero.</p>
+     */
+    private void purge(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "town purge <days> [" + CONFIRM + ']');
+            return;
+        }
+        final OptionalInt days = positiveDays(args.getFirst());
+        if (days.isEmpty()) {
+            messages.send(actor::send, MessageKey.TOWN_PURGE_BAD_PERIOD,
+                    MessageService.value("input", args.getFirst()));
+            return;
+        }
+        final boolean apply = args.size() > 1 && CONFIRM.equalsIgnoreCase(args.get(1));
+        withTown(actor, (who, town) ->
+                reply(actor, towns.purge(who, town.id(), java.time.Duration.ofDays(days.getAsInt()), apply), purged -> {
+                    if (purged.count() == 0) {
+                        messages.send(actor::send, MessageKey.TOWN_PURGE_NOBODY,
+                                MessageService.value("days", days.getAsInt()));
+                    } else if (purged.applied()) {
+                        messages.send(actor::send, MessageKey.TOWN_PURGED,
+                                MessageService.value("count", purged.count()),
+                                MessageService.value("town", town.name().display()));
+                    } else {
+                        messages.send(actor::send, MessageKey.TOWN_PURGE_PREVIEW,
+                                MessageService.value("count", purged.count()),
+                                MessageService.value("days", days.getAsInt()));
+                        messages.sendRaw(actor::send, MessageKey.TOWN_PURGE_PREVIEW_LINE,
+                                MessageService.value("residents", nameList(purged.removed())));
+                        messages.sendRaw(actor::send, MessageKey.TOWN_PURGE_CONFIRM,
+                                MessageService.value("command",
+                                        "/town purge " + days.getAsInt() + ' ' + CONFIRM));
+                    }
+                    if (purged.protectedByRank() > 0) {
+                        // Said out loud rather than left as a silent difference between the number
+                        // they expected and the number they got.
+                        messages.sendRaw(actor::send, MessageKey.TOWN_PURGE_OUTRANKED,
+                                MessageService.value("count", purged.protectedByRank()));
+                    }
+                }));
+    }
+
+    /** Names, sorted, for a preview a mayor is meant to read before confirming. */
+    private String nameList(final List<ResidentId> who) {
+        final List<String> named = new ArrayList<>(who.size());
+        who.forEach(one -> named.add(names.describe(one)));
+        named.sort(String.CASE_INSENSITIVE_ORDER);
+        return String.join(", ", named);
+    }
+
+    /** A whole number of days, at least one. Anything else is a typo worth reporting. */
+    private static OptionalInt positiveDays(final String raw) {
+        try {
+            final int days = Integer.parseInt(raw.trim());
+            return days >= 1 ? OptionalInt.of(days) : OptionalInt.empty();
+        } catch (final NumberFormatException notANumber) {
+            return OptionalInt.empty();
+        }
+    }
     /**
      * {@code /town merge} — two towns becoming one.
      *

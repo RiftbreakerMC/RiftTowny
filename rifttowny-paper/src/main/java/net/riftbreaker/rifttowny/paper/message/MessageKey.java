@@ -83,6 +83,33 @@ public enum MessageKey {
     TOWN_LEFT("town.left",
             "<yellow>You left <white><town></white>.</yellow>"),
 
+    TOWN_PURGE_BAD_PERIOD("town.purge-bad-period",
+            "<red><white><input></white> is not a number of days. One or more, and a purge with "
+                    + "no floor is a way to empty a town by typing a zero.</red>"),
+
+    TOWN_PURGE_NOBODY("town.purge-nobody",
+            "<gray>Nobody in your town has been away for <white><days></white> day(s).</gray>"),
+
+    /** A look, not a change. The wording has to make that unmistakable. */
+    TOWN_PURGE_PREVIEW("town.purge-preview",
+            "<yellow><white><count></white> resident(s) have not been seen for "
+                    + "<white><days></white> day(s). Nothing has changed yet.</yellow>"),
+
+    TOWN_PURGE_PREVIEW_LINE("town.purge-preview-line",
+            "  <gray><residents></gray>"),
+
+    TOWN_PURGE_CONFIRM("town.purge-confirm",
+            "  <gray>Run <white><command></white> to remove them.</gray>"),
+
+    TOWN_PURGED("town.purged",
+            "<yellow>Removed <white><count></white> resident(s) from "
+                    + "<white><town></white>.</yellow>"),
+
+    /** Said out loud rather than left as a silent gap between the expected and actual count. */
+    TOWN_PURGE_OUTRANKED("town.purge-outranked",
+            "  <gray><white><count></white> were left alone because you do not outrank "
+                    + "them.</gray>"),
+
     TOWN_KICKED("town.kicked",
             "<yellow><white><resident></white> was removed from <white><town></white>.</yellow>"),
 

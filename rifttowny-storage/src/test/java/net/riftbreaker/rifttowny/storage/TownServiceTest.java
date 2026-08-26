@@ -753,4 +753,163 @@ class TownServiceTest extends SqliteFixture {
             assertThat(residents.find(CITIZEN).join().orElseThrow().town()).contains(ashford.id());
         }
     }
+
+    /**
+     * Purging residents nobody has seen.
+     *
+     * <p>Every test here is really about an exclusion. The removal itself is the kick path repeated,
+     * which is covered above; what is specific to a purge is who it must refuse to touch, because
+     * each of those is a way to wreck a town with one number.</p>
+     */
+    @Nested
+    @DisplayName("purging the inactive")
+    class Purging {
+
+        private Town riftholm;
+
+        @BeforeEach
+        void aTownWithStragglers() {
+            seeAsNewcomer(MAYOR, "Mayor");
+            seeAsNewcomer(OFFICER, "Officer");
+            seeAsNewcomer(CITIZEN, "Citizen");
+            riftholm = foundRiftholm();
+            service.join(MAYOR, OFFICER, riftholm.id()).join();
+            service.join(MAYOR, CITIZEN, riftholm.id()).join();
+        }
+
+        /** Backdates somebody's last login, which is the only thing a purge reads. */
+        private void lastSeen(final ResidentId who, final java.time.Duration ago) {
+            final Resident resident = residents.find(who).join().orElseThrow();
+            residents.save(resident.seenAt(CLOCK.instant().minus(ago))).join();
+        }
+
+        @Test
+        @DisplayName("removes somebody past the cutoff and leaves somebody inside it")
+        void removesTheInactive() {
+            lastSeen(CITIZEN, java.time.Duration.ofDays(40));
+            lastSeen(OFFICER, java.time.Duration.ofDays(3));
+
+            final var purged = service.purge(
+                    MAYOR, riftholm.id(), java.time.Duration.ofDays(30), true).join();
+
+            assertThat(purged.succeeded()).as("%s", purged.denial()).isTrue();
+            assertThat(purged.value().orElseThrow().removed()).containsExactly(CITIZEN);
+            final Town after = towns.find(riftholm.id()).join().orElseThrow();
+            assertThat(after.residents()).containsExactlyInAnyOrder(MAYOR, OFFICER);
+            assertThat(residents.find(CITIZEN).join().orElseThrow().town()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a preview changes nothing, and reports what the real one would do")
+        void previewChangesNothing() {
+            // The importer previewed "0 towns" and then imported forty, because the counting lived
+            // in the writing pass. Here both numbers come from the same pass by construction.
+            lastSeen(CITIZEN, java.time.Duration.ofDays(40));
+
+            final var preview = service.purge(
+                    MAYOR, riftholm.id(), java.time.Duration.ofDays(30), false).join();
+
+            assertThat(preview.value().orElseThrow().applied()).isFalse();
+            assertThat(preview.value().orElseThrow().removed()).containsExactly(CITIZEN);
+            assertThat(towns.find(riftholm.id()).join().orElseThrow().residents())
+                    .containsExactlyInAnyOrder(MAYOR, OFFICER, CITIZEN);
+
+            final var real = service.purge(
+                    MAYOR, riftholm.id(), java.time.Duration.ofDays(30), true).join();
+            assertThat(real.value().orElseThrow().removed())
+                    .as("the preview and the purge must agree")
+                    .isEqualTo(preview.value().orElseThrow().removed());
+        }
+
+        @Test
+        @DisplayName("the mayor is never purged, however long they have been away")
+        void theMayorSurvives() {
+            // Town.release refuses the mayor anyway, but hitting that inside the loop would roll
+            // back the whole purge - and a mayor tidying up their own town while inactive
+            // themselves is an ordinary way to use this.
+            lastSeen(MAYOR, java.time.Duration.ofDays(400));
+            lastSeen(CITIZEN, java.time.Duration.ofDays(40));
+
+            final var purged = service.purge(
+                    MAYOR, riftholm.id(), java.time.Duration.ofDays(30), true).join();
+
+            assertThat(purged.value().orElseThrow().removed()).containsExactly(CITIZEN);
+            assertThat(towns.find(riftholm.id()).join().orElseThrow().residents()).contains(MAYOR);
+        }
+
+        @Test
+        @DisplayName("somebody the actor does not outrank is skipped and counted")
+        void outrankedAreSkipped() {
+            // Without this an officer could clear out their co-officers by choosing a number that
+            // happens to catch them. Skipped rather than refused, so one protected resident does
+            // not make the command useless on the town that most needs it.
+            final ResidentId junior = ResidentId.of(java.util.UUID.randomUUID());
+            seeAsNewcomer(junior, "Junior");
+            service.join(MAYOR, junior, riftholm.id()).join();
+            lastSeen(CITIZEN, java.time.Duration.ofDays(40));
+            lastSeen(junior, java.time.Duration.ofDays(40));
+            // The officer may kick, but CITIZEN outranks them and junior does not.
+            giveRole(riftholm.id(), OFFICER, 500, Permission.KICK_RESIDENT);
+            giveRole(riftholm.id(), CITIZEN, 600);
+
+            final var purged = service.purge(
+                    OFFICER, riftholm.id(), java.time.Duration.ofDays(30), true).join();
+
+            assertThat(purged.succeeded()).as("%s", purged.denial()).isTrue();
+            assertThat(purged.value().orElseThrow().removed()).containsExactly(junior);
+            assertThat(purged.value().orElseThrow().protectedByRank()).isEqualTo(1);
+            assertThat(towns.find(riftholm.id()).join().orElseThrow().residents())
+                    .contains(CITIZEN);
+        }
+
+        @Test
+        @DisplayName("a purge that catches nobody is not a failure")
+        void nobodyToPurge() {
+            final var purged = service.purge(
+                    MAYOR, riftholm.id(), java.time.Duration.ofDays(30), true).join();
+
+            assertThat(purged.succeeded()).isTrue();
+            assertThat(purged.value().orElseThrow().count()).isZero();
+        }
+
+        @Test
+        @DisplayName("somebody without the permission cannot purge at all")
+        void needsThePermission() {
+            lastSeen(CITIZEN, java.time.Duration.ofDays(40));
+
+            final var refused = service.purge(
+                    CITIZEN, riftholm.id(), java.time.Duration.ofDays(30), true).join();
+
+            assertThat(refused.denial()).contains(ChangeDenial.MISSING_PERMISSION);
+            assertThat(towns.find(riftholm.id()).join().orElseThrow().residents()).contains(CITIZEN);
+        }
+
+        @Test
+        @DisplayName("a purged resident's plots go back to the town")
+        void plotsAreReleased() {
+            // The same rule a kick applies: a plot is authority over a square inside the town, and
+            // somebody who is no longer a member should not keep it.
+            lastSeen(CITIZEN, java.time.Duration.ofDays(40));
+            final var chunk = new ChunkKey(WORLD, 7, 7);
+            store.inTransaction(t -> {
+                t.claims().insert(net.riftbreaker.rifttowny.domain.territory.Claim.of(
+                        chunk, riftholm.id(),
+                        net.riftbreaker.rifttowny.domain.territory.ClaimKind.ORDINARY,
+                        CLOCK.instant()));
+                return null;
+            }).join();
+            store.inTransaction(t -> {
+                final var claim = t.claims().at(chunk).orElseThrow();
+                t.claims().updatePlot(new net.riftbreaker.rifttowny.domain.territory.Claim(
+                        claim.id(), claim.chunk(), claim.town(), claim.kind(), claim.type(),
+                        CITIZEN, claim.claimedAt()));
+                return null;
+            }).join();
+
+            service.purge(MAYOR, riftholm.id(), java.time.Duration.ofDays(30), true).join();
+
+            assertThat(store.inTransaction(t -> t.claims().at(chunk)).join().orElseThrow().owner())
+                    .isNull();
+        }
+    }
 }

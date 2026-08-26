@@ -24,6 +24,7 @@ import net.riftbreaker.rifttowny.domain.store.CivicTransaction;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -718,6 +719,119 @@ public final class TownService {
         });
     }
 
+
+    /**
+     * Removes residents who have not been seen since a cutoff. Requires
+     * {@link Permission#KICK_RESIDENT}.
+     *
+     * <p><strong>A preview by default.</strong> {@code apply} false does every check and every
+     * exclusion and then returns the list without writing anything, so the count a mayor is shown is
+     * produced by the same pass that would do the work rather than by a second one that could
+     * disagree with it. That is the rule the importer arrived at after previewing "0 towns" and then
+     * importing forty.</p>
+     *
+     * <p>Two people are never removed, and both are skipped rather than refused, because a purge
+     * that failed outright because of one protected resident would be useless on the towns that most
+     * need it:</p>
+     *
+     * <ul>
+     *   <li><strong>The mayor</strong>, whatever their last login. {@link Town#release} refuses them
+     *       anyway, but hitting that inside the loop would roll back the whole purge — and a mayor
+     *       purging their own town while inactive themselves is an ordinary way to use this.</li>
+     *   <li><strong>Anybody the actor does not outrank</strong>, by the same rule a single kick
+     *       applies. Without it an officer could clear out their co-officers by choosing a number
+     *       that happens to catch them.</li>
+     * </ul>
+     *
+     * @param inactiveFor how long since a resident was last seen makes them a candidate. Measured
+     *        from this service's own clock, so "now" is decided in one place
+     * @param apply false to look without touching anything
+     */
+    public CompletableFuture<ServiceResult<Purge>> purge(
+            final ResidentId actor,
+            final TownId townId,
+            final Duration inactiveFor,
+            final boolean apply
+    ) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(townId, "townId");
+        Objects.requireNonNull(inactiveFor, "inactiveFor");
+        final Instant before = clock.instant().minus(inactiveFor);
+
+        return refreshing(transaction(transaction -> {
+            Town town = town(transaction, townId);
+            requirePermission(transaction, town, actor, Permission.KICK_RESIDENT);
+
+            final RoleBook book = roleBook(transaction, townId);
+            final int actorRank = book.rankOf(actor, town.standingOf(actor));
+
+            final List<ResidentId> removing = new java.util.ArrayList<>();
+            int protectedByRank = 0;
+            for (final Resident resident : transaction.residents().findByTown(townId)) {
+                if (!resident.lastSeenAt().isBefore(before) || resident.id().equals(town.mayor())) {
+                    continue;
+                }
+                if (actorRank <= book.rankOf(resident.id(), town.standingOf(resident.id()))) {
+                    protectedByRank++;
+                    continue;
+                }
+                removing.add(resident.id());
+            }
+
+            if (!apply || removing.isEmpty()) {
+                return new Purge(townId, List.copyOf(removing), protectedByRank, false);
+            }
+
+            for (final ResidentId who : removing) {
+                // Every one of the five things a departure touches, because a purge is a departure
+                // repeated and nothing about it is special. Missing one here would be the same bug
+                // as missing it in a kick, except forty times over and on people who are not
+                // logged in to notice.
+                final Resident resident = resident(transaction, who);
+                final Outcome<Town> released = town.release(who, false);
+                town = require(released);
+                transaction.residents().save(require(resident.leaveTown()));
+                transaction.publishAll(released.events(), correlation("purge", townId));
+
+                transaction.roles().find(OrganisationScope.TOWN, townId.value()).ifPresent(roles -> {
+                    final Outcome<RoleBook> stripped = roles.unassignAll(who);
+                    stripped.value().ifPresent(transaction.roles()::save);
+                    transaction.publishAll(stripped.events(), correlation("purge", townId));
+                });
+                PlotService.releaseHeldPlots(transaction, index, townId, who);
+            }
+
+            // The nation roles of everybody who left, in one call rather than one per person: they
+            // all stop being citizens at the same moment and CitizenRoles takes the whole list.
+            final Town finished = town;
+            finished.nation().ifPresent(nation -> transaction.publishAll(
+                    CitizenRoles.revoke(transaction, nation, removing),
+                    correlation("purge", townId)));
+
+            transaction.towns().save(town);
+            return new Purge(townId, List.copyOf(removing), protectedByRank, true);
+        }), Purge::town);
+    }
+
+    /**
+     * What a purge did, or would do.
+     *
+     * @param removed who went, or who would go on a preview
+     * @param protectedByRank how many were skipped because the actor does not outrank them
+     * @param applied false when this was a look rather than a change
+     */
+    public record Purge(
+            TownId town, List<ResidentId> removed, int protectedByRank, boolean applied) {
+
+        public Purge {
+            Objects.requireNonNull(town, "town");
+            removed = List.copyOf(removed);
+        }
+
+        public int count() {
+            return removed.size();
+        }
+    }
     private CompletableFuture<ServiceResult<Town>> release(
             final ResidentId who,
             final TownId townId,
