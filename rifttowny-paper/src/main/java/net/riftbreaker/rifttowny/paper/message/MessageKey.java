@@ -626,6 +626,23 @@ public enum MessageKey {
     NATION_ONLINE_NONE("nation.online-none",
             "<gray>Nobody from <white><nation></white> is online.</gray>"),
 
+    RESIDENT_NOTICES_SET("resident.notices-set",
+            "<green>Territory notices: <white><value></white>.</green>"),
+
+    RESIDENT_NOTICES_DEFAULT("resident.notices-default",
+            "<green>Territory notices follow the server again.</green>"),
+
+    RESIDENT_NOTICES_NOW("resident.notices-now",
+            "<gray>Territory notices: <white><value></white>.</gray>"),
+
+    RESIDENT_NOTICES_UNKNOWN("resident.notices-unknown",
+            "<red><white><input></white> is not one of: <white><options></white></red>"),
+
+    /** Stored, and then told the truth: the setting cannot do anything on this server. */
+    RESIDENT_NOTICES_DISABLED_HERE("resident.notices-disabled-here",
+            "  <yellow>This server does not send territory notices, so this will not "
+                    + "change anything here.</yellow>"),
+
     RESIDENT_HEADER("resident.header",
             "<dark_gray>---</dark_gray> <white><resident></white> <dark_gray>---</dark_gray>"),
 

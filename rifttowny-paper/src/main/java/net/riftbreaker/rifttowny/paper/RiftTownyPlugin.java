@@ -85,6 +85,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private net.riftbreaker.rifttowny.domain.service.DiplomacyService diplomacy;
     private net.riftbreaker.rifttowny.domain.justice.Outlaws outlawBook;
     private net.riftbreaker.rifttowny.domain.service.OutlawService outlawService;
+    private net.riftbreaker.rifttowny.domain.resident.ResidentPreferences residentPreferences;
+    private net.riftbreaker.rifttowny.domain.service.PreferenceService preferenceService;
     private net.riftbreaker.rifttowny.domain.chat.ActiveChannels activeChannels;
     private net.riftbreaker.rifttowny.domain.chat.ChannelAudience channelAudience;
     private net.riftbreaker.rifttowny.integrations.chat.RiftChatAdapter chatAdapter;
@@ -237,7 +239,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 nationRepository, directory, diplomacy, bankService, messages, denialText).tree());
 
         registerTree("resident", new net.riftbreaker.rifttowny.paper.command.ResidentCommands(
-                residentRepository, plotService, directory, residentNames, messages, clock).tree());
+                residentRepository, plotService, directory, residentNames, preferenceService,
+                settings.territoryNotices(), messages, clock).tree());
 
         final net.riftbreaker.rifttowny.paper.chat.ChannelRenderer channelRenderer =
                 new net.riftbreaker.rifttowny.paper.chat.ChannelRenderer(
@@ -312,6 +315,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.nationCache = net.riftbreaker.rifttowny.domain.civic.NationCache.empty();
             this.diplomacyBook = net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty();
             this.outlawBook = net.riftbreaker.rifttowny.domain.justice.Outlaws.empty();
+            this.residentPreferences =
+                    net.riftbreaker.rifttowny.domain.resident.ResidentPreferences.empty();
             this.civicCacheService = new net.riftbreaker.rifttowny.domain.service.CivicCacheService(
                     civicStore, civicCache, nationCache, diplomacyBook, outlawBook,
                     getLogger()::warning);
@@ -397,6 +402,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     civicStore, clock, diplomacyBook);
             this.outlawService = new net.riftbreaker.rifttowny.domain.service.OutlawService(
                     civicStore, clock, outlawBook);
+            this.preferenceService = new net.riftbreaker.rifttowny.domain.service.PreferenceService(
+                    civicStore, clock, residentPreferences);
             this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();
             this.activeChannels = net.riftbreaker.rifttowny.domain.chat.ActiveChannels.empty();
             this.channelAudience = new net.riftbreaker.rifttowny.domain.chat.ChannelAudience(
@@ -451,6 +458,10 @@ public final class RiftTownyPlugin extends JavaPlugin {
             final int outlawries = outlawService.loadAll()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
             getLogger().info("Loaded " + outlawries + " outlawry(ies) into memory.");
+
+            final int chosen = preferenceService.loadAll()
+                    .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
+            getLogger().info("Loaded " + chosen + " player preference(s) into memory.");
 
             final int named = residentNameService.loadAll()
                     .orTimeout(30L, java.util.concurrent.TimeUnit.SECONDS).join();
@@ -521,7 +532,8 @@ public final class RiftTownyPlugin extends JavaPlugin {
                             residentNames,
                             java.time.Clock.systemUTC(),
                             settings.territoryNoticesOnActionBar(),
-                            positions),
+                            positions,
+                            residentPreferences),
                     this);
         }
     }

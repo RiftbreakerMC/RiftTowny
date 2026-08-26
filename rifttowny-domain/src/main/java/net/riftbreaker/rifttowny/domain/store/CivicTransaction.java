@@ -59,6 +59,32 @@ public interface CivicTransaction {
     /** Who each town has declared unwelcome. */
     OutlawStore outlaws();
 
+    /** What each player has chosen for themselves. */
+    PreferenceStore preferences();
+
+    /**
+     * Player preferences.
+     *
+     * <p>A row exists only for somebody who has chosen something, so {@link #clear} deletes rather
+     * than writing a default. The absence is the state.</p>
+     */
+    interface PreferenceStore {
+
+        /** Records or replaces a player's choices. */
+        void save(net.riftbreaker.rifttowny.domain.resident.ResidentPreferences.Choice choice,
+                  java.time.Instant when);
+
+        /** Removes a player's row entirely. @return whether there was one */
+        boolean clear(ResidentId who);
+
+        /** One player's choices, or empty when they have never made any. */
+        java.util.Optional<net.riftbreaker.rifttowny.domain.resident.ResidentPreferences.Choice>
+                find(ResidentId who);
+
+        /** Everything stored, for filling the cache at startup. */
+        java.util.List<net.riftbreaker.rifttowny.domain.resident.ResidentPreferences.Choice> all();
+    }
+
     /**
      * The outlaw list.
      *

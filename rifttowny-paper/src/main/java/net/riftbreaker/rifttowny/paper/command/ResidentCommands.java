@@ -5,6 +5,7 @@ import net.riftbreaker.rifttowny.domain.directory.Page;
 import net.riftbreaker.rifttowny.domain.directory.ResidentProfile;
 import net.riftbreaker.rifttowny.domain.directory.ResidentSummary;
 import net.riftbreaker.rifttowny.domain.org.Resident;
+import net.riftbreaker.rifttowny.domain.resident.NoticePreference;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
 import net.riftbreaker.rifttowny.domain.service.PlotService;
@@ -44,6 +45,8 @@ public final class ResidentCommands {
     private final net.riftbreaker.rifttowny.domain.civic.ResidentNames names;
     private final MessageService messages;
     private final Listings listings;
+    private final net.riftbreaker.rifttowny.domain.service.PreferenceService preferences;
+    private final boolean noticesEnabledOnThisServer;
     private final Clock clock;
 
     public ResidentCommands(
@@ -51,6 +54,8 @@ public final class ResidentCommands {
             final PlotService plots,
             final CivicDirectory directory,
             final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
+            final net.riftbreaker.rifttowny.domain.service.PreferenceService preferences,
+            final boolean noticesEnabledOnThisServer,
             final MessageService messages,
             final Clock clock
     ) {
@@ -60,6 +65,8 @@ public final class ResidentCommands {
         this.names = Objects.requireNonNull(names, "names");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.listings = new Listings(messages);
+        this.preferences = Objects.requireNonNull(preferences, "preferences");
+        this.noticesEnabledOnThisServer = noticesEnabledOnThisServer;
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -89,6 +96,7 @@ public final class ResidentCommands {
                         .describedAs("List everybody who belongs to a town")
                         .completer((actor, args) -> args.size() <= 1 ? List.of("1") : List.of())
                         .runs(this::list, Surface.CHAT))
+                .child(settingsTree())
                 .runs(this::info, Surface.CHAT);
     }
 
@@ -124,6 +132,80 @@ public final class ResidentCommands {
                     MessageService.value("town", row.townName()));
         }
         listings.more(actor, page, "/resident list " + (page.number() + 1));
+    }
+
+    /**
+     * {@code /resident set} — the things a player decides about their own screen.
+     *
+     * <p>A group with no action of its own, so the tree renderer prints its children as the list of
+     * what is settable. That list cannot go stale or lie: a preference appears in it only because
+     * somebody added a node, and the node is what makes it settable.</p>
+     *
+     * <p>No permission beyond reaching the command. These are settings about the player asking, not
+     * about a town, so there is nothing for a role to grant and nothing for a mayor to overrule.</p>
+     */
+    private CommandNode settingsTree() {
+        return CommandNode.group("set")
+                .permission("rifttowny.resident.set")
+                .usage("resident set")
+                .describedAs("Change what you see")
+                .child(CommandNode.action("notices")
+                        .permission("rifttowny.resident.set")
+                        .usage("resident set notices <off|chat|actionbar|default>")
+                        .describedAs("Whether territory notices reach you, and where they appear")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of("off", "chat", "actionbar", "default") : List.of())
+                        .runs(this::setNotices, Surface.CHAT))
+                .build();
+    }
+
+    /**
+     * Chooses, clears, or says what is currently chosen.
+     *
+     * <p>Reading it back with no argument is a small departure from {@code /town set board}, which
+     * refuses a missing value. It is worth it here: without it a player can set this and never see
+     * it, and {@code /resident info} is the wrong place to put it — that screen is somebody's public
+     * record, and what they have chosen about their own hotbar is not public.</p>
+     */
+    private void setNotices(final CommandActor actor, final List<String> args) {
+        actor.resident().ifPresentOrElse(who -> {
+            if (args.isEmpty()) {
+                messages.send(actor::send, MessageKey.RESIDENT_NOTICES_NOW,
+                        MessageService.value("value", describeNotice(who)));
+                return;
+            }
+            final String typed = args.getFirst();
+            if ("default".equalsIgnoreCase(typed)) {
+                then(actor, preferences.clearNotice(who), ignored ->
+                        messages.send(actor::send, MessageKey.RESIDENT_NOTICES_DEFAULT));
+                return;
+            }
+            final var chosen = NoticePreference.parse(typed);
+            if (chosen.isEmpty()) {
+                messages.send(actor::send, MessageKey.RESIDENT_NOTICES_UNKNOWN,
+                        MessageService.value("input", typed),
+                        MessageService.value("options", NoticePreference.options()));
+                return;
+            }
+            then(actor, preferences.chooseNotice(who, chosen.get()), stored -> {
+                messages.send(actor::send, MessageKey.RESIDENT_NOTICES_SET,
+                        MessageService.value("value", stored.typed()));
+                if (!noticesEnabledOnThisServer) {
+                    // Accepted and stored, and then told the truth: this server does not send
+                    // territory notices at all, so the setting will not do anything here. A
+                    // silently accepted setting that toggles nothing is the state this plugin
+                    // keeps finding and closing.
+                    messages.sendRaw(actor::send, MessageKey.RESIDENT_NOTICES_DISABLED_HERE);
+                }
+            });
+        }, () -> messages.send(actor::send, MessageKey.COMMAND_PLAYER_ONLY));
+    }
+
+    /** What they have chosen, or what the server does for them because they have not. */
+    private String describeNotice(final ResidentId who) {
+        return preferences.noticeFor(who)
+                .map(NoticePreference::typed)
+                .orElse("default");
     }
     /** One player's record, named or your own. */
     public void info(final CommandActor actor, final List<String> args) {

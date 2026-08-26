@@ -44,7 +44,7 @@ commands:
   resident:
     aliases: [res]
     description: Look at a player's town record.
-    usage: /resident <list|[player]>
+    usage: /resident <list|set|[player]>
   townchat:
     aliases: [tc]
     description: Speak to your town, or switch to its channel.
@@ -136,6 +136,12 @@ permissions:
   # person rather than a place, and a server that wants to hide one may not want to hide the other.
   rifttowny.resident.info:
     description: View a player's town record, and list everybody who belongs to a town.
+    default: true
+
+  # A player's own screen, not somebody else's record. Split from .info for the reason that node
+  # was split from .town.info: one is about looking at other people, the other is about yourself.
+  rifttowny.resident.set:
+    description: Change what you see - territory notices, and anything else settable per player.
     default: true
 
   # Speaking to your own town or nation. Granted to everyone: the channel a player reaches is the

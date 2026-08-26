@@ -90,6 +90,7 @@ public final class JdbcCivicStore implements CivicStore {
         private final ConnectionTaxStore taxes;
         private final ConnectionRelationStore relations;
         private final ConnectionOutlawStore outlaws;
+        private final ConnectionPreferenceStore preferences;
 
         private JdbcCivicTransaction(
                 final Connection connection, final RiftTownyDatabase database, final Clock clock) {
@@ -108,6 +109,7 @@ public final class JdbcCivicStore implements CivicStore {
             this.taxes = new ConnectionTaxStore(connection);
             this.relations = new ConnectionRelationStore(connection, database.backend());
             this.outlaws = new ConnectionOutlawStore(connection, database.backend());
+            this.preferences = new ConnectionPreferenceStore(connection, database.backend());
         }
 
         @Override
@@ -173,6 +175,11 @@ public final class JdbcCivicStore implements CivicStore {
         @Override
         public OutlawStore outlaws() {
             return outlaws;
+        }
+
+        @Override
+        public PreferenceStore preferences() {
+            return preferences;
         }
 
         @Override

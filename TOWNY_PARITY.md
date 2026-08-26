@@ -42,7 +42,7 @@ rows as the truth.
 | `/resident` — view your own record | `/resident`, `/res` | DONE |
 | `/resident <name>` — view another | `/resident <name>` | DONE |
 | `/resident list` | `/resident list [page]` | PARTIAL — lists residents **of towns**, from the membership index protection already keeps. Somebody who has never joined one has a database row and no place here; the individual lookup answers for them |
-| `/resident set mode …` — chat modes, map modes, spy | — | **MISSING** |
+| `/resident set mode …` — chat modes, map modes, spy | `/resident set notices <off|chat|actionbar|default>` | PARTIAL, and deliberately so — one mode, because the territory notice is the only unsolicited repeating message the plugin sends. Map modes, plot borders and auto-claim have no feature to toggle; spy is permanently excluded; persisting the chat channel is a written refusal, not a gap |
 | `/resident friend add|remove` | — | **MISSING** — the town trust list exists, personal friends do not |
 | `/resident toggle` — bordertitles, plotborder, etc. | — | **MISSING** |
 | `/resident jail …` | — | **MISSING** — `RT-MOD-JUSTICE` |

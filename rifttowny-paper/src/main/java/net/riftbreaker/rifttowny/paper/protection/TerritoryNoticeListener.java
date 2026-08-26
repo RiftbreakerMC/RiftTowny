@@ -43,6 +43,7 @@ public final class TerritoryNoticeListener implements Listener {
     private final Clock clock;
     private final boolean actionBar;
     private final net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions;
+    private final net.riftbreaker.rifttowny.domain.resident.ResidentPreferences preferences;
     private final Map<UUID, TerritoryNotice.Territory> lastSeen = new ConcurrentHashMap<>();
 
     /**
@@ -58,7 +59,8 @@ public final class TerritoryNoticeListener implements Listener {
             final boolean actionBar
     ) {
         this(notice, messages, names, clock, actionBar,
-                net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty());
+                net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty(),
+                net.riftbreaker.rifttowny.domain.resident.ResidentPreferences.empty());
     }
 
     /**
@@ -77,12 +79,33 @@ public final class TerritoryNoticeListener implements Listener {
             final boolean actionBar,
             final net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions
     ) {
+        this(notice, messages, names, clock, actionBar, positions,
+                net.riftbreaker.rifttowny.domain.resident.ResidentPreferences.empty());
+    }
+
+    /**
+     * The same, letting a player overrule the server about their own notices.
+     *
+     * @param preferences consulted per player. An empty set means nobody has chosen anything, and
+     *        every player follows {@code actionBar} and the server-wide switch, which is what this
+     *        listener did before preferences existed
+     */
+    public TerritoryNoticeListener(
+            final TerritoryNotice notice,
+            final MessageService messages,
+            final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
+            final Clock clock,
+            final boolean actionBar,
+            final net.riftbreaker.rifttowny.domain.directory.LastKnownChunk positions,
+            final net.riftbreaker.rifttowny.domain.resident.ResidentPreferences preferences
+    ) {
         this.notice = Objects.requireNonNull(notice, "notice");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.names = Objects.requireNonNull(names, "names");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.actionBar = actionBar;
         this.positions = Objects.requireNonNull(positions, "positions");
+        this.preferences = Objects.requireNonNull(preferences, "preferences");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -137,7 +160,21 @@ public final class TerritoryNoticeListener implements Listener {
         if (!TerritoryNotice.worthAnnouncing(before, now)) {
             return;
         }
-        render(player, now).ifPresent(message -> send(player, message));
+        // Read HERE, and not at the top of this method. Everything above it is state other things
+        // depend on: LastKnownChunk feeds the placeholder surface, and lastSeen is what makes the
+        // next worthAnnouncing correct. An early return - the obvious way to write this - would
+        // make a player who turned notices off vanish from the placeholders and leave their last
+        // seen territory stale, so the first notice after turning them back on would be wrong.
+        // Nothing would throw.
+        final var chosen = preferences.noticeFor(
+                net.riftbreaker.rifttowny.domain.org.ResidentId.of(player.getUniqueId()));
+        if (chosen.isPresent() && !chosen.get().announces()) {
+            return;
+        }
+        render(player, now).ifPresent(
+                message -> send(player, message, chosen.map(
+                        net.riftbreaker.rifttowny.domain.resident.NoticePreference::usesActionBar)
+                        .orElse(actionBar)));
     }
 
     private java.util.Optional<Component> render(
@@ -174,8 +211,8 @@ public final class TerritoryNoticeListener implements Listener {
         return names.describe(territory.holder());
     }
 
-    private void send(final Player player, final Component message) {
-        if (actionBar) {
+    private void send(final Player player, final Component message, final boolean toActionBar) {
+        if (toActionBar) {
             player.sendActionBar(message);
         } else {
             player.sendMessage(message);
