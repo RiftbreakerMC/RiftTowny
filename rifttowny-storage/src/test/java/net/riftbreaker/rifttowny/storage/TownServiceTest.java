@@ -195,6 +195,31 @@ class TownServiceTest extends SqliteFixture {
         }
     }
 
+
+        @Test
+        @DisplayName("admitting somebody the town had outlawed lifts the outlawry")
+        void admissionLiftsOutlawry() {
+            // Town.admit already clears their trust for exactly this reason - holding both would
+            // leave a member carrying an outsider state - and outlawry is the same shape of fact.
+            // The merge path lifted it; the ordinary join did not, which made the two disagree.
+            final ResidentId stranger = ResidentId.of(java.util.UUID.randomUUID());
+            seeAsNewcomer(stranger, "Stranger");
+            final Town town = foundRiftholm();
+            store.inTransaction(t -> {
+                t.outlaws().declare(town.id(), stranger, MAYOR, CLOCK.instant());
+                return null;
+            }).join();
+            outlawBook.declare(town.id(), stranger);
+
+            service.join(MAYOR, stranger, town.id()).join();
+
+            assertThat(store.inTransaction(t -> t.outlaws().holds(town.id(), stranger)).join())
+                    .as("the row goes")
+                    .isFalse();
+            assertThat(outlawBook.isOutlawed(town.id(), stranger))
+                    .as("and the book is told, or the listing names its own resident")
+                    .isFalse();
+        }
     @Nested
     @DisplayName("authority")
     class Authority {

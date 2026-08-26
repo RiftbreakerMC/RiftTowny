@@ -107,8 +107,11 @@ public enum ProtectionFlag {
                     relationship.isMember();
             // Doors and buttons for anyone the town has some relationship with.
             case INTERACT, ENTITY_DAMAGE -> relationship.isAtLeast(Relationship.ALLY);
-            // A shop nobody may use is not a shop.
-            case SHOP_USE -> true;
+            // A shop nobody may use is not a shop - but an outlaw is the one person a town has
+            // said no to by name, and leaving this unconditional made outlawry a PROMOTION for
+            // this one flag: a visitor explicitly denied shop use would gain it by being outlawed,
+            // because nothing inherits down the ladder and the built-in default caught them.
+            case SHOP_USE -> relationship != Relationship.OUTLAW;
             // Off inside claims until a town turns it on; a town is not an arena by default.
             case PVP -> false;
             case FLIGHT -> relationship.isMember();

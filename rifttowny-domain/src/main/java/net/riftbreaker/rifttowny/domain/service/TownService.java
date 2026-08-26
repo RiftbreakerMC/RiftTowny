@@ -307,7 +307,7 @@ public final class TownService {
         Objects.requireNonNull(who, "who");
         Objects.requireNonNull(townId, "townId");
 
-        return refreshing(transaction(transaction -> {
+        return pardoning(refreshing(transaction(transaction -> {
             final Optional<Invitation> invitation =
                     transaction.invitations().find(townId, Invitation.Invitee.of(who));
             if (invitation.isEmpty()) {
@@ -322,7 +322,7 @@ public final class TownService {
             final Town updated = admit(transaction, townId, who);
             transaction.invitations().delete(townId, Invitation.Invitee.of(who));
             return updated;
-        }), Town::id);
+        }), Town::id), who);
     }
 
     /**
@@ -345,7 +345,7 @@ public final class TownService {
         Objects.requireNonNull(who, "who");
         Objects.requireNonNull(townId, "townId");
 
-        return refreshing(transaction(transaction -> {
+        return pardoning(refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
             if (!town.profile().open()) {
                 throw new ChangeRefusedException(ChangeDenial.TOWN_IS_NOT_OPEN);
@@ -353,7 +353,7 @@ public final class TownService {
             final Town updated = admit(transaction, townId, who);
             transaction.invitations().delete(townId, Invitation.Invitee.of(who));
             return updated;
-        }), Town::id);
+        }), Town::id), who);
     }
 
     /** Turns an offer down, so it stops appearing in the player's list. */
@@ -407,14 +407,23 @@ public final class TownService {
         Objects.requireNonNull(who, "who");
         Objects.requireNonNull(townId, "townId");
 
-        return refreshing(transaction(transaction -> {
+        return pardoning(refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
             requirePermission(transaction, town, actor, Permission.INVITE_RESIDENT);
             return admit(transaction, townId, who);
-        }), Town::id);
+        }), Town::id), who);
     }
 
-    /** The membership change itself, shared by the consented path and the forced one. */
+    /**
+     * The membership change itself, shared by the consented path and the forced one.
+     *
+     * <p>Admission lifts any outlawry the town held against them, for the reason {@link Town#admit}
+     * gives for clearing their trust in the same breath: holding both would leave a member carrying
+     * an outsider state, and it is the state {@code OutlawService.declare} refuses outright as
+     * CANNOT_OUTLAW_A_RESIDENT. Without this a town could invite somebody it had outlawed and then
+     * find its own resident named on {@code /town outlaw list}, with the pardon that would clear it
+     * refused as NOT_OUTLAWED once they left again.</p>
+     */
     private Town admit(
             final CivicTransaction transaction, final TownId townId, final ResidentId who) {
         final Town town = town(transaction, townId);
@@ -425,8 +434,23 @@ public final class TownService {
 
         transaction.residents().save(joined);
         transaction.towns().save(updated);
+        transaction.outlaws().pardon(townId, who);
         transaction.publishAll(admitted.events(), correlation("join", townId));
         return updated;
+    }
+
+    /**
+     * Tells the outlaw book what an admission just did, after the commit.
+     *
+     * <p>The book is a separate thing from the table and every reader consults it, so a pardon that
+     * reached only the database would keep a member on the survivor's list until a restart.</p>
+     */
+    private CompletableFuture<ServiceResult<Town>> pardoning(
+            final CompletableFuture<ServiceResult<Town>> pending, final ResidentId who) {
+        return pending.thenApply(result -> {
+            result.value().ifPresent(town -> outlaws.pardon(town.id(), who));
+            return result;
+        });
     }
 
     /**
