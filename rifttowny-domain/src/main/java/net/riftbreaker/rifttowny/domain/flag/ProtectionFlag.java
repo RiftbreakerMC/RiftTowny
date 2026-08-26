@@ -160,6 +160,26 @@ public enum ProtectionFlag {
         return category == Category.WORLD ? Relationship.WILDERNESS : actual;
     }
 
+
+    /**
+     * The rung to try when nothing has an opinion at the actor's own.
+     *
+     * <p>Only {@link #PVP}, and only for an outlaw, who falls back to {@link Relationship#VISITOR}.
+     * The ladder assumes a lower rung means fewer privileges, and PVP is the one flag where that is
+     * inverted: being <em>allowed</em> to fight is not a grant, it is exposure. Without this an
+     * outlawed player in a town that had enabled PvP for visitors was hittable and could not hit
+     * back — no layer held an opinion at OUTLAW, so every swing they made fell to the built-in
+     * refusal while everybody else swung under the town's own setting. A town cannot have
+     * configured against that, because the rung did not exist when they set their flags.</p>
+     *
+     * <p>A <em>fallback</em> rather than a collapse: a town that deliberately sets PVP for outlaws
+     * still gets what it asked for, and the setting is not a row that nothing reads.</p>
+     */
+    public Optional<Relationship> fallbackRelationship(final Relationship actual) {
+        return this == PVP && actual == Relationship.OUTLAW
+                ? Optional.of(Relationship.VISITOR)
+                : Optional.empty();
+    }
     public static Optional<ProtectionFlag> parse(final String raw) {
         if (raw == null || raw.isBlank()) {
             return Optional.empty();

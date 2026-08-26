@@ -79,6 +79,22 @@ public final class FlagResolver {
                 return new FlagDecision(flag, relationship, opinion.get(), layer.source());
             }
         }
+
+        // Nothing had an opinion at the actor's own rung. One flag has somewhere else to look:
+        // PVP for an outlaw asks what the town said about visitors, because being allowed to fight
+        // is exposure rather than a privilege, and a rung nobody configured must not leave somebody
+        // able to be hit and unable to hit back. Reported at the rung that actually answered.
+        final Relationship fallback = flag.fallbackRelationship(relationship).orElse(null);
+        if (fallback != null) {
+            for (final FlagLayer layer : layers) {
+                final Optional<Boolean> opinion = layer.settings().opinionOn(flag, fallback);
+                if (opinion.isPresent()) {
+                    return new FlagDecision(flag, fallback, opinion.get(), layer.source());
+                }
+            }
+            return new FlagDecision(flag, fallback,
+                    flag.allowedByDefault(fallback, land), FlagSource.BUILT_IN);
+        }
         return new FlagDecision(
                 flag, relationship, flag.allowedByDefault(relationship, land), FlagSource.BUILT_IN);
     }

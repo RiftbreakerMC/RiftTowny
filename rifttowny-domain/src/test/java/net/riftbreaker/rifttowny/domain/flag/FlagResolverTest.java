@@ -325,4 +325,85 @@ class FlagResolverTest {
                     .contains(true);
         }
     }
+
+    @Nested
+    @DisplayName("an outlaw and PvP")
+    class OutlawPvp {
+
+        private static FlagDecision decide(final Relationship actor, final FlagSettings town) {
+            return resolve(ProtectionFlag.PVP, actor,
+                    List.of(new FlagResolver.FlagLayer(FlagSource.ORGANISATION, town)));
+        }
+
+        @Test
+        @DisplayName("a town that lets visitors fight lets outlaws fight back")
+        void outlawFollowsVisitor() {
+            // The bug this exists for: PVP is resolved at the ATTACKER's rung, so an outlawed
+            // player in a town with pvp enabled for visitors was hittable by everybody and could
+            // not swing back - every attempt fell to the built-in refusal because no layer held an
+            // opinion at OUTLAW. Being allowed to fight is exposure, not a privilege.
+            final FlagSettings town = allow(ProtectionFlag.PVP, Relationship.VISITOR);
+
+            assertThat(decide(Relationship.OUTLAW, town).allowed()).isTrue();
+            assertThat(decide(Relationship.VISITOR, town).allowed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("and a town that forbids it forbids it for them too")
+        void outlawFollowsVisitorBothWays() {
+            final FlagSettings town = deny(ProtectionFlag.PVP, Relationship.VISITOR);
+
+            assertThat(decide(Relationship.OUTLAW, town).allowed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("an explicit setting for outlaws still wins, so the row is never dead")
+        void explicitOutlawSettingWins() {
+            // A fallback rather than a collapse. Resolving outlaws AT the visitor rung would make
+            // /town flag set pvp outlaw <...> a row nothing ever reads, which is the shape this
+            // project keeps finding and closing.
+            final FlagSettings town = FlagSettings.builder()
+                    .set(ProtectionFlag.PVP, Relationship.VISITOR, true)
+                    .set(ProtectionFlag.PVP, Relationship.OUTLAW, false)
+                    .build();
+
+            assertThat(decide(Relationship.OUTLAW, town).allowed()).isFalse();
+            assertThat(decide(Relationship.VISITOR, town).allowed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("the decision names the rung that actually answered")
+        void reportsTheRungThatAnswered() {
+            // "Why was I denied" is a daily support question, and answering it with a rung nobody
+            // configured would be worse than not answering.
+            final FlagSettings town = allow(ProtectionFlag.PVP, Relationship.VISITOR);
+
+            assertThat(decide(Relationship.OUTLAW, town).relationship())
+                    .isEqualTo(Relationship.VISITOR);
+        }
+
+        @Test
+        @DisplayName("an unconfigured town still refuses everybody, outlaw included")
+        void unconfiguredIsUnchanged() {
+            final FlagSettings nothing = FlagSettings.builder().build();
+
+            assertThat(decide(Relationship.OUTLAW, nothing).allowed()).isFalse();
+            assertThat(decide(Relationship.VISITOR, nothing).allowed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("no other flag falls back, so outlawry stays a demotion everywhere else")
+        void onlyPvpFallsBack() {
+            for (final ProtectionFlag flag : ProtectionFlag.values()) {
+                if (flag != ProtectionFlag.PVP) {
+                    assertThat(flag.fallbackRelationship(Relationship.OUTLAW))
+                            .as("%s", flag)
+                            .isEmpty();
+                }
+            }
+            assertThat(ProtectionFlag.PVP.fallbackRelationship(Relationship.VISITOR)).isEmpty();
+            assertThat(ProtectionFlag.PVP.fallbackRelationship(Relationship.OUTLAW))
+                    .contains(Relationship.VISITOR);
+        }
+    }
 }
