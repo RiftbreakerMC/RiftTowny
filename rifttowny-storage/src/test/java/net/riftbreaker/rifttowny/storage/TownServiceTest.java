@@ -3,6 +3,9 @@ package net.riftbreaker.rifttowny.storage;
 import net.riftbreaker.rifttowny.domain.naming.NamePolicy;
 import net.riftbreaker.rifttowny.domain.naming.NameProblem;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
+import net.riftbreaker.rifttowny.api.ChunkKey;
+import net.riftbreaker.rifttowny.domain.bank.LedgerEntry;
+import net.riftbreaker.rifttowny.domain.bank.Money;
 import net.riftbreaker.rifttowny.domain.org.OrganisationScope;
 import net.riftbreaker.rifttowny.domain.org.Resident;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
@@ -62,6 +65,26 @@ class TownServiceTest extends SqliteFixture {
 
     private Town foundRiftholm() {
         return service.found(MAYOR, "Mayor", "Riftholm").join().value().orElseThrow();
+    }
+
+    private static final java.util.UUID WORLD = java.util.UUID.randomUUID();
+
+    /** Land straight into the store and the index, since the merge is what is under test. */
+    private void giveLand(final net.riftbreaker.rifttowny.domain.org.TownId town, final ChunkKey... chunks) {
+        for (final ChunkKey chunk : chunks) {
+            final var claim = net.riftbreaker.rifttowny.domain.territory.Claim.of(
+                    chunk, town, net.riftbreaker.rifttowny.domain.territory.ClaimKind.ORDINARY,
+                    CLOCK.instant());
+            store.inTransaction(t -> {
+                t.claims().insert(claim);
+                return null;
+            }).join();
+            index.put(claim);
+        }
+    }
+
+    private static Money money(final String amount) {
+        return Money.of(new java.math.BigDecimal(amount), "coins");
     }
 
     private void seeAsNewcomer(final ResidentId who, final String name) {
@@ -572,6 +595,162 @@ class TownServiceTest extends SqliteFixture {
 
             assertThat(refused.denial()).contains(ChangeDenial.MISSING_PERMISSION);
             assertThat(towns.find(riftholm.id()).join().orElseThrow().trustedOutsiders()).isEmpty();
+        }
+    }
+
+    /**
+     * Merging two towns.
+     *
+     * <p>The hazards here are ordering hazards, and they are silent. {@code rt_claim} cascades from
+     * {@code rt_town} and {@code ConnectionTownStore.delete} nulls {@code rt_resident.town_id}, so a
+     * merge written in the wrong order destroys the land it was moving and strands the people it was
+     * moving them for — with no exception, no refusal, and a success message. Every test below is
+     * really a test of the order.</p>
+     */
+    @Nested
+    @DisplayName("merging")
+    class Merging {
+
+        private Town riftholm;
+        private Town ashford;
+
+        @BeforeEach
+        void twoTowns() {
+            seeAsNewcomer(MAYOR, "Mayor");
+            seeAsNewcomer(OFFICER, "Officer");
+            seeAsNewcomer(CITIZEN, "Citizen");
+            riftholm = foundRiftholm();
+            ashford = service.found(OFFICER, "Officer", "Ashford").join().value().orElseThrow();
+            service.join(OFFICER, CITIZEN, ashford.id()).join();
+        }
+
+        private void offerAndAccept() {
+            service.offerMerge(MAYOR, riftholm.id(), ashford.id()).join();
+            final var merged = service.acceptMerge(OFFICER, ashford.id(), riftholm.id()).join();
+            assertThat(merged.succeeded()).as("%s", merged.denial()).isTrue();
+        }
+
+        @Test
+        @DisplayName("the absorbed town's people become the survivor's, and keep a town")
+        void residentsMove() {
+            offerAndAccept();
+
+            final Town survivor = towns.find(riftholm.id()).join().orElseThrow();
+            assertThat(survivor.residents()).contains(MAYOR, OFFICER, CITIZEN);
+            assertThat(towns.find(ashford.id()).join()).isEmpty();
+            // The trap: ConnectionTownStore.delete nulls rt_resident.town_id for the town it drops.
+            // Move the people after the delete and they end up in no town at all.
+            assertThat(residents.find(CITIZEN).join().orElseThrow().town()).contains(riftholm.id());
+            assertThat(residents.find(OFFICER).join().orElseThrow().town()).contains(riftholm.id());
+        }
+
+        @Test
+        @DisplayName("the absorbed town's land changes hands rather than being destroyed")
+        void landMoves() {
+            // The worst failure this feature can have, and it is silent: rt_claim cascades from
+            // rt_town, so deleting the town before moving its chunks deletes the chunks.
+            giveLand(ashford.id(), new ChunkKey(WORLD, 40, 40), new ChunkKey(WORLD, 41, 40));
+            final int before = store.inTransaction(t -> t.claims().of(riftholm.id()).size()).join();
+
+            offerAndAccept();
+
+            final int after = store.inTransaction(t -> t.claims().of(riftholm.id()).size()).join();
+            assertThat(after).isEqualTo(before + 2);
+            assertThat(store.inTransaction(t -> t.claims().of(ashford.id())).join()).isEmpty();
+            // And the in-memory index agrees, or protection would answer for a town that is gone.
+            assertThat(index.ownerOf(new ChunkKey(WORLD, 40, 40))).contains(riftholm.id());
+        }
+
+        @Test
+        @DisplayName("the treasury moves, and both ledgers say where it went")
+        void moneyMoves() {
+            final var bank = new net.riftbreaker.rifttowny.domain.service.BankService(
+                    store, CLOCK, net.riftbreaker.rifttowny.domain.bank.PlayerWallet.absent());
+            bank.pay(ashford.id(), money("60"), LedgerEntry.Reason.TAX, null).join();
+
+            offerAndAccept();
+
+            assertThat(bank.balanceOf(riftholm.id()).join()).isEqualTo(money("60"));
+            // The absorbed account's history survives on purpose: BankStore.forget would delete the
+            // ledger with the balance, and a merge is exactly when somebody asks where money went.
+            final var absorbedLedger = store.inTransaction(
+                    t -> t.bank().history(ashford.bankAccountId(), 10)).join();
+            assertThat(absorbedLedger).isNotEmpty();
+            assertThat(absorbedLedger.getFirst().note()).contains("merged into Riftholm");
+        }
+
+        @Test
+        @DisplayName("an outlawry against somebody being absorbed is lifted, not left standing")
+        void outlawriesAreLifted() {
+            // Otherwise the survivor ends the merge with a member its own town has outlawed, which
+            // is the state OutlawService refuses outright.
+            store.inTransaction(t -> {
+                t.outlaws().declare(riftholm.id(), CITIZEN, MAYOR, CLOCK.instant());
+                return null;
+            }).join();
+
+            offerAndAccept();
+
+            assertThat(store.inTransaction(t -> t.outlaws().holds(riftholm.id(), CITIZEN)).join())
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("what the absorbed town alone owned goes with it")
+        void absorbedBelongingsGo() {
+            offerAndAccept();
+
+            assertThat(store.inTransaction(t -> t.spawns().of(ashford.id())).join()).isEmpty();
+            assertThat(store.inTransaction(t -> t.roles().find(
+                    OrganisationScope.TOWN, ashford.id().value())).join()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("only the two mayors can, on their own sides")
+        void mayorsOnly() {
+            assertThat(service.offerMerge(CITIZEN, riftholm.id(), ashford.id()).join().denial())
+                    .as("a non-mayor offering")
+                    .contains(ChangeDenial.MISSING_PERMISSION);
+
+            service.offerMerge(MAYOR, riftholm.id(), ashford.id()).join();
+            assertThat(service.acceptMerge(CITIZEN, ashford.id(), riftholm.id()).join().denial())
+                    .as("a member accepting on their mayor's behalf")
+                    .contains(ChangeDenial.MISSING_PERMISSION);
+            // Refused and unchanged: both towns still stand.
+            assertThat(towns.find(ashford.id()).join()).isPresent();
+        }
+
+        @Test
+        @DisplayName("accepting without a standing offer is refused")
+        void needsAnOffer() {
+            assertThat(service.acceptMerge(OFFICER, ashford.id(), riftholm.id()).join().denial())
+                    .contains(ChangeDenial.NO_INVITATION);
+            assertThat(towns.find(ashford.id()).join()).isPresent();
+        }
+
+        @Test
+        @DisplayName("a town cannot merge with itself")
+        void notWithItself() {
+            assertThat(service.offerMerge(MAYOR, riftholm.id(), riftholm.id()).join().denial())
+                    .contains(ChangeDenial.CANNOT_MERGE_WITH_SELF);
+        }
+
+        @Test
+        @DisplayName("two towns in different nations are refused, and nothing is touched")
+        void nationsMustMatch() {
+            // Allowing it would either enrol a townful of strangers in a nation that never invited
+            // them, or take a member town out of one on two town mayors' word.
+            final var nations = new net.riftbreaker.rifttowny.domain.service.NationService(
+                    store, NamePolicy.defaults(), CLOCK,
+                    net.riftbreaker.rifttowny.domain.service.CivicCacheRefresher.none());
+            nations.found(MAYOR, riftholm.id(), "Valen").join();
+
+            service.offerMerge(MAYOR, riftholm.id(), ashford.id()).join();
+            final var refused = service.acceptMerge(OFFICER, ashford.id(), riftholm.id()).join();
+
+            assertThat(refused.denial()).contains(ChangeDenial.MERGE_REQUIRES_THE_SAME_NATION);
+            assertThat(towns.find(ashford.id()).join()).isPresent();
+            assertThat(residents.find(CITIZEN).join().orElseThrow().town()).contains(ashford.id());
         }
     }
 }

@@ -198,6 +198,20 @@ public interface CivicTransaction {
         /** Returns every plot a resident holds in one town to the town. How many went back. */
         int releaseAllHeldBy(ResidentId owner, TownId town);
 
+        /**
+         * Hands every one of a town's chunks to another town, in one statement.
+         *
+         * <p>For a merge. Deliberately not delete-and-reinsert: rt_claim cascades from rt_town, so
+         * the alternative shape - drop the old town first, then re-insert its chunks - destroys the
+         * land it was meant to move. One UPDATE also makes a five-hundred-chunk town the same size
+         * of work as a one-chunk town, which is what lets a merge be a single transaction.</p>
+         *
+         * @return how many chunks moved
+         */
+        int reassignAllOf(
+                net.riftbreaker.rifttowny.domain.org.TownId from,
+                net.riftbreaker.rifttowny.domain.org.TownId to);
+
         /** Releases a whole town's territory. Returns how many chunks went. */
         int deleteAllOf(net.riftbreaker.rifttowny.domain.org.TownId town);
     }

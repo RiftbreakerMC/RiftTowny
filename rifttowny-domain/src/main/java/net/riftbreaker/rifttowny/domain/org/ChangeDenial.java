@@ -123,6 +123,19 @@ public enum ChangeDenial {
     /** Not outlawed by this town. */
     NOT_OUTLAWED,
 
+    /**
+     * Merging two towns that do not share a nation.
+     *
+     * <p>Refused rather than resolved, and the reason is whose decision it is. Allowing it would
+     * either enrol a townful of strangers in a nation that never invited them, or take a member town
+     * out of a nation on two town mayors' word. Both belong to the nation, and both already have a
+     * command. Refusing costs the mayors one they already know.</p>
+     */
+    MERGE_REQUIRES_THE_SAME_NATION,
+
+    /** A town cannot merge with itself. */
+    CANNOT_MERGE_WITH_SELF,
+
     // --- presentation ---------------------------------------------------------------------------
 
     /**

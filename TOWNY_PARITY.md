@@ -81,7 +81,7 @@ rows as the truth.
 | Town upkeep, bankruptcy, ruin on unpaid upkeep | `taxes.upkeep-per-chunk`, a grace period, then a fall into a ruin | DONE |
 | Resident tax, and eviction of residents who cannot pay | Resident tax charged; **no eviction** | **DIFFERENT** — eviction is a punishment applied by a timer to somebody who may simply have been away. A town that wants somebody gone has `/town kick` and a person to decide it |
 | `/town outlaw add|remove` | — | **DONE** — `/town outlaw add|remove|list`, gated by MANAGE_TRUST. An outlaw resolves as the lowest rung of the relationship ladder, so a town configures what they may do exactly as it does for a visitor |
-| `/town merge` | — | **MISSING** |
+| `/town merge` | `/town merge offer|accept|cancel|offers` | DONE — the surviving town offers, the absorbed town's mayor accepts, so the irreversible half is typed by whoever loses their town. Mayor only on both sides. Refused across nations |
 | `/town online` | `/town online [town]` | DONE — with each person's roles beside them |
 | `/town list` with sorting | `/town list [page] [name\|residents\|land\|age]` | DONE — page and order in either order, since players type both |
 | `/town trust add|remove` | `/town trust add|remove|list` | DONE — gated by MANAGE_TRUST, the same node as `/town outlaw`. Trust lifts an outsider from `VISITOR` to `TRUSTED` and nothing more; what that is worth is the town's own flag settings |

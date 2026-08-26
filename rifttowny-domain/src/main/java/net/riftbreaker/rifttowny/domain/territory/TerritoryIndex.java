@@ -77,6 +77,31 @@ public final class TerritoryIndex {
         generation.incrementAndGet();
     }
 
+
+    /**
+     * Records a whole town's territory changing hands, as on a merge.
+     *
+     * <p>Rebuilt in place rather than removed and re-added: the two-step version has a moment in
+     * which the chunks belong to nobody, and a protection check landing in that window would read a
+     * town's own land as wilderness and let anybody standing there break it.</p>
+     *
+     * @return how many chunks moved
+     */
+    public synchronized int reassignAllOf(final TownId from, final TownId to) {
+        Objects.requireNonNull(from, "from");
+        Objects.requireNonNull(to, "to");
+        int moved = 0;
+        for (final Map.Entry<ChunkKey, Claim> entry : claims.entrySet()) {
+            if (entry.getValue().town().equals(from)) {
+                final Claim held = entry.getValue();
+                entry.setValue(new Claim(held.id(), held.chunk(), to, held.kind(),
+                        held.type(), held.owner(), held.claimedAt()));
+                moved++;
+            }
+        }
+        generation.incrementAndGet();
+        return moved;
+    }
     /** Records a whole town's territory going away, as on disband. */
     public int removeAllOf(final TownId town) {
         Objects.requireNonNull(town, "town");

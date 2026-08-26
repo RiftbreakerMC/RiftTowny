@@ -154,6 +154,35 @@ public sealed interface DomainEvent {
         }
     }
 
+
+    /**
+     * Two towns became one.
+     *
+     * <p>Carries what was lost as well as what moved, because nothing else records it: the absorbed
+     * town's row is gone by the time anything reads this, and its name and its custom roles exist
+     * nowhere else afterwards.</p>
+     */
+    record TownsMerged(
+            TownId survivor,
+            TownId absorbed,
+            OrganisationName absorbedName,
+            int residentsMoved,
+            int chunksMoved,
+            java.util.List<String> rolesLost
+    ) implements DomainEvent {
+
+        public TownsMerged {
+            Objects.requireNonNull(survivor, "survivor");
+            Objects.requireNonNull(absorbed, "absorbed");
+            Objects.requireNonNull(absorbedName, "absorbedName");
+            rolesLost = java.util.List.copyOf(rolesLost);
+        }
+
+        @Override
+        public String type() {
+            return "town.merged";
+        }
+    }
     /**
      * @param residentsReleased how many players became townless, so an announcement can say how many
      *        people this affected without a second query against a town that no longer exists

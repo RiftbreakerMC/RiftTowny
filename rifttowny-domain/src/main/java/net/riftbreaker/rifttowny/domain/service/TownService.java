@@ -795,6 +795,244 @@ public final class TownService {
         }
     }
 
+
+    /**
+     * Offers to absorb another town. Only the surviving town's mayor may make the offer.
+     *
+     * <p>Changes nothing by itself. The offer is an ordinary {@link Invitation} — the survivor is
+     * the inviter, the town to be absorbed is the invitee — which is expressible today because
+     * {@code Invitation.Invitee.of(TownId)} exists and an inviter is an {@code OrganisationId}. No
+     * migration, and it lapses in seven days like every other offer.</p>
+     *
+     * <p><strong>The inviter survives and the accepter ends</strong>, so the irreversible half is
+     * typed by the mayor whose town ceases to exist. There is nowhere in {@code rt_invitation} to
+     * record a direction other than the pairing itself, and inventing one would be a migration to
+     * express something the pairing already says.</p>
+     */
+    public CompletableFuture<ServiceResult<TownId>> offerMerge(
+            final ResidentId actor, final TownId survivorId, final TownId absorbedId) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(survivorId, "survivorId");
+        Objects.requireNonNull(absorbedId, "absorbedId");
+
+        return transaction(transaction -> {
+            if (survivorId.equals(absorbedId)) {
+                throw new ChangeRefusedException(ChangeDenial.CANNOT_MERGE_WITH_SELF);
+            }
+            requireMayor(town(transaction, survivorId), actor);
+            town(transaction, absorbedId);
+            transaction.invitations().save(Invitation.offer(
+                    survivorId, Invitation.Invitee.of(absorbedId), actor, clock.instant()));
+            return absorbedId;
+        });
+    }
+
+    /** Withdraws an offer. The survivor's mayor, since it is their offer. */
+    public CompletableFuture<ServiceResult<TownId>> withdrawMergeOffer(
+            final ResidentId actor, final TownId survivorId, final TownId absorbedId) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(survivorId, "survivorId");
+        Objects.requireNonNull(absorbedId, "absorbedId");
+
+        return transaction(transaction -> {
+            requireMayor(town(transaction, survivorId), actor);
+            if (!transaction.invitations().delete(survivorId, Invitation.Invitee.of(absorbedId))) {
+                throw new ChangeRefusedException(ChangeDenial.NO_INVITATION);
+            }
+            return absorbedId;
+        });
+    }
+
+    /** Every merge offered to this town, lapsed ones excluded. */
+    public CompletableFuture<List<Invitation>> mergeOffersTo(final TownId townId) {
+        Objects.requireNonNull(townId, "townId");
+        return store.inTransaction(transaction ->
+                transaction.invitations().to(Invitation.Invitee.of(townId)).stream()
+                        // Town inviters only. The same table carries nation offers addressed to this
+                        // town, and a nation inviting it to join is not an offer to absorb it.
+                        .filter(offer -> offer.inviter() instanceof TownId)
+                        .filter(offer -> offer.expiresAt().isAfter(clock.instant()))
+                        .toList());
+    }
+
+    /**
+     * Accepts a merge, absorbing the accepting mayor's own town into the offering one.
+     *
+     * <p><strong>The order below is the safety argument rather than a style.</strong>
+     * {@code rt_claim} cascades from {@code rt_town}, and {@code ConnectionTownStore.delete} nulls
+     * {@code rt_resident.town_id} before dropping the row. So the land must be handed over and the
+     * residents moved <em>before</em> the absorbed town is deleted. Written the other way round, a
+     * five-hundred-chunk town's territory is destroyed by the cascade and its people are left
+     * townless — which is the automatic irreversible deletion of claims the brief permanently
+     * excludes, arrived at purely by putting the statements in the wrong order.</p>
+     *
+     * <p>One transaction, and the statement count is bounded by residents rather than by land: the
+     * claims move in a single {@code UPDATE}, so a town with five hundred chunks is the same work as
+     * one with a single chunk. A failure anywhere rolls the whole thing back rather than leaving
+     * half a town.</p>
+     */
+    public CompletableFuture<ServiceResult<Merged>> acceptMerge(
+            final ResidentId actor, final TownId absorbedId, final TownId survivorId) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(absorbedId, "absorbedId");
+        Objects.requireNonNull(survivorId, "survivorId");
+
+        return transaction(transaction -> {
+            if (survivorId.equals(absorbedId)) {
+                throw new ChangeRefusedException(ChangeDenial.CANNOT_MERGE_WITH_SELF);
+            }
+            Town survivor = town(transaction, survivorId);
+            final Town absorbed = town(transaction, absorbedId);
+            // The accepting mayor is the one losing a town, so they must be its mayor. The
+            // survivor's consent is the standing offer.
+            requireMayor(absorbed, actor);
+
+            // Re-read rather than trusted from offer time: an offer may be a week old, and a town
+            // that has joined a nation since is a different proposition entirely.
+            if (!absorbed.nation().equals(survivor.nation())) {
+                throw new ChangeRefusedException(ChangeDenial.MERGE_REQUIRES_THE_SAME_NATION);
+            }
+
+            final Invitation.Invitee invitee = Invitation.Invitee.of(absorbedId);
+            final Invitation offer = transaction.invitations().to(invitee).stream()
+                    .filter(one -> survivorId.equals(one.inviter()))
+                    .findFirst()
+                    .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.NO_INVITATION));
+            if (!offer.expiresAt().isAfter(clock.instant())) {
+                throw new ChangeRefusedException(ChangeDenial.INVITATION_EXPIRED);
+            }
+            transaction.invitations().delete(survivorId, invitee);
+
+            // 1. The people, moved one at a time because a resident row carries its own town, and
+            // admitted through the aggregate so the survivor's own rules still apply to each.
+            final List<ResidentId> moved = new java.util.ArrayList<>();
+            for (final Resident resident : transaction.residents().findByTown(absorbedId)) {
+                transaction.residents().save(
+                        require(require(resident.leaveTown()).joinTown(survivorId)));
+                survivor = require(survivor.admit(resident.id()));
+                moved.add(resident.id());
+                // Admitting somebody the survivor had outlawed would leave a member barred by their
+                // own town, which OutlawService refuses outright. Lifted rather than refused, for
+                // the same reason Town.admit clears trust: the later, more specific decision wins.
+                transaction.outlaws().pardon(survivorId, resident.id());
+            }
+
+            // 2. The money, as a movement rather than a rewrite, so both ledgers show where it went.
+            // BankStore.forget is deliberately not called: it deletes the ledger with the balance,
+            // and a merge is exactly when somebody asks where a town's treasury ended up.
+            moveTreasury(transaction, absorbed, survivor);
+
+            // 3. The land, before the town row goes. One statement, whatever the size of the town.
+            final int chunksMoved = transaction.claims().reassignAllOf(absorbedId, survivorId);
+
+            // 4. What the absorbed town alone owned. Its organisation-level flag overrides name a
+            // town that is about to stop existing; its per-chunk overrides describe chunks that
+            // survive and are deliberately left standing, since dropping them could throw open land
+            // whose owner had locked it.
+            transaction.flags().clearAll(FlagTarget.organisation(absorbedId));
+            transaction.spawns().clear(absorbedId);
+            transaction.invitations().deleteAllFor(absorbedId);
+
+            final List<String> rolesLost = new java.util.ArrayList<>();
+            roleBook(transaction, absorbedId).ordered().stream()
+                    .filter(role -> !role.isSystem())
+                    .forEach(role -> rolesLost.add(role.name()));
+            transaction.roles().delete(OrganisationScope.TOWN, absorbedId.value());
+
+            // 5. The nation, if there is one. Both towns are in it - that was checked above - so it
+            // keeps the survivor, and no citizen loses their citizenship or their nation role.
+            absorbed.nation().ifPresent(nationId -> {
+                final net.riftbreaker.rifttowny.domain.org.Nation nation = transaction.nations().find(nationId)
+                        .orElseThrow(() -> new ChangeRefusedException(ChangeDenial.NATION_NOT_FOUND));
+                transaction.nations().save(require(nation.release(absorbedId)));
+            });
+
+            transaction.towns().save(survivor);
+            transaction.towns().delete(absorbedId);
+
+            transaction.publish(
+                    new DomainEvent.TownsMerged(survivorId, absorbedId, absorbed.name(),
+                            moved.size(), chunksMoved, rolesLost),
+                    correlation("merge", survivorId));
+            return new Merged(survivorId, absorbedId, absorbed.name(), survivor.name(),
+                    moved.size(), chunksMoved, List.copyOf(rolesLost));
+        }).thenCompose(result -> {
+            // After the commit, never inside it. Until the index is corrected it still points every
+            // one of those chunks at a town that no longer exists, and protection would answer for
+            // an owner that cannot be found.
+            if (result.value().isEmpty()) {
+                return CompletableFuture.completedFuture(result);
+            }
+            final Merged merged = result.value().orElseThrow();
+            index.reassignAllOf(merged.absorbed(), merged.survivor());
+            overrides.clearAll(FlagTarget.organisation(merged.absorbed()));
+            return civic.refresh(merged.survivor())
+                    .thenCompose(ignored -> civic.refresh(merged.absorbed()))
+                    .thenApply(ignored -> result);
+        });
+    }
+
+    /**
+     * Moves everything one treasury holds into another.
+     *
+     * <p>A debit and a credit rather than a silent rewrite, because the ledger is what an operator
+     * reads when somebody asks where a town's money went — and a merge is exactly when they ask.</p>
+     */
+    private void moveTreasury(
+            final CivicTransaction transaction, final Town absorbed, final Town survivor) {
+        // The currency is taken from what the account last did, because a balance can only be read
+        // by naming one and this service has no configured currency of its own.
+        final var lastMovement = transaction.bank().history(absorbed.bankAccountId(), 1);
+        if (lastMovement.isEmpty()) {
+            return;
+        }
+        final String currency = lastMovement.getFirst().balance().currency();
+        final var held = transaction.bank().balance(absorbed.bankAccountId(), currency);
+        if (held.isEmpty() || held.get().isZero()) {
+            return;
+        }
+        final var moving = held.get();
+        final var before = transaction.bank().balance(survivor.bankAccountId(), currency)
+                .orElseGet(() -> net.riftbreaker.rifttowny.domain.bank.Money.zero(currency));
+        transaction.bank().record(
+                net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                        absorbed.bankAccountId(), moving,
+                        net.riftbreaker.rifttowny.domain.bank.Money.zero(currency),
+                        net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.ADMIN,
+                        null, "merged into " + survivor.name().display(), clock.instant()),
+                clock.instant());
+        transaction.bank().record(
+                net.riftbreaker.rifttowny.domain.bank.LedgerEntry.of(
+                        survivor.bankAccountId(), moving, before.plus(moving),
+                        net.riftbreaker.rifttowny.domain.bank.LedgerEntry.Reason.ADMIN,
+                        null, "merged from " + absorbed.name().display(), clock.instant()),
+                clock.instant());
+    }
+
+    /**
+     * Mayor only, like handing over the mayoralty and for a stronger version of its reason.
+     *
+     * <p>A merge is worse than a disband: a disbanded town leaves a ruin anybody may reclaim, while
+     * a merged town's land goes to one named town chosen by whoever typed the command. Gating it on
+     * a role permission would let an officer hand the whole place to a rival.</p>
+     */
+    private static void requireMayor(final Town town, final ResidentId actor) {
+        if (town.standingOf(actor) != SystemRole.LEADER) {
+            throw new ChangeRefusedException(ChangeDenial.MISSING_PERMISSION);
+        }
+    }
+
+    /** What a merge did, for the message and for the caches. */
+    public record Merged(
+            TownId survivor,
+            TownId absorbed,
+            OrganisationName absorbedName,
+            OrganisationName survivorName,
+            int residentsMoved,
+            int chunksMoved,
+            List<String> rolesLost
+    ) {
+    }
     /**
      * The town's roles.
      *

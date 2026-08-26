@@ -275,6 +275,7 @@ public final class TownCommands {
                 .child(roleTree())
                 .child(flagTree())
                 .child(trustTree())
+                .child(mergeTree())
                 .child(outlawTree())
                 .child(settingsTree())
                 .build();
@@ -341,6 +342,132 @@ public final class TownCommands {
 
 
 
+
+    /**
+     * {@code /town merge} — two towns becoming one.
+     *
+     * <p>Two commands and two mayors. The surviving town offers; the town that will cease to exist
+     * accepts, naming who it is joining. The irreversible half is therefore typed by the person who
+     * loses everything, and the survivor's name is the argument, so there is no separate
+     * confirmation word to add — typing the name of the town that is about to absorb yours is the
+     * confirmation.</p>
+     */
+    private CommandNode mergeTree() {
+        return CommandNode.group("merge")
+                .permission("rifttowny.town.merge")
+                .usage("town merge")
+                .describedAs("Absorb another town, or accept being absorbed")
+                .child(CommandNode.action("offer")
+                        .permission("rifttowny.town.merge")
+                        .usage("town merge offer <town>")
+                        .describedAs("Offer to absorb another town. Mayor only")
+                        .completer((actor, args) -> args.size() <= 1 ? townNames() : List.of())
+                        .runs(this::mergeOffer, Surface.CHAT))
+                .child(CommandNode.action("cancel")
+                        .permission("rifttowny.town.merge")
+                        .usage("town merge cancel <town>")
+                        .describedAs("Withdraw an offer you made")
+                        .runs(this::mergeCancel, Surface.CHAT))
+                .child(CommandNode.action("accept")
+                        .permission("rifttowny.town.merge")
+                        .usage("town merge accept <town>")
+                        .describedAs("Dissolve your town into theirs. Mayor only, and final")
+                        .runs(this::mergeAccept, Surface.CHAT))
+                .child(CommandNode.action("offers")
+                        .permission("rifttowny.town.merge")
+                        .usage("town merge offers")
+                        .describedAs("Who has offered to absorb your town")
+                        .runs(this::mergeOffers, Surface.CHAT))
+                .runs(this::mergeOffers, Surface.CHAT);
+    }
+
+    private void mergeOffer(final CommandActor actor, final List<String> args) {
+        withTownAndNamedTown(actor, args, "town merge offer <town>", (who, mine, theirs) ->
+                reply(actor, towns.offerMerge(who, mine.id(), theirs.id()), ignored ->
+                        messages.send(actor::send, MessageKey.TOWN_MERGE_OFFERED,
+                                MessageService.value("town", theirs.name().display()))));
+    }
+
+    private void mergeCancel(final CommandActor actor, final List<String> args) {
+        withTownAndNamedTown(actor, args, "town merge cancel <town>", (who, mine, theirs) ->
+                reply(actor, towns.withdrawMergeOffer(who, mine.id(), theirs.id()), ignored ->
+                        messages.send(actor::send, MessageKey.TOWN_MERGE_CANCELLED,
+                                MessageService.value("town", theirs.name().display()))));
+    }
+
+    private void mergeAccept(final CommandActor actor, final List<String> args) {
+        withTownAndNamedTown(actor, args, "town merge accept <town>", (who, mine, theirs) ->
+                reply(actor, towns.acceptMerge(who, mine.id(), theirs.id()), merged -> {
+                    messages.send(actor::send, MessageKey.TOWN_MERGED,
+                            MessageService.value("absorbed", merged.absorbedName().display()),
+                            MessageService.value("survivor", merged.survivorName().display()),
+                            MessageService.value("residents", merged.residentsMoved()),
+                            MessageService.value("chunks", merged.chunksMoved()));
+                    if (!merged.rolesLost().isEmpty()) {
+                        // Named because nothing else records them: the role book went with the town,
+                        // and re-creating them in the survivor should be transcription rather than
+                        // trying to remember what a town that no longer exists used to have.
+                        messages.sendRaw(actor::send, MessageKey.TOWN_MERGE_ROLES_LOST,
+                                MessageService.value("roles",
+                                        String.join(", ", merged.rolesLost())));
+                    }
+                }));
+    }
+
+    private void mergeOffers(final CommandActor actor, final List<String> args) {
+        withTown(actor, (who, town) -> then(actor, towns.mergeOffersTo(town.id()), offers -> {
+            if (offers.isEmpty()) {
+                messages.send(actor::send, MessageKey.TOWN_MERGE_NO_OFFERS);
+                return;
+            }
+            messages.send(actor::send, MessageKey.TOWN_MERGE_OFFERS_HEADER);
+            for (final var offer : offers) {
+                messages.sendRaw(actor::send, MessageKey.TOWN_MERGE_OFFERS_LINE,
+                        MessageService.value("town", nameOfTown(offer.inviter())),
+                        MessageService.value("expires",
+                                net.riftbreaker.rifttowny.paper.message.Times.date(
+                                        offer.expiresAt())));
+            }
+        }));
+    }
+
+    /** A town's display name from the cache, or its id when the cache has never seen it. */
+    private String nameOfTown(final net.riftbreaker.rifttowny.domain.org.OrganisationId who) {
+        if (!(who instanceof net.riftbreaker.rifttowny.domain.org.TownId townId)) {
+            return String.valueOf(who);
+        }
+        return directory.town(townId)
+                .map(net.riftbreaker.rifttowny.domain.directory.TownSummary::name)
+                .orElseGet(() -> townId.value().toString());
+    }
+
+    /**
+     * Reads the actor's own town and a named one.
+     *
+     * <p>Both are needed by every merge command, and the named town is resolved through the
+     * repository rather than the cache because a merge must act on the real row.</p>
+     */
+    private void withTownAndNamedTown(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final TwoTownWork work
+    ) {
+        if (args.isEmpty()) {
+            usage(actor, usage);
+            return;
+        }
+        withTown(actor, (who, mine) ->
+                then(actor, townRepository.findByName(args.getFirst()), found ->
+                        found.ifPresentOrElse(
+                                theirs -> work.accept(who, mine, theirs),
+                                () -> denied(actor, ChangeDenial.TOWN_NOT_FOUND))));
+    }
+
+    @FunctionalInterface
+    private interface TwoTownWork {
+        void accept(ResidentId who, Town mine, Town theirs);
+    }
     /**
      * {@code /town trust} — the one grant a town can make to somebody who is not in it.
      *

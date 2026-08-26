@@ -132,6 +132,20 @@ final class ConnectionClaimStore implements CivicTransaction.ClaimStore {
         });
     }
 
+
+    @Override
+    public int reassignAllOf(final TownId from, final TownId to) {
+        Objects.requireNonNull(from, "from");
+        Objects.requireNonNull(to, "to");
+        return StorageFailure.wrapping(() -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE rt_claim SET town_id = ? WHERE town_id = ?")) {
+                statement.setString(1, to.value().toString());
+                statement.setString(2, from.value().toString());
+                return statement.executeUpdate();
+            }
+        });
+    }
     @Override
     public int deleteAllOf(final TownId town) {
         Objects.requireNonNull(town, "town");

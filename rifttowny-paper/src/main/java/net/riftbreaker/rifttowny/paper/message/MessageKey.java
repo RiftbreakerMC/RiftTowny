@@ -475,6 +475,31 @@ public enum MessageKey {
     TOWN_RESIDENTS_LINE("town.residents-line",
             "  <gray><residents></gray>"),
 
+    /** An offer, not a merge. The wording says so, because a mayor will assume otherwise. */
+    TOWN_MERGE_OFFERED("town.merge-offered",
+            "<green>Offered to absorb <white><town></white>. Nothing changes until their "
+                    + "mayor accepts.</green>"),
+
+    TOWN_MERGE_CANCELLED("town.merge-cancelled",
+            "<yellow>Withdrew the offer to absorb <white><town></white>.</yellow>"),
+
+    TOWN_MERGED("town.merged",
+            "<green><white><absorbed></white> is now part of <white><survivor></white> "
+                    + "<gray>(<residents> resident(s), <chunks> chunk(s))</gray>.</green>"),
+
+    /** Named because the role book went with the town and nothing else records what it held. */
+    TOWN_MERGE_ROLES_LOST("town.merge-roles-lost",
+            "  <yellow>Roles that did not survive: <white><roles></white></yellow>"),
+
+    TOWN_MERGE_OFFERS_HEADER("town.merge-offers-header",
+            "<gray>Towns offering to absorb yours:</gray>"),
+
+    TOWN_MERGE_OFFERS_LINE("town.merge-offers-line",
+            "  <aqua><town></aqua> <dark_gray>-</dark_gray> <gray>until <expires></gray>"),
+
+    TOWN_MERGE_NO_OFFERS("town.merge-no-offers",
+            "<gray>No town has offered to absorb yours.</gray>"),
+
     TOWN_TRUSTED("town.trusted",
             "<green><white><resident></white> is now trusted in "
                     + "<white><town></white>.</green>"),
