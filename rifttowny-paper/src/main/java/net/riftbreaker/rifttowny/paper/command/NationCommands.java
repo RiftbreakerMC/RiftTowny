@@ -17,6 +17,7 @@ import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.org.TownRepository;
+import net.riftbreaker.rifttowny.domain.role.Permission;
 import net.riftbreaker.rifttowny.domain.role.Role;
 import net.riftbreaker.rifttowny.domain.service.NationService;
 import net.riftbreaker.rifttowny.domain.service.ServiceResult;
@@ -500,6 +501,44 @@ public final class NationCommands {
                         .describedAs("Take a role away")
                         .completer((actor, args) -> args.size() <= 1 ? onlinePlayerNames() : List.of())
                         .runs(this::roleUnassign, Surface.CHAT))
+                .child(CommandNode.action("grant")
+                        .aliases("allow")
+                        .permission("rifttowny.nation.role.manage")
+                        .usage("nation role grant <role> <permission>")
+                        .describedAs("Let a role do something")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of()
+                                : permissionNameList())
+                        .runs(this::roleGrant, Surface.CHAT))
+                .child(CommandNode.action("revoke")
+                        .aliases("deny")
+                        .permission("rifttowny.nation.role.manage")
+                        .usage("nation role revoke <role> <permission>")
+                        .describedAs("Stop a role doing something")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of()
+                                : permissionNameList())
+                        .runs(this::roleRevoke, Surface.CHAT))
+                .child(CommandNode.action("priority")
+                        .aliases("rank")
+                        .permission("rifttowny.nation.role.manage")
+                        .usage("nation role priority <role> <number>")
+                        .describedAs("Move a role in the ranking")
+                        .completer((actor, args) -> List.of())
+                        .runs(this::rolePriority, Surface.CHAT))
+                .child(CommandNode.action("clone")
+                        .aliases("copy")
+                        .permission("rifttowny.nation.role.manage")
+                        .usage("nation role clone <role> <new name> <priority>")
+                        .describedAs("Copy a role under a new name")
+                        .completer((actor, args) -> List.of())
+                        .runs(this::roleClone, Surface.CHAT))
+                .child(CommandNode.action("rename")
+                        .permission("rifttowny.nation.role.manage")
+                        .usage("nation role rename <role> <new name>")
+                        .describedAs("Rename a role")
+                        .completer((actor, args) -> List.of())
+                        .runs(this::roleRename, Surface.CHAT))
                 .build();
     }
 
@@ -915,6 +954,138 @@ public final class NationCommands {
                                         MessageService.value("role", role.name()))));
     }
 
+
+    /**
+     * The five that had no command.
+     *
+     * <p>{@code NationRoleService} carried {@code clone}, {@code rename}, {@code reprioritise},
+     * {@code grant} and {@code revoke} with no caller anywhere, so a nation could create a rank —
+     * with an empty permission set, since that is what {@code new} passes — and then had no way to
+     * give it a single permission, change its name, or move it in the ranking. {@code MANAGE_ROLES}
+     * describes itself as "create, clone, rename, reorder and delete"; only two of those five could
+     * actually be reached.</p>
+     */
+    private void roleGrant(final CommandActor actor, final List<String> args) {
+        withRoleAndPermission(actor, args, "nation role grant <role> <permission>",
+                (who, nation, role, permission) -> reply(actor,
+                        roles.grant(who, nation.id(), role.id(), permission), ignored ->
+                                messages.send(actor::send, MessageKey.ROLE_PERMISSION_GRANTED,
+                                        MessageService.value("permission",
+                                                permission.name().toLowerCase(java.util.Locale.ROOT)),
+                                        MessageService.value("role", role.name()))));
+    }
+
+    private void roleRevoke(final CommandActor actor, final List<String> args) {
+        withRoleAndPermission(actor, args, "nation role revoke <role> <permission>",
+                (who, nation, role, permission) -> reply(actor,
+                        roles.revoke(who, nation.id(), role.id(), permission), ignored ->
+                                messages.send(actor::send, MessageKey.ROLE_PERMISSION_REVOKED,
+                                        MessageService.value("permission",
+                                                permission.name().toLowerCase(java.util.Locale.ROOT)),
+                                        MessageService.value("role", role.name()))));
+    }
+
+    private void rolePriority(final CommandActor actor, final List<String> args) {
+        if (args.size() < 2) {
+            usage(actor, "nation role priority <role> <number>");
+            return;
+        }
+        final Optional<Integer> priority = parsePriority(args.get(1));
+        if (priority.isEmpty()) {
+            usage(actor, "nation role priority <role> <number>");
+            return;
+        }
+        withRole(actor, args, (who, nation, role) -> reply(actor,
+                roles.reprioritise(who, nation.id(), role.id(), priority.get()), ignored ->
+                        messages.send(actor::send, MessageKey.ROLE_REPRIORITISED,
+                                MessageService.value("role", role.name()),
+                                MessageService.value("priority", String.valueOf(priority.get())))));
+    }
+
+    private void roleClone(final CommandActor actor, final List<String> args) {
+        if (args.size() < 3) {
+            usage(actor, "nation role clone <role> <new name> <priority>");
+            return;
+        }
+        final Optional<Integer> priority = parsePriority(args.get(2));
+        if (priority.isEmpty()) {
+            usage(actor, "nation role clone <role> <new name> <priority>");
+            return;
+        }
+        withRole(actor, args, (who, nation, role) -> reply(actor,
+                roles.clone(who, nation.id(), role.id(), args.get(1), priority.get()),
+                made -> messages.send(actor::send, MessageKey.ROLE_CREATED,
+                        MessageService.value("role", made.name()))));
+    }
+
+    private void roleRename(final CommandActor actor, final List<String> args) {
+        if (args.size() < 2) {
+            usage(actor, "nation role rename <role> <new name>");
+            return;
+        }
+        withRole(actor, args, (who, nation, role) -> reply(actor,
+                roles.rename(who, nation.id(), role.id(), args.get(1)), ignored ->
+                        messages.send(actor::send, MessageKey.ROLE_RENAMED,
+                                MessageService.value("role", role.name()),
+                                MessageService.value("name", args.get(1)))));
+    }
+
+    /** Reads a role by name and a permission by name, reporting whichever one failed. */
+    private void withRoleAndPermission(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final RolePermissionWork work
+    ) {
+        if (args.size() < 2) {
+            usage(actor, usage);
+            return;
+        }
+        final Optional<Permission> permission = Permission.parse(args.get(1));
+        if (permission.isEmpty()) {
+            messages.send(actor::send, MessageKey.ROLE_UNKNOWN_PERMISSION,
+                    MessageService.value("input", args.get(1)),
+                    MessageService.value("options", permissionNames()));
+            return;
+        }
+        withRole(actor, args, (who, nation, role) -> work.accept(who, nation, role, permission.get()));
+    }
+
+    /** Resolves the first argument as one of the acting nation's roles. */
+    private void withRole(
+            final CommandActor actor, final List<String> args, final NamedRoleWork work) {
+        if (args.isEmpty()) {
+            usage(actor, "nation role <action> <role> ...");
+            return;
+        }
+        withNation(actor, (who, nation) ->
+                then(actor, roles.list(nation.id()), found -> byName(found, args.getFirst())
+                        .ifPresentOrElse(
+                                role -> work.accept(who, nation, role),
+                                () -> denied(actor, ChangeDenial.ROLE_NOT_FOUND))));
+    }
+
+    private static String permissionNames() {
+        return java.util.Arrays.stream(Permission.values())
+                .map(permission -> permission.name().toLowerCase(java.util.Locale.ROOT))
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    private static List<String> permissionNameList() {
+        return java.util.Arrays.stream(Permission.values())
+                .map(permission -> permission.name().toLowerCase(java.util.Locale.ROOT))
+                .toList();
+    }
+
+    @FunctionalInterface
+    private interface RolePermissionWork {
+        void accept(ResidentId who, Nation nation, Role role, Permission permission);
+    }
+
+    @FunctionalInterface
+    private interface NamedRoleWork {
+        void accept(ResidentId who, Nation nation, Role role);
+    }
     private void withRoleAndTarget(
             final CommandActor actor,
             final List<String> args,

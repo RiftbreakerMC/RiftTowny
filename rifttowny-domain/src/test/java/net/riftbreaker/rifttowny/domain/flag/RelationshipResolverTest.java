@@ -15,10 +15,32 @@ class RelationshipResolverTest {
     private static final NationId VALEN = NationId.random();
     private static final NationId KORATH = NationId.random();
 
+    /**
+     * The views these tests need, spelled out here rather than on the record.
+     *
+     * <p>They live in the test because that is who wanted them: the three factories that used to sit
+     * on {@code TerritoryView} were called by nothing else, and each hard-coded {@code outlawed}
+     * to false — so the OUTLAW rung silently resolved as a visitor through them. A shorthand in the
+     * test can go stale without misleading production.</p>
+     */
+    private static TerritoryView unclaimed() {
+        return new TerritoryView(false, null, null, null, null, false, false, false, false);
+    }
+
+    private static TerritoryView claimed(
+            final TownId owningTown,
+            final NationId owningNation,
+            final TownId actorTown,
+            final NationId actorNation,
+            final boolean trustedByOwner) {
+        return new TerritoryView(true, owningTown, owningNation, actorTown, actorNation,
+                trustedByOwner, false, false, false);
+    }
+
     @Test
     @DisplayName("unclaimed land is wilderness whoever is standing on it")
     void unclaimedIsWilderness() {
-        assertThat(RelationshipResolver.resolve(TerritoryView.wilderness()))
+        assertThat(RelationshipResolver.resolve(unclaimed()))
                 .isEqualTo(Relationship.WILDERNESS);
     }
 
@@ -26,7 +48,7 @@ class RelationshipResolverTest {
     @DisplayName("a member of the owning town is TOWN")
     void ownTownIsTown() {
         assertThat(RelationshipResolver.resolve(
-                TerritoryView.claim(RIFTHOLM, VALEN, RIFTHOLM, VALEN, false)))
+                claimed(RIFTHOLM, VALEN, RIFTHOLM, VALEN, false)))
                 .isEqualTo(Relationship.TOWN);
     }
 
@@ -34,7 +56,7 @@ class RelationshipResolverTest {
     @DisplayName("a member of another town in the same nation is NATION")
     void sameNationIsNation() {
         assertThat(RelationshipResolver.resolve(
-                TerritoryView.claim(RIFTHOLM, VALEN, ASHFORD, VALEN, false)))
+                claimed(RIFTHOLM, VALEN, ASHFORD, VALEN, false)))
                 .isEqualTo(Relationship.NATION);
     }
 
@@ -42,7 +64,7 @@ class RelationshipResolverTest {
     @DisplayName("someone from an unrelated town is a visitor")
     void strangerIsVisitor() {
         assertThat(RelationshipResolver.resolve(
-                TerritoryView.claim(RIFTHOLM, VALEN, ASHFORD, KORATH, false)))
+                claimed(RIFTHOLM, VALEN, ASHFORD, KORATH, false)))
                 .isEqualTo(Relationship.VISITOR);
     }
 
@@ -50,7 +72,7 @@ class RelationshipResolverTest {
     @DisplayName("someone with no town at all is a visitor")
     void townlessIsVisitor() {
         assertThat(RelationshipResolver.resolve(
-                TerritoryView.claim(RIFTHOLM, null, null, null, false)))
+                claimed(RIFTHOLM, null, null, null, false)))
                 .isEqualTo(Relationship.VISITOR);
     }
 
@@ -58,7 +80,7 @@ class RelationshipResolverTest {
     @DisplayName("a trusted outsider outranks a visitor but nothing more")
     void trustSitsAboveVisitor() {
         assertThat(RelationshipResolver.resolve(
-                TerritoryView.claim(RIFTHOLM, VALEN, ASHFORD, KORATH, true)))
+                claimed(RIFTHOLM, VALEN, ASHFORD, KORATH, true)))
                 .isEqualTo(Relationship.TRUSTED);
     }
 
@@ -66,7 +88,7 @@ class RelationshipResolverTest {
     @DisplayName("a member who is also on the trust list is still a member")
     void trustNeverDemotesAMember() {
         assertThat(RelationshipResolver.resolve(
-                TerritoryView.claim(RIFTHOLM, VALEN, RIFTHOLM, VALEN, true)))
+                claimed(RIFTHOLM, VALEN, RIFTHOLM, VALEN, true)))
                 .as("otherwise adding somebody to the trust list would take rights away")
                 .isEqualTo(Relationship.TOWN);
     }

@@ -76,6 +76,29 @@ public enum ProtectionFlag {
     }
 
     /**
+     * Whether a town or an operator may set this by hand.
+     *
+     * <p>{@link Category#SYSTEM} flags are granted by the subsystem that owns them and by nothing
+     * else. They were offered by the {@code /town flag} completer anyway, and nothing refused the
+     * command, so a mayor could store an {@code ORGANISATION} override for {@code WAR_ACTION} on
+     * their own land — a layer that outranks the built-in refusal. It buys nothing today because no
+     * listener maps to those two yet, which is exactly why it went unnoticed; it would have become
+     * a self-granted exemption the day the war module started reading them, held by whichever towns
+     * happened to have typed the command first.</p>
+     *
+     * <p>The list of flags a town may configure is a smaller thing than the list of flags, and this
+     * is the difference.</p>
+     */
+    public boolean configurable() {
+        return category != Category.SYSTEM;
+    }
+
+    /** Every flag a town or an operator may actually set, in declaration order. */
+    public static java.util.List<ProtectionFlag> settable() {
+        return java.util.Arrays.stream(values()).filter(ProtectionFlag::configurable).toList();
+    }
+
+    /**
      * The shipped default when no layer has an opinion.
      *
      * <p>Deliberately conservative inside claims and permissive in wilderness: a server that

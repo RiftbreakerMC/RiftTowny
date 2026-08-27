@@ -34,6 +34,17 @@ public final class CivicCacheService implements CivicCacheRefresher {
     private final net.riftbreaker.rifttowny.domain.civic.NationCache nationCache;
     private final net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook diplomacy;
     private final net.riftbreaker.rifttowny.domain.justice.Outlaws outlaws;
+
+    /**
+     * Anything else that caches by town and has to be told when one stops existing.
+     *
+     * <p>A registration seam rather than a constructor argument, because the things that need it are
+     * built after this is. { SpawnService} keeps its own map keyed by town and exposes a
+     * { forget}, and until this existed nothing called it - a disbanded town left a spawn in
+     * memory until the next restart, and so did a merged one.</p>
+     */
+    private final java.util.List<Consumer<TownId>> alsoForget =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Consumer<String> warn;
 
     /**
@@ -167,6 +178,7 @@ public final class CivicCacheService implements CivicCacheRefresher {
                 // Disbanded between the change and this read, or disbanded by the change itself.
                 cache.forget(town);
                 outlaws.forget(town);
+                alsoForget.forEach(listener -> listener.accept(town));
                 return null;
             }
             final Optional<RoleBook> roles = rolesOf(transaction, town);
@@ -209,12 +221,24 @@ public final class CivicCacheService implements CivicCacheRefresher {
         });
     }
 
+    /**
+     * Registers another cache to be dropped whenever a town stops existing.
+     *
+     * <p>Called at enable, once per cache. Nothing unregisters: these live as long as the plugin
+     * does, and a listener that outlived its owner would be a leak of exactly the kind it exists to
+     * prevent.</p>
+     */
+    public void alsoForget(final Consumer<TownId> listener) {
+        alsoForget.add(Objects.requireNonNull(listener, "listener"));
+    }
+
     /** Drops a town without reading anything, for a caller that already knows it is gone. */
     public void forget(final TownId town) {
         cache.forget(town);
         // The rows cascade with the town; this is the cache being told, and forgetting it here is
         // what stops a disbanded town's grudges outliving it until the next restart.
         outlaws.forget(town);
+        alsoForget.forEach(listener -> listener.accept(town));
     }
 
     private static Optional<RoleBook> rolesOf(

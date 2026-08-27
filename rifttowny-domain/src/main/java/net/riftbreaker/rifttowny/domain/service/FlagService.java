@@ -62,11 +62,6 @@ public final class FlagService {
         this.overrides = Objects.requireNonNull(overrides, "overrides");
     }
 
-    /** The in-memory set, which is also the resolver's settings source. */
-    public FlagOverrides overrides() {
-        return overrides;
-    }
-
     /**
      * Fills the in-memory set from storage.
      *
@@ -130,6 +125,23 @@ public final class FlagService {
         return clear(actor, townId, FlagTarget.claim(chunk), flag, relationship);
     }
 
+
+    /**
+     * The first flag whose ladder is inverted at this target, if any.
+     *
+     * <p>A question rather than a handle on the cache. {@code FlagSettings.firstNonMonotonic} has
+     * existed since the flag system was written, and {@code Relationship}'s own javadoc cites it as
+     * the thing that catches "a configuration that lets a visitor do something a trusted outsider
+     * cannot" — but nothing called it, so nothing ever caught anything. This is the caller.</p>
+     *
+     * <p>It reads the target's own settings rather than the resolved stack, which is the right
+     * scope: a town can only be told about the rungs it set itself, and an inversion produced by an
+     * administrator's layer sitting above it is not the town's to fix.</p>
+     */
+    public java.util.Optional<ProtectionFlag> firstInconsistent(final FlagTarget target) {
+        Objects.requireNonNull(target, "target");
+        return overrides.settingsFor(target).firstNonMonotonic();
+    }
     /** Everything a target has been told, for a listing. */
     public CompletableFuture<List<FlagOverride>> of(final FlagTarget target) {
         Objects.requireNonNull(target, "target");
@@ -191,32 +203,6 @@ public final class FlagService {
                 });
     }
 
-    /**
-     * Removes everything a disbanded town's targets held, its claims included.
-     *
-     * <p>Called after the town is gone. The rows have no foreign key to sweep them — the target
-     * column holds four kinds of identifier and cannot reference one table — so they are removed
-     * explicitly, and the alternative is an override that reappears when somebody else claims the
-     * chunk.</p>
-     */
-    public CompletableFuture<Integer> forgetTown(final TownId townId, final List<ChunkKey> chunks) {
-        Objects.requireNonNull(townId, "townId");
-        final List<FlagTarget> targets = new java.util.ArrayList<>();
-        targets.add(FlagTarget.organisation(townId));
-        for (final ChunkKey chunk : chunks == null ? List.<ChunkKey>of() : chunks) {
-            targets.add(FlagTarget.claim(chunk));
-        }
-        return store.inTransaction(transaction -> {
-            int removed = 0;
-            for (final FlagTarget target : targets) {
-                removed += transaction.flags().clearAll(target);
-            }
-            return removed;
-        }).thenApply(removed -> {
-            targets.forEach(overrides::clearAll);
-            return removed;
-        });
-    }
 
     // --- internals -----------------------------------------------------------------------------
 
@@ -231,6 +217,12 @@ public final class FlagService {
         Objects.requireNonNull(flag, "flag");
         Objects.requireNonNull(relationship, "relationship");
 
+        // Guarded here rather than only in the command, because the service is the boundary: the
+        // API and any future menu reach this and not the parser.
+        if (!flag.configurable()) {
+            return CompletableFuture.completedFuture(
+                    ServiceResult.refused(ChangeDenial.FLAG_NOT_SETTABLE));
+        }
         return transaction(townId, actor, transaction -> {
             requireReach(transaction, townId, target);
             final FlagOverride override = FlagOverride.of(

@@ -46,6 +46,7 @@ public final class ResidentCommands {
     private final MessageService messages;
     private final Listings listings;
     private final net.riftbreaker.rifttowny.domain.service.PreferenceService preferences;
+    private final net.riftbreaker.rifttowny.domain.service.OutlawService outlaws;
     private final boolean noticesEnabledOnThisServer;
     private final Clock clock;
 
@@ -55,6 +56,7 @@ public final class ResidentCommands {
             final CivicDirectory directory,
             final net.riftbreaker.rifttowny.domain.civic.ResidentNames names,
             final net.riftbreaker.rifttowny.domain.service.PreferenceService preferences,
+            final net.riftbreaker.rifttowny.domain.service.OutlawService outlaws,
             final boolean noticesEnabledOnThisServer,
             final MessageService messages,
             final Clock clock
@@ -66,6 +68,7 @@ public final class ResidentCommands {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.listings = new Listings(messages);
         this.preferences = Objects.requireNonNull(preferences, "preferences");
+        this.outlaws = Objects.requireNonNull(outlaws, "outlaws");
         this.noticesEnabledOnThisServer = noticesEnabledOnThisServer;
         this.clock = Objects.requireNonNull(clock, "clock");
     }
@@ -248,6 +251,22 @@ public final class ResidentCommands {
         line(actor, "Last seen", isOnline(profile.id())
                 ? plain(MessageKey.RESIDENT_ONLINE_NOW)
                 : Times.ago(profile.lastSeenAt(), clock.instant()));
+
+        // Where they are not welcome. Answered from the outlaw book, so it costs nothing, and it
+        // reveals nothing private - a town's outlaw list is already readable with /town outlaw
+        // list, which every player holds by default. Omitted entirely when there is nobody to
+        // name, rather than printing an empty line on almost every screen.
+        final var barred = outlaws.townsOutlawing(profile.id());
+        if (!barred.isEmpty()) {
+            final java.util.List<String> names = new ArrayList<>(barred.size());
+            barred.forEach(town -> directory.town(town)
+                    .map(net.riftbreaker.rifttowny.domain.directory.TownSummary::name)
+                    .ifPresent(names::add));
+            names.sort(String.CASE_INSENSITIVE_ORDER);
+            if (!names.isEmpty()) {
+                line(actor, "Outlawed by", String.join(", ", names));
+            }
+        }
     }
 
     /**

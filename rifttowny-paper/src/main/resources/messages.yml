@@ -14,11 +14,6 @@
 
 prefix: '<gradient:#4ea8de:#80ffdb><bold>RiftTowny</bold></gradient> <dark_gray>|</dark_gray> '
 
-startup:
-  towny-conflict: '<red>RiftTowny cannot run alongside Towny: the command tree and the <white>%townyadvanced_*%</white> placeholder namespace both collide. Remove one of the two plugins.</red>'
-  storage-problem: '<red><setting></red> <gray><problem></gray> <yellow>-></yellow> <white><remedy></white>'
-  storage-abort: '<red>RiftTowny did not start: the storage configuration is unsafe. Fix the problems above and restart.</red>'
-
 command:
   no-permission: '<red>You do not have permission to do that.</red>'
   unknown-subcommand: '<red>Unknown subcommand <white><input></white>. Try <white><command></white>.</red>'
@@ -59,7 +54,7 @@ town:
   unclaimed-all: '<yellow>Released <white><chunks></white> chunk(s). <white><town></white> now holds only its home chunk.</yellow>'
   unclaimed: '<yellow>Released <white><chunk></white>.</yellow>'
   bank-header: '<gray>Treasury of <white><town></white> <dark_gray>-</dark_gray> <white><balance></white></gray>'
-  bank-line: '  <white><movement></white> <dark_gray>-</dark_gray> <gray><by></gray>'
+  bank-line: '  <white><movement></white><gray><detail></gray> <dark_gray>-</dark_gray> <gray><by></gray>'
   bank-no-history: '  <gray>Nothing has moved yet.</gray>'
   bank-no-economy: '  <yellow>No economy plugin is installed, so money cannot move between players and the town.</yellow>'
   bank-deposited: '<green>Deposited <white><amount></white>. The treasury holds <white><balance></white>.</green>'
@@ -211,11 +206,17 @@ role:
   deleted: '<yellow>Deleted the role <white><role></white>.</yellow>'
   assigned: '<green><white><resident></white> now holds <white><role></white>.</green>'
   unassigned: '<yellow><white><resident></white> no longer holds <white><role></white>.</yellow>'
+  permission-granted: '<green><white><role></white> may now <white><permission></white>.</green>'
+  permission-revoked: '<yellow><white><role></white> may no longer <white><permission></white>.</yellow>'
+  reprioritised: '<green><white><role></white> now ranks <white><priority></white>.</green>'
+  renamed: '<green><white><role></white> is now called <white><name></white>.</green>'
+  unknown-permission: '<red>Unknown permission <white><input></white>. One of: <white><options></white></red>'
   list-header: '<gray>Roles in <white><town></white>, highest first:</gray>'
   list-line: '  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> <dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>'
 
 flag:
   set: '<green><white><flag></white> for <white><relationship></white> is now <white><state></white> <gray>(<scope>)</gray>.</green>'
+  ladder-inverted: '  <yellow><white><flag></white> is now allowed to somebody who ranks lower than somebody it is denied to. Usually that means two arguments swapped.</yellow>'
   cleared: '<yellow><white><flag></white> for <white><relationship></white> is no longer set <gray>(<scope>)</gray>; the layer below decides again.</yellow>'
   list-header: '<gray>Overrides for <white><target></white>:</gray>'
   list-line: '  <aqua><flag></aqua> <gray>for</gray> <white><relationship></white> <dark_gray>-</dark_gray> <white><state></white>'
@@ -313,6 +314,7 @@ denial:
   ruin-not-yet-reclaimable: 'These ruins are too fresh to rebuild. Come back later.'
   flag-not-set: 'That flag was not set here, so there was nothing to clear.'
   flag-target-not-yours: 'That land is not yours to configure.'
+  flag-not-settable: 'That flag is set by the server when a war or an event runs, not by hand.'
   town-not-in-a-nation: 'Your town does not belong to a nation.'
   not-a-citizen-of-this-nation: 'That player does not live in one of this nation''s towns.'
   no-invitation: 'That nation has not invited your town.'

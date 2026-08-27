@@ -12,18 +12,6 @@ public enum MessageKey {
 
     PREFIX("prefix", "<gradient:#4ea8de:#80ffdb><bold>RiftTowny</bold></gradient> <dark_gray>|</dark_gray> "),
 
-    STARTUP_TOWNY_CONFLICT("startup.towny-conflict",
-            "<red>RiftTowny cannot run alongside Towny: the command tree and the "
-                    + "<white>%townyadvanced_*%</white> placeholder namespace both collide. "
-                    + "Remove one of the two plugins.</red>"),
-
-    STARTUP_STORAGE_PROBLEM("startup.storage-problem",
-            "<red><setting></red> <gray><problem></gray> <yellow>-></yellow> <white><remedy></white>"),
-
-    STARTUP_STORAGE_ABORT("startup.storage-abort",
-            "<red>RiftTowny did not start: the storage configuration is unsafe. "
-                    + "Fix the problems above and restart.</red>"),
-
     COMMAND_NO_PERMISSION("command.no-permission",
             "<red>You do not have permission to do that.</red>"),
 
@@ -171,7 +159,7 @@ public enum MessageKey {
                     + "<white><balance></white></gray>"),
 
     TOWN_BANK_LINE("town.bank-line",
-            "  <white><movement></white> <dark_gray>-</dark_gray> <gray><by></gray>"),
+            "  <white><movement></white><gray><detail></gray> <dark_gray>-</dark_gray> <gray><by></gray>"),
 
     TOWN_BANK_NO_HISTORY("town.bank-no-history",
             "  <gray>Nothing has moved yet.</gray>"),
@@ -320,6 +308,22 @@ public enum MessageKey {
     ROLE_UNASSIGNED("role.unassigned",
             "<yellow><white><resident></white> no longer holds <white><role></white>.</yellow>"),
 
+    ROLE_PERMISSION_GRANTED("role.permission-granted",
+            "<green><white><role></white> may now <white><permission></white>.</green>"),
+
+    ROLE_PERMISSION_REVOKED("role.permission-revoked",
+            "<yellow><white><role></white> may no longer <white><permission></white>.</yellow>"),
+
+    ROLE_REPRIORITISED("role.reprioritised",
+            "<green><white><role></white> now ranks <white><priority></white>.</green>"),
+
+    ROLE_RENAMED("role.renamed",
+            "<green><white><role></white> is now called <white><name></white>.</green>"),
+
+    ROLE_UNKNOWN_PERMISSION("role.unknown-permission",
+            "<red>Unknown permission <white><input></white>. "
+                    + "One of: <white><options></white></red>"),
+
     ROLE_LIST_HEADER("role.list-header",
             "<gray>Roles in <white><town></white>, highest first:</gray>"),
 
@@ -344,6 +348,16 @@ public enum MessageKey {
     FLAG_SET("flag.set",
             "<green><white><flag></white> for <white><relationship></white> is now "
                     + "<white><state></white> <gray>(<scope>)</gray>.</green>"),
+
+    /**
+     * A ladder that lets a lower rung do what a higher one may not.
+     *
+     * <p>A warning rather than a refusal: it is legitimate to want, and refusing would make the
+     * command lie about what it accepted.</p>
+     */
+    FLAG_LADDER_INVERTED("flag.ladder-inverted",
+            "  <yellow><white><flag></white> is now allowed to somebody who ranks lower than "
+                    + "somebody it is denied to. Usually that means two arguments swapped.</yellow>"),
 
     /** Cleared, not denied. The distinction matters: the layer below answers again. */
     FLAG_CLEARED("flag.cleared",

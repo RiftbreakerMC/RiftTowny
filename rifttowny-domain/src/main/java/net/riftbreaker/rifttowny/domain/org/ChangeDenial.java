@@ -353,6 +353,17 @@ public enum ChangeDenial {
     FLAG_NOT_SET,
 
     /**
+     * That flag is granted by the subsystem that owns it, not by hand.
+     *
+     * <p>The {@code SYSTEM} flags exist so that a war or an event can widen what is permitted for
+     * as long as it runs. A town writing its own organisation-layer override for one would be
+     * granting itself the exemption permanently, from a layer that outranks the built-in refusal —
+     * and because nothing reads those flags yet, it would have sat there unnoticed until the module
+     * that does read them shipped.</p>
+     */
+    FLAG_NOT_SETTABLE,
+
+    /**
      * That land or organisation is not yours to configure.
      *
      * <p>The resolver reads a claim's overrides without asking who wrote them, so a town that could

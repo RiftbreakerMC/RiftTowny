@@ -240,7 +240,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
         registerTree("resident", new net.riftbreaker.rifttowny.paper.command.ResidentCommands(
                 residentRepository, plotService, directory, residentNames, preferenceService,
-                settings.territoryNotices(), messages, clock).tree());
+                outlawService, settings.territoryNotices(), messages, clock).tree());
 
         final net.riftbreaker.rifttowny.paper.chat.ChannelRenderer channelRenderer =
                 new net.riftbreaker.rifttowny.paper.chat.ChannelRenderer(
@@ -326,6 +326,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.spawnService = new net.riftbreaker.rifttowny.domain.service.SpawnService(
                     civicStore, clock, territoryIndex)
                     .pricedAt(settings.prices(), economyAdapter);
+            // The spawn cache is keyed by town, so it has to be told when one stops existing -
+            // a disband or a merge otherwise leaves a spawn in memory until the next restart.
+            civicCacheService.alsoForget(spawnService::forget);
             this.plotService = new net.riftbreaker.rifttowny.domain.service.PlotService(
                     civicStore, clock, territoryIndex, settings.prices(), economyAdapter);
             // RiftEco if it is here, and a wallet that refuses everything if it is not. The civic

@@ -216,6 +216,55 @@ class FlagServiceTest extends SqliteFixture {
         }
 
         @Test
+        @DisplayName("a mayor cannot set a flag the war and event subsystems own")
+        void systemFlagsAreNotSettable() {
+            // These were offered by the completer and refused by nothing, so a mayor could store an
+            // ORGANISATION override for WAR_ACTION on their own land - a layer that outranks the
+            // built-in refusal. It bought nothing while no listener read those flags, which is why
+            // it went unnoticed; it would have become a self-granted exemption held by whichever
+            // towns had typed the command before the war module shipped.
+            final Town town = riftholm();
+
+            for (final ProtectionFlag flag : ProtectionFlag.values()) {
+                if (flag.category() == ProtectionFlag.Category.SYSTEM) {
+                    assertThat(flags.setForTown(
+                            MAYOR, town.id(), flag, Relationship.VISITOR, true).join().denial())
+                            .as("%s", flag)
+                            .contains(ChangeDenial.FLAG_NOT_SETTABLE);
+                }
+            }
+            assertThat(flags.of(FlagTarget.organisation(town.id())).join()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("and cannot reach them on a single chunk either")
+        void systemFlagsAreNotSettableOnAClaim() {
+            final Town town = riftholm();
+
+            assertThat(flags.setForClaim(
+                    MAYOR, town.id(), HOME, ProtectionFlag.WAR_ACTION, Relationship.VISITOR, true)
+                    .join().denial())
+                    .contains(ChangeDenial.FLAG_NOT_SETTABLE);
+        }
+
+        @Test
+        @DisplayName("every other flag is still settable, so the guard is not a blanket refusal")
+        void ordinaryFlagsAreUnaffected() {
+            final Town town = riftholm();
+
+            for (final ProtectionFlag flag : ProtectionFlag.settable()) {
+                assertThat(flags.setForTown(
+                        MAYOR, town.id(), flag, Relationship.VISITOR, true).join().succeeded())
+                        .as("%s", flag)
+                        .isTrue();
+            }
+            assertThat(ProtectionFlag.settable())
+                    .as("the settable list must not silently become empty")
+                    .hasSizeGreaterThan(10)
+                    .doesNotContain(ProtectionFlag.WAR_ACTION, ProtectionFlag.EVENT_ACTION);
+        }
+
+        @Test
         @DisplayName("a flag cannot be set on unclaimed land")
         void cannotSetOnWilderness() {
             final Town town = riftholm();

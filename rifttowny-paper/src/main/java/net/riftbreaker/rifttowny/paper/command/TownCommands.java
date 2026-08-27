@@ -18,6 +18,7 @@ import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.org.TownProfile;
+import net.riftbreaker.rifttowny.domain.role.Permission;
 import net.riftbreaker.rifttowny.domain.role.Role;
 import net.riftbreaker.rifttowny.domain.service.ServiceResult;
 import net.riftbreaker.rifttowny.domain.service.TownRoleService;
@@ -775,6 +776,44 @@ public final class TownCommands {
                         .describedAs("Take a role away")
                         .completer((actor, args) -> args.size() <= 1 ? onlinePlayerNames() : List.of())
                         .runs(this::roleUnassign, Surface.CHAT))
+                .child(CommandNode.action("grant")
+                        .aliases("allow")
+                        .permission("rifttowny.role.manage")
+                        .usage("town role grant <role> <permission>")
+                        .describedAs("Let a role do something")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of()
+                                : lowerNames(Permission.values()))
+                        .runs(this::roleGrant, Surface.CHAT))
+                .child(CommandNode.action("revoke")
+                        .aliases("deny")
+                        .permission("rifttowny.role.manage")
+                        .usage("town role revoke <role> <permission>")
+                        .describedAs("Stop a role doing something")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of()
+                                : lowerNames(Permission.values()))
+                        .runs(this::roleRevoke, Surface.CHAT))
+                .child(CommandNode.action("priority")
+                        .aliases("rank")
+                        .permission("rifttowny.role.manage")
+                        .usage("town role priority <role> <number>")
+                        .describedAs("Move a role in the ranking")
+                        .completer((actor, args) -> List.of())
+                        .runs(this::rolePriority, Surface.CHAT))
+                .child(CommandNode.action("clone")
+                        .aliases("copy")
+                        .permission("rifttowny.role.manage")
+                        .usage("town role clone <role> <new name> <priority>")
+                        .describedAs("Copy a role under a new name")
+                        .completer((actor, args) -> List.of())
+                        .runs(this::roleClone, Surface.CHAT))
+                .child(CommandNode.action("rename")
+                        .permission("rifttowny.role.manage")
+                        .usage("town role rename <role> <new name>")
+                        .describedAs("Rename a role")
+                        .completer((actor, args) -> List.of())
+                        .runs(this::roleRename, Surface.CHAT))
                 .build();
     }
 
@@ -1423,6 +1462,133 @@ public final class TownCommands {
                                         MessageService.value("role", role.name()))));
     }
 
+    /**
+     * Giving a role a permission, and taking it back.
+     *
+     * <p>Without these a custom role is inert for ever. {@code /town role new} creates one with an
+     * empty permission set, and nothing else could add to it, so a town could name a rank, hand it
+     * to people, and have it grant nothing, permanently. The service methods behind this existed
+     * the whole time with no caller, which is why the gap stayed invisible: the domain looked
+     * complete, and only the command tree knew otherwise.</p>
+     *
+     * <p>{@code MANAGE_ROLES} gates both, and the editor refuses to grant a permission the actor
+     * does not hold themselves, so this cannot be used to climb.</p>
+     */
+    private void roleGrant(final CommandActor actor, final List<String> args) {
+        withRoleAndPermission(actor, args, "town role grant <role> <permission>",
+                (who, town, role, permission) -> reply(actor,
+                        roles.grant(who, town.id(), role.id(), permission), ignored ->
+                                messages.send(actor::send, MessageKey.ROLE_PERMISSION_GRANTED,
+                                        MessageService.value("permission",
+                                                permission.name().toLowerCase(Locale.ROOT)),
+                                        MessageService.value("role", role.name()))));
+    }
+
+    private void roleRevoke(final CommandActor actor, final List<String> args) {
+        withRoleAndPermission(actor, args, "town role revoke <role> <permission>",
+                (who, town, role, permission) -> reply(actor,
+                        roles.revoke(who, town.id(), role.id(), permission), ignored ->
+                                messages.send(actor::send, MessageKey.ROLE_PERMISSION_REVOKED,
+                                        MessageService.value("permission",
+                                                permission.name().toLowerCase(Locale.ROOT)),
+                                        MessageService.value("role", role.name()))));
+    }
+
+
+    /** Copies a role's whole permission set under a new name, which is how a variant rank is made. */
+    private void roleClone(final CommandActor actor, final List<String> args) {
+        if (args.size() < 3) {
+            usage(actor, "town role clone <role> <new name> <priority>");
+            return;
+        }
+        final Optional<Integer> priority = parsePriority(args.get(2));
+        if (priority.isEmpty()) {
+            usage(actor, "town role clone <role> <new name> <priority>");
+            return;
+        }
+        withRole(actor, args, (who, town, role) -> reply(actor,
+                roles.clone(who, town.id(), role.id(), args.get(1), priority.get()),
+                made -> messages.send(actor::send, MessageKey.ROLE_CREATED,
+                        MessageService.value("role", made.name()))));
+    }
+
+    private void roleRename(final CommandActor actor, final List<String> args) {
+        if (args.size() < 2) {
+            usage(actor, "town role rename <role> <new name>");
+            return;
+        }
+        withRole(actor, args, (who, town, role) -> reply(actor,
+                roles.rename(who, town.id(), role.id(), args.get(1)), ignored ->
+                        messages.send(actor::send, MessageKey.ROLE_RENAMED,
+                                MessageService.value("role", role.name()),
+                                MessageService.value("name", args.get(1)))));
+    }
+    /** Moves a role up or down the ranking, which is what decides who may act on whom. */
+    private void rolePriority(final CommandActor actor, final List<String> args) {
+        if (args.size() < 2) {
+            usage(actor, "town role priority <role> <number>");
+            return;
+        }
+        final Optional<Integer> priority = parsePriority(args.get(1));
+        if (priority.isEmpty()) {
+            usage(actor, "town role priority <role> <number>");
+            return;
+        }
+        withRole(actor, args, (who, town, role) -> reply(actor,
+                roles.reprioritise(who, town.id(), role.id(), priority.get()), ignored ->
+                        messages.send(actor::send, MessageKey.ROLE_REPRIORITISED,
+                                MessageService.value("role", role.name()),
+                                MessageService.value("priority",
+                                        String.valueOf(priority.get())))));
+    }
+
+    /** Reads a role by name and a permission by name, reporting whichever one failed. */
+    private void withRoleAndPermission(
+            final CommandActor actor,
+            final List<String> args,
+            final String usage,
+            final RolePermissionWork work
+    ) {
+        if (args.size() < 2) {
+            usage(actor, usage);
+            return;
+        }
+        final Optional<Permission> permission = parsePermission(actor, args.get(1));
+        if (permission.isEmpty()) {
+            return;
+        }
+        withRole(actor, args, (who, town, role) -> work.accept(who, town, role, permission.get()));
+    }
+
+    /** Resolves the first argument as one of the acting town's roles. */
+    private void withRole(final CommandActor actor, final List<String> args, final NamedRoleWork work) {
+        withTown(actor, (who, town) ->
+                then(actor, roles.list(town.id()), found -> byName(found, args.getFirst())
+                        .ifPresentOrElse(
+                                role -> work.accept(who, town, role),
+                                () -> denied(actor, ChangeDenial.ROLE_NOT_FOUND))));
+    }
+
+    private Optional<Permission> parsePermission(final CommandActor actor, final String raw) {
+        final Optional<Permission> permission = Permission.parse(raw);
+        if (permission.isEmpty()) {
+            messages.send(actor::send, MessageKey.ROLE_UNKNOWN_PERMISSION,
+                    MessageService.value("input", raw),
+                    MessageService.value("options", names(Permission.values())));
+        }
+        return permission;
+    }
+
+    @FunctionalInterface
+    private interface RolePermissionWork {
+        void accept(ResidentId who, Town town, Role role, Permission permission);
+    }
+
+    @FunctionalInterface
+    private interface NamedRoleWork {
+        void accept(ResidentId who, Town town, Role role);
+    }
+
     // --- bank actions --------------------------------------------------------------------------
 
     /**
@@ -1449,6 +1615,7 @@ public final class TownCommands {
                         for (final var entry : history) {
                             messages.sendRaw(actor::send, MessageKey.TOWN_BANK_LINE,
                                     MessageService.value("movement", entry.describe()),
+                                    MessageService.value("detail", entry.note().map(note -> " " + note).orElse("")),
                                     MessageService.value("by",
                                             entry.author().map(names::describe).orElse("the server")));
                         }
@@ -1725,6 +1892,14 @@ public final class TownCommands {
                 MessageService.value("relationship", stored.relationship()),
                 MessageService.value("state", stored.allowed() ? "allowed" : "denied"),
                 MessageService.value("scope", scopeLabel(stored.source())));
+
+        // Said here because here is where somebody can act on it. The ladder runs from outlaw up
+        // to plot holder, and a setting that allows something at a lower rung than it denies it at
+        // a higher one is almost always a typo - the two arguments transposed, usually. Reported
+        // rather than refused: it is a legitimate thing to want, just rarely.
+        flags.firstInconsistent(stored.target()).ifPresent(inverted ->
+                messages.sendRaw(actor::send, MessageKey.FLAG_LADDER_INVERTED,
+                        MessageService.value("flag", inverted)));
     }
 
     private void announceCleared(
@@ -1743,14 +1918,28 @@ public final class TownCommands {
         return source == FlagSource.CLAIM ? "this chunk" : "town-wide";
     }
 
+    /**
+     * Reads a flag name, refusing the ones a town does not get to set.
+     *
+     * <p>A {@code SYSTEM} flag is reported as unknown rather than as refused, because from the
+     * town's side it is: those are granted by the subsystem that owns them, and naming one in the
+     * refusal would advertise a lever that does not exist for the person reading it.</p>
+     */
     private Optional<ProtectionFlag> parseFlag(final CommandActor actor, final String raw) {
-        final Optional<ProtectionFlag> flag = ProtectionFlag.parse(raw);
+        final Optional<ProtectionFlag> flag =
+                ProtectionFlag.parse(raw).filter(ProtectionFlag::configurable);
         if (flag.isEmpty()) {
             messages.send(actor::send, MessageKey.FLAG_UNKNOWN,
                     MessageService.value("input", raw),
-                    MessageService.value("options", names(ProtectionFlag.values())));
+                    MessageService.value("options", String.join(", ", settableFlagNames())));
         }
         return flag;
+    }
+
+    private static List<String> settableFlagNames() {
+        return ProtectionFlag.settable().stream()
+                .map(flag -> flag.name().toLowerCase(Locale.ROOT))
+                .toList();
     }
 
     private Optional<Relationship> parseRelationship(final CommandActor actor, final String raw) {
@@ -1773,17 +1962,13 @@ public final class TownCommands {
     }
 
     private static String names(final Enum<?>[] values) {
-        final List<String> names = new ArrayList<>(values.length);
-        for (final Enum<?> value : values) {
-            names.add(value.name().toLowerCase(Locale.ROOT));
-        }
-        return String.join(", ", names);
+        return String.join(", ", lowerNames(values));
     }
 
     private static List<String> completeFlagArguments(
             final CommandActor actor, final List<String> args) {
         return switch (args.size()) {
-            case 0, 1 -> lowerNames(ProtectionFlag.values());
+            case 0, 1 -> settableFlagNames();
             case 2 -> lowerNames(Relationship.values());
             case 3 -> List.of("allow", "deny", "clear");
             default -> List.of();

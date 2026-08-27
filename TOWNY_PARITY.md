@@ -74,7 +74,7 @@ rows as the truth.
 | `/town toggle neutral` / peaceful | `/town set neutral <on\|off>` | PARTIAL — recorded and shown; **nothing enforces it**, because there is no war module. RiftWars will read it |
 | Town map colour | `/town set colour <#a1b2c3\|clear>` | DONE |
 | `/town rank add|remove` | `/town role assign|unassign` | DONE |
-| Custom ranks with configurable permissions | `/town role new|delete`, grant, revoke, reprioritise | DONE — Towny's ranks are config-defined; ours are per-town and editable in game |
+| Custom ranks with configurable permissions | `/town role new`, `delete`, `grant`, `revoke`, `priority`, `assign`, `unassign` | DONE — Towny's ranks are config-defined; ours are per-town and editable in game. Until 2026-08-26 this row overstated it: `grant`, `revoke` and `priority` existed as service methods with no command, so a town could create a rank and never set what it did |
 | `/town claim` cost, and a refund on unclaim | `prices.claim`, `prices.claim-refund`, charged in the same transaction as the claim | DONE |
 | `/town buy bonus` | — | **MISSING** |
 | `/town deposit`, `/town withdraw` | `/town deposit`, `/town withdraw`, `/town bank` | DONE — bound to RiftEco. Refuses with a clear message when no economy plugin is installed |

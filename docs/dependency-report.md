@@ -32,7 +32,7 @@ to start.
 |---|---|---|
 | RiftEco | `provided` artifact | Economy features disabled; territory and governance unaffected |
 | RiftCore | `provided` artifact | Shared GUI framework unavailable; RiftTowny falls back to its own inventory holder |
-| RiftLogger | `provided` artifact | Civic audit not written to the central log; local audit table still populated |
+| RiftLogger | `provided` artifact | Civic audit not written to the central log. The local `rt_audit` table has no writer either, so there is no audit trail at all until RT-CORE-LOG lands |
 | RiftPvP | `provided` artifact | Combat-tag flight removal disabled |
 | RiftBoosters | `provided` artifact | Community flight booster unavailable |
 | RiftChat | `provided` artifact | `/tc` `/nc` `/ac` unavailable |

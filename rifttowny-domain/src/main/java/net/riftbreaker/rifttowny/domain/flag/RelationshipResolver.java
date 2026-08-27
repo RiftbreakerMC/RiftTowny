@@ -99,35 +99,11 @@ public final class RelationshipResolver {
             boolean outlawed,
             boolean allied
     ) {
-
-        /** Unclaimed land. */
-        public static TerritoryView wilderness() {
-            return new TerritoryView(false, null, null, null, null, false, false, false, false);
-        }
-
-        /** A claim, with the actor's own affiliations. */
-        public static TerritoryView claim(
-                final TownId owningTown,
-                final NationId owningNation,
-                final TownId actorTown,
-                final NationId actorNation,
-                final boolean trustedByOwner
-        ) {
-            return claim(owningTown, owningNation, actorTown, actorNation, trustedByOwner, false);
-        }
-
-        /** The same, for a chunk the actor may hold as a plot. */
-        public static TerritoryView claim(
-                final TownId owningTown,
-                final NationId owningNation,
-                final TownId actorTown,
-                final NationId actorNation,
-                final boolean trustedByOwner,
-                final boolean holdsPlot
-        ) {
-            return new TerritoryView(
-                    true, owningTown, owningNation, actorTown, actorNation,
-                    trustedByOwner, holdsPlot, false, false);
-        }
+        // No convenience factories. There were three, used by nothing but tests, and every one of
+        // them hard-coded `outlawed = false` — so when the OUTLAW rung was added they quietly began
+        // resolving an outlawed player as an ordinary visitor, with no compiler signal. A record
+        // with nine components and two adjacent booleans is exactly where a helpful shorthand goes
+        // stale without anybody noticing, and the canonical constructor cannot: adding a component
+        // breaks every call site until somebody decides what it should be there.
     }
 }
