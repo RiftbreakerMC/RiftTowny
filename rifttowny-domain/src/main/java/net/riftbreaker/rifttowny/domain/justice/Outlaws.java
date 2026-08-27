@@ -29,7 +29,10 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class Outlaws {
 
-    private final Map<TownId, Set<ResidentId>> byTown = new ConcurrentHashMap<>();
+    // The declaration rather than the id alone. It was a Set<ResidentId>, which threw away the
+    // officer and the timestamp the moment a row was loaded - so the two columns rt_town_outlaw
+    // has always written could not be shown even though they sat in the result set.
+    private final Map<TownId, Map<ResidentId, Declaration>> byTown = new ConcurrentHashMap<>();
 
     private final AtomicLong generation = new AtomicLong();
 
@@ -47,9 +50,17 @@ public final class Outlaws {
         generation.incrementAndGet();
     }
 
-    /** Records one. Idempotent: declaring twice is the same as declaring once. */
-    public synchronized void declare(final TownId town, final ResidentId who) {
-        put(new Declaration(town, who));
+    /**
+     * Records one. Idempotent: declaring twice is the same as declaring once.
+     *
+     * @param by the officer responsible, or null for the console and for imports
+     */
+    public synchronized void declare(
+            final TownId town,
+            final ResidentId who,
+            final ResidentId by,
+            final java.time.Instant when) {
+        put(new Declaration(town, who, by, when));
         generation.incrementAndGet();
     }
 
@@ -76,8 +87,8 @@ public final class Outlaws {
 
     private void put(final Declaration declaration) {
         Objects.requireNonNull(declaration, "declaration");
-        byTown.computeIfAbsent(declaration.town(), ignored -> ConcurrentHashMap.newKeySet())
-                .add(declaration.who());
+        byTown.computeIfAbsent(declaration.town(), ignored -> new ConcurrentHashMap<>())
+                .put(declaration.who(), declaration);
     }
 
     // --- reading -------------------------------------------------------------------------------
@@ -87,8 +98,8 @@ public final class Outlaws {
         if (town == null || who == null) {
             return false;
         }
-        final Set<ResidentId> held = byTown.get(town);
-        return held != null && held.contains(who);
+        final Map<ResidentId, Declaration> held = byTown.get(town);
+        return held != null && held.containsKey(who);
     }
 
     /** One town's list, for its own screen. */
@@ -96,7 +107,15 @@ public final class Outlaws {
         if (town == null) {
             return Set.of();
         }
-        return Set.copyOf(byTown.getOrDefault(town, Set.of()));
+        return Set.copyOf(byTown.getOrDefault(town, Map.of()).keySet());
+    }
+
+    /** One town's list with the officer and the date behind each, for its own screen. */
+    public java.util.Collection<Declaration> declarationsOf(final TownId town) {
+        if (town == null) {
+            return java.util.List.of();
+        }
+        return java.util.List.copyOf(byTown.getOrDefault(town, Map.of()).values());
     }
 
     /**
@@ -113,7 +132,7 @@ public final class Outlaws {
         }
         final Set<TownId> found = new java.util.LinkedHashSet<>();
         byTown.forEach((town, held) -> {
-            if (held.contains(who)) {
+            if (held.containsKey(who)) {
                 found.add(town);
             }
         });
@@ -122,7 +141,7 @@ public final class Outlaws {
 
     public int size() {
         int total = 0;
-        for (final Set<ResidentId> held : byTown.values()) {
+        for (final Map<ResidentId, Declaration> held : byTown.values()) {
             total += held.size();
         }
         return total;
@@ -137,12 +156,33 @@ public final class Outlaws {
         return "Outlaws[towns=" + byTown.size() + ", declarations=" + size() + ']';
     }
 
-    /** One town's declaration about one player. */
-    public record Declaration(TownId town, ResidentId who) {
+    /**
+     * One town's standing refusal of one player.
+     *
+     * <p>{@code declaredBy} and {@code declaredAt} were written on every row from the first
+     * migration and read back by nothing: {@code holds} was a {@code SELECT 1} and {@code all()}
+     * selected two columns into a two-field record, so the provenance had nowhere to go. That made
+     * V14's own reason for storing them unreachable — an outlawry is a sanction, and "which of my
+     * officers did this, and when" is the first question a mayor faces when a player appeals it.</p>
+     *
+     * @param town the town doing the refusing
+     * @param who the player refused
+     * @param declaredBy the officer who declared it, or null for the console and for imports.
+     *        "Nobody in particular" is a truer answer there than naming whoever was mayor
+     * @param declaredAt when it was declared
+     */
+    public record Declaration(TownId town, ResidentId who, ResidentId declaredBy,
+                              java.time.Instant declaredAt) {
 
         public Declaration {
             Objects.requireNonNull(town, "town");
             Objects.requireNonNull(who, "who");
+            Objects.requireNonNull(declaredAt, "declaredAt");
+        }
+
+        /** The officer who declared it, absent when the console or an import did. */
+        public java.util.Optional<ResidentId> author() {
+            return java.util.Optional.ofNullable(declaredBy);
         }
     }
 }

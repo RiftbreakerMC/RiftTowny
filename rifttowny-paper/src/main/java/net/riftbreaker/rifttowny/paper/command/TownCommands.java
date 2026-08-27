@@ -18,6 +18,7 @@ import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.org.TownProfile;
+import net.riftbreaker.rifttowny.domain.justice.Outlaws;
 import net.riftbreaker.rifttowny.domain.role.Permission;
 import net.riftbreaker.rifttowny.domain.role.Role;
 import net.riftbreaker.rifttowny.domain.service.ServiceResult;
@@ -686,14 +687,26 @@ public final class TownCommands {
                         MessageService.value("town", town.name().display()));
                 return;
             }
-            final List<String> named = new ArrayList<>(listed.size());
-            listed.forEach(one -> named.add(names.describe(one)));
-            named.sort(String.CASE_INSENSITIVE_ORDER);
+            // One line each, carrying who declared it and when. rt_town_outlaw has written both
+            // since V14 and nothing read them back, which made the migration's own reason for the
+            // columns unreachable: an outlawry is a sanction, and "which of my officers did this"
+            // is the first question a mayor faces when a player appeals one.
+            final List<Outlaws.Declaration> declarations =
+                    new ArrayList<>(outlaws.declarationsOf(town.id()));
+            declarations.sort(java.util.Comparator.comparing(
+                    one -> names.describe(one.who()), String.CASE_INSENSITIVE_ORDER));
             messages.send(actor::send, MessageKey.TOWN_OUTLAW_LIST_HEADER,
                     MessageService.value("town", town.name().display()),
-                    MessageService.value("count", named.size()));
-            messages.sendRaw(actor::send, MessageKey.TOWN_OUTLAW_LIST_LINE,
-                    MessageService.value("residents", String.join(", ", named)));
+                    MessageService.value("count", declarations.size()));
+            final java.time.Instant now = java.time.Instant.now();
+            for (final Outlaws.Declaration one : declarations) {
+                messages.sendRaw(actor::send, MessageKey.TOWN_OUTLAW_LIST_LINE,
+                        MessageService.value("resident", names.describe(one.who())),
+                        MessageService.value("by", one.author()
+                                .map(names::describe)
+                                .orElse("the server")),
+                        MessageService.value("when", Times.ago(one.declaredAt(), now)));
+            }
         });
     }
     /**

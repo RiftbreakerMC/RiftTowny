@@ -149,6 +149,24 @@ class OutlawServiceTest extends SqliteFixture {
         }
 
         @Test
+        @DisplayName("and brings the officer and the date back with it")
+        void loadRestoresProvenance() {
+            // The round trip these two columns never had. They were written on every row from V14
+            // and dropped on the way back: holds() was a SELECT 1 and all() selected two columns
+            // into a two-field record, so "which of my officers did this" - the migration's stated
+            // reason for storing them - could not be answered from a running server.
+            outlaws.declare(MAYOR, ashford.id(), STRANGER).join();
+            book.replaceAll(java.util.List.of());
+            outlaws.loadAll().join();
+
+            assertThat(outlaws.declarationsOf(ashford.id())).singleElement().satisfies(one -> {
+                assertThat(one.who()).isEqualTo(STRANGER);
+                assertThat(one.author()).contains(MAYOR);
+                assertThat(one.declaredAt()).isEqualTo(NOW);
+            });
+        }
+
+        @Test
         @DisplayName("a disbanded town's grudges go with it, in the table and in the cache")
         void disbandCascades() {
             // Both halves have to happen. The rows cascade in the database; the cache is told by

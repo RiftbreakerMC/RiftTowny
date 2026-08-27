@@ -101,7 +101,8 @@ final class ConnectionOutlawStore implements CivicTransaction.OutlawStore {
         return StorageFailure.wrapping(() -> {
             final List<Outlaws.Declaration> found = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT town_id, resident_id FROM rt_town_outlaw ORDER BY town_id, resident_id");
+                    "SELECT town_id, resident_id, declared_by, declared_at FROM rt_town_outlaw "
+                            + "ORDER BY town_id, resident_id");
                     ResultSet results = statement.executeQuery()) {
                 while (results.next()) {
                     read(results).ifPresent(found::add);
@@ -121,9 +122,12 @@ final class ConnectionOutlawStore implements CivicTransaction.OutlawStore {
     private static java.util.Optional<Outlaws.Declaration> read(final ResultSet results)
             throws SQLException {
         try {
+            final String by = results.getString("declared_by");
             return java.util.Optional.of(new Outlaws.Declaration(
                     TownId.parse(results.getString("town_id")),
-                    ResidentId.parse(results.getString("resident_id"))));
+                    ResidentId.parse(results.getString("resident_id")),
+                    by == null ? null : ResidentId.parse(by),
+                    java.time.Instant.ofEpochMilli(results.getLong("declared_at"))));
         } catch (final IllegalArgumentException | NullPointerException unreadable) {
             return java.util.Optional.empty();
         }

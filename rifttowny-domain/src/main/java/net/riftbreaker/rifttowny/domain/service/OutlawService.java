@@ -72,6 +72,10 @@ public final class OutlawService {
         Objects.requireNonNull(townId, "townId");
         Objects.requireNonNull(target, "target");
 
+        // One reading, used for the row and for the cache, so the two cannot disagree about when a
+        // sanction was imposed - which is the thing an appeal turns on.
+        final java.time.Instant when = clock.instant();
+
         return transaction(transaction -> {
             final Town town = CivicPermissions.town(transaction, townId);
             CivicPermissions.requireTown(transaction, town, actor, Permission.MANAGE_TRUST);
@@ -82,7 +86,7 @@ public final class OutlawService {
             if (transaction.outlaws().holds(townId, target)) {
                 throw new ChangeRefusedException(ChangeDenial.ALREADY_OUTLAWED);
             }
-            transaction.outlaws().declare(townId, target, actor, clock.instant());
+            transaction.outlaws().declare(townId, target, actor, when);
             transaction.publish(
                     new DomainEvent.OutlawDeclared(townId, target, actor),
                     "outlaw:" + townId.value());
@@ -91,7 +95,7 @@ public final class OutlawService {
             // After the commit, never inside it: a rolled-back declaration that had already reached
             // the cache would leave a player barred by a rule the database never took.
             if (result.succeeded()) {
-                book.declare(townId, target);
+                book.declare(townId, target, actor, when);
             }
             return result;
         });
@@ -126,6 +130,12 @@ public final class OutlawService {
     /** One town's list, from the cache. */
     public Set<ResidentId> of(final TownId townId) {
         return book.of(townId);
+    }
+
+    /** One town's list with the officer and date behind each, from the cache. */
+    public java.util.Collection<net.riftbreaker.rifttowny.domain.justice.Outlaws.Declaration>
+            declarationsOf(final TownId townId) {
+        return book.declarationsOf(townId);
     }
 
     /** Where this player is unwelcome, from the cache. */

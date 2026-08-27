@@ -209,7 +209,7 @@ class TownServiceTest extends SqliteFixture {
                 t.outlaws().declare(town.id(), stranger, MAYOR, CLOCK.instant());
                 return null;
             }).join();
-            outlawBook.declare(town.id(), stranger);
+            outlawBook.declare(town.id(), stranger, MAYOR, CLOCK.instant());
 
             service.join(MAYOR, stranger, town.id()).join();
 
@@ -809,7 +809,7 @@ class TownServiceTest extends SqliteFixture {
                 t.outlaws().declare(riftholm.id(), CITIZEN, MAYOR, CLOCK.instant());
                 return null;
             }).join();
-            outlawBook.declare(riftholm.id(), CITIZEN);
+            outlawBook.declare(riftholm.id(), CITIZEN, MAYOR, CLOCK.instant());
 
             offerAndAccept();
 

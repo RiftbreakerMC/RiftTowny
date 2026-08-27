@@ -574,7 +574,8 @@ public enum MessageKey {
             "<gray>Outlawed by <white><town></white> <dark_gray>(<count>)</dark_gray></gray>"),
 
     TOWN_OUTLAW_LIST_LINE("town.outlaw-list-line",
-            "  <gray><residents></gray>"),
+            "  <white><resident></white> <dark_gray>-</dark_gray> <gray>by <white><by></white>, "
+                    + "<when></gray>"),
 
     TOWN_OUTLAW_LIST_EMPTY("town.outlaw-list-empty",
             "<gray><white><town></white> has outlawed nobody.</gray>"),
