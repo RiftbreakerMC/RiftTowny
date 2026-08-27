@@ -14,12 +14,15 @@ import java.util.Objects;
  *
  * @param storage where data lives
  * @param topology where this server sits in the network
+ * @param outboxRetention how long an undelivered outbox row is kept before the housekeeping sweep
+ *        drops it. Zero keeps everything, which is only sane once a drain exists
  * @param townyPermissionAliases whether {@code towny.*} permissions are accepted alongside
  *        {@code rifttowny.*}, for servers migrating an existing permission set
  */
 public record RiftTownySettings(
         StorageSettings storage,
         NetworkTopology topology,
+        java.time.Duration outboxRetention,
         boolean townyPermissionAliases,
         java.time.Duration ruinLifetime,
         java.time.Duration ruinReclaimDelay,
@@ -195,6 +198,8 @@ public record RiftTownySettings(
         return new RiftTownySettings(
                 storage,
                 topology,
+                java.time.Duration.ofDays(
+                        Math.max(0L, config.getLong("network.outbox-retention-days", 7L))),
                 config.getBoolean("permissions.towny-aliases", false),
                 java.time.Duration.ofHours(ruinHours),
                 java.time.Duration.ofHours(reclaimHours),

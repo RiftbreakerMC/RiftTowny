@@ -56,6 +56,20 @@ public interface OutboxRepository {
     /** Deletes delivered events older than {@code before}. Returns how many rows went. */
     CompletableFuture<Integer> pruneDelivered(Instant before);
 
+    /**
+     * Deletes events older than {@code before} that were never delivered. Returns how many went.
+     *
+     * <p>Only {@link OutboxStatus#PENDING}. A {@code FAILED} row is a question somebody asked the
+     * server to answer and is left alone, exactly as {@link #markFailed} promises.</p>
+     *
+     * <p>This exists because the queue has a writer and no drain: every civic change appends a row,
+     * and the consumer that would deliver them is a separate module that has not shipped. Without
+     * it the table is an unbounded leak on any server that runs for a season, and a queue nobody is
+     * reading is not a queue. An announcement that has been sitting undelivered for a week has no
+     * audience left, so dropping it costs nothing that keeping it would recover.</p>
+     */
+    CompletableFuture<Integer> pruneUndelivered(Instant before);
+
     /** How many rows sit in each status, for {@code /rifttowny status}. */
     CompletableFuture<OutboxCounts> counts();
 }

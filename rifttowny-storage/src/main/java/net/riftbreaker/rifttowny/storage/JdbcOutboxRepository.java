@@ -211,6 +211,19 @@ public final class JdbcOutboxRepository implements OutboxRepository {
         }));
     }
 
+
+    @Override
+    public CompletableFuture<Integer> pruneUndelivered(final Instant before) {
+        Objects.requireNonNull(before, "before");
+        return supply(() -> database.write(connection -> {
+            final String sql = "DELETE FROM rt_outbox WHERE status = ? AND created_at < ?";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, OutboxStatus.PENDING.name());
+                statement.setLong(2, before.toEpochMilli());
+                return statement.executeUpdate();
+            }
+        }));
+    }
     @Override
     public CompletableFuture<OutboxCounts> counts() {
         return supply(() -> database.read(connection -> {

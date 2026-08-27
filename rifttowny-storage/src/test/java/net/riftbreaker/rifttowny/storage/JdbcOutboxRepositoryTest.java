@@ -229,4 +229,31 @@ class JdbcOutboxRepositoryTest extends SqliteFixture {
         assertThat(counts.delivered()).isZero();
         assertThat(counts.pending()).isEqualTo(1L);
     }
+
+    @Test
+    @DisplayName("pruning the undelivered removes pending rows and spares failed ones")
+    void pruneRemovesPendingButNotFailed() {
+        // The queue has a writer and no drain, so PENDING is where every row sits and stays. A
+        // FAILED row is different: markFailed's contract is that it is left for an operator, and a
+        // sweep that quietly ate the evidence would make that promise worthless.
+        append("a", "1");
+        final OutboxEvent failed = append("b", "2");
+        outbox.markFailed(failed.eventId(), "no consumer", clock.instant(), 1).join();
+
+        final int removed = outbox.pruneUndelivered(clock.instant().plusSeconds(60)).join();
+
+        assertThat(removed).isEqualTo(1);
+        final OutboxCounts counts = outbox.counts().join();
+        assertThat(counts.pending()).isZero();
+        assertThat(counts.failed()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("and spares anything newer than the cutoff")
+    void pruneRespectsTheCutoff() {
+        append("a", "1");
+
+        assertThat(outbox.pruneUndelivered(clock.instant().minusSeconds(60)).join()).isZero();
+        assertThat(outbox.counts().join().pending()).isEqualTo(1L);
+    }
 }

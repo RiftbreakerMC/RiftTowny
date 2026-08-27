@@ -29,12 +29,18 @@ storage:
     password: ''
 
 network:
-  # Unique and stable per backend server. Outbox ownership, advisory leases and audit rows are all
-  # keyed on it, so two servers sharing an id will fight over the same work.
+  # Unique and stable per backend server. Outbox ownership is keyed on it, so two servers sharing
+  # an id would fight over the same work. (Advisory leases and audit rows are named in the design
+  # and have no table yet; nothing else reads this today.)
   server-id: standalone
 
   # True when more than one backend server shares this database. Requires mariadb.
   shared: false
+
+  # How long an undelivered outbox row is kept, in days. Every civic change appends one; the module
+  # that delivers them has not shipped, so without this the table grows for ever. 0 keeps them all,
+  # which is only sensible once something is actually draining the queue.
+  outbox-retention-days: 7
 
 prices:
   # What things cost. Every value is 0 by default, which means free: a server that installs

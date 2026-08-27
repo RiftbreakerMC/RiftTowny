@@ -582,6 +582,36 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     java.time.Duration.ofMinutes(10));
         }
 
+
+        if (!settings.outboxRetention().isZero()) {
+            // The queue has a writer and no drain. Every civic change appends a row and the module
+            // that would deliver them has not shipped, so this is the only thing standing between a
+            // long-running server and a table that grows for ever. Delivered rows go too, for when
+            // that module does land.
+            //
+            // Daily, and offset well past startup: nothing waits on it, and a delete sweeping a
+            // week of rows is the last thing a server should be doing while it is still filling.
+            scheduler.asyncRepeating(
+                    () -> {
+                        final java.time.Instant before =
+                                clock.instant().minus(settings.outboxRetention());
+                        outbox.pruneUndelivered(before)
+                                .thenCombine(outbox.pruneDelivered(before), Integer::sum)
+                                .whenComplete((removed, failure) -> {
+                                    if (failure != null) {
+                                        getLogger().log(java.util.logging.Level.WARNING,
+                                                "Could not sweep the outbox", failure);
+                                    } else if (removed > 0) {
+                                        getLogger().info(
+                                                "Swept " + removed + " outbox row(s) older than "
+                                                        + settings.outboxRetention().toDays()
+                                                        + " day(s).");
+                                    }
+                                });
+                    },
+                    java.time.Duration.ofMinutes(10),
+                    java.time.Duration.ofHours(24));
+        }
         if (!settings.ruinsEnabled()) {
             return;
         }
