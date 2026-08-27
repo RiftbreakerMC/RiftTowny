@@ -10,7 +10,6 @@ import net.riftbreaker.rifttowny.paper.command.RiftTownyCommand;
 import net.riftbreaker.rifttowny.paper.config.RiftTownySettings;
 import net.riftbreaker.rifttowny.paper.message.MessageService;
 import net.riftbreaker.rifttowny.paper.scheduler.SchedulerFactory;
-import net.riftbreaker.rifttowny.storage.JdbcIdempotencyStore;
 import net.riftbreaker.rifttowny.storage.JdbcOutboxRepository;
 import net.riftbreaker.rifttowny.storage.RiftTownyDatabase;
 import net.riftbreaker.rifttowny.storage.SchemaMigrator;
@@ -32,6 +31,9 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
     private static final String TOWNY_PLUGIN_NAME = "Towny";
 
+    /** How long a spent idempotency key is kept. See the sweep in scheduleHousekeeping. */
+    private static final java.time.Duration KEY_RETENTION = java.time.Duration.ofDays(30);
+
     /**
      * The running plugin.
      *
@@ -47,7 +49,6 @@ public final class RiftTownyPlugin extends JavaPlugin {
     private RiftTownyDatabase database;
     private SchemaMigrator.MigrationSummary schema;
     private JdbcOutboxRepository outbox;
-    private JdbcIdempotencyStore idempotencyKeys;
     private DefaultCapabilityRegistry capabilities;
     private net.riftbreaker.rifttowny.storage.JdbcResidentRepository residentRepository;
     private net.riftbreaker.rifttowny.storage.JdbcTownRepository townRepository;
@@ -297,7 +298,6 @@ public final class RiftTownyPlugin extends JavaPlugin {
 
             final Executor storageExecutor = task -> scheduler.async(task);
             this.outbox = new JdbcOutboxRepository(database, storageExecutor);
-            this.idempotencyKeys = new JdbcIdempotencyStore(database, storageExecutor);
             this.residentRepository =
                     new net.riftbreaker.rifttowny.storage.JdbcResidentRepository(database, storageExecutor);
             this.townRepository =
@@ -612,6 +612,26 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     java.time.Duration.ofMinutes(10),
                     java.time.Duration.ofHours(24));
         }
+
+        // Beside the outbox sweep and for the same reason: a table that only ever gains rows is a
+        // leak, and the tax run takes a key per town per period. Thirty days is far longer than it
+        // needs to be - a key stops mattering the moment its period can no longer be resumed, which
+        // is as soon as the next one begins - and the generosity is the point: pruning a key whose
+        // period is still live would let that period's charge happen a second time. A server whose
+        // tax interval is longer than a month would have to raise this.
+        scheduler.asyncRepeating(
+                () -> civicStore.inTransaction(transaction ->
+                                transaction.keys().prune(clock.instant().minus(KEY_RETENTION)))
+                        .whenComplete((removed, failure) -> {
+                            if (failure != null) {
+                                getLogger().log(java.util.logging.Level.WARNING,
+                                        "Could not sweep spent idempotency keys", failure);
+                            } else if (removed > 0) {
+                                getLogger().info("Swept " + removed + " spent idempotency key(s).");
+                            }
+                        }),
+                java.time.Duration.ofMinutes(15),
+                java.time.Duration.ofHours(24));
         if (!settings.ruinsEnabled()) {
             return;
         }
@@ -696,9 +716,11 @@ public final class RiftTownyPlugin extends JavaPlugin {
         return outbox;
     }
 
-    public JdbcIdempotencyStore idempotencyKeys() {
-        return idempotencyKeys;
+    /** The unit of work, for diagnostics that need a read the caches cannot answer. */
+    public net.riftbreaker.rifttowny.storage.JdbcCivicStore civicStore() {
+        return civicStore;
     }
+
 
     public SchemaMigrator.MigrationSummary schema() {
         return schema;

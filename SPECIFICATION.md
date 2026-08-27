@@ -197,8 +197,12 @@ admin-forced currency -> transaction currency -> organisation default -> server 
 
 ### 4.2 Integrity `[SPEC]`
 
-Every monetary operation carries an idempotency key and is atomic. A retry after a
-timeout must not double-charge. Disbanding an organisation settles its accounts
+Every monetary operation is atomic: the money moves in the same transaction as the change
+that justifies it, so a refusal, a crash or a constraint violation rolls back both. An
+operation that spans more than one transaction - a tax run visiting every town - carries an
+idempotency key per unit of work as well, so an interrupted one resumes without
+double-charging. A single interactive command needs no key: nothing retries it, and
+atomicity is the guarantee. Disbanding an organisation settles its accounts
 deterministically; the default policy pays the remaining balance to the leader, subject to
 configuration.
 

@@ -749,6 +749,15 @@ public enum MessageKey {
             "  <gray>Outbox</gray> <white><pending></white> pending, <white><claimed></white> claimed, "
                     + "<white><failed></white> failed"),
 
+    STATUS_TAX_RUN("status.tax-run",
+            "  <gray>Last tax run</gray> <white><period></white> <dark_gray>-</dark_gray> "
+                    + "<white><towns></white> town(s), <white><residents></white> resident(s), "
+                    + "<white><fallen></white> fallen <gray>(<server>)</gray>"),
+
+    STATUS_TAX_RUN_UNFINISHED("status.tax-run-unfinished",
+            "  <yellow>Last tax run <white><period></white> did not finish</yellow> "
+                    + "<gray>(<server>); the next run will resume it</gray>"),
+
     STATUS_OUTBOX_UNAVAILABLE("status.outbox-unavailable",
             "  <gray>Outbox</gray> <red>unavailable: <reason></red>"),
 

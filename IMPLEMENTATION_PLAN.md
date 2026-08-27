@@ -82,7 +82,7 @@ but real public API, and fails loudly instead of silently when something is wron
 - [x] `V1` baseline: residents, towns, nations, claims, areas, roles, role permissions, role members, organisation currencies, outbox, idempotency, audit
 - [x] Persistent transactional outbox — append-idempotent, network-exclusive claim, stale-claim reclaim, retry budget then park, prune, depth counts (9 tests)
 - [x] Idempotency store — claim/complete/release/prune, with release refusing to undo a completed operation (5 tests)
-- [~] Repository interfaces — outbox and idempotency exist and are implemented. Resident, town, nation, claim, area and role tables exist in the schema but **have no repositories yet**; those land in Phase 2 with the entities they serve
+- [~] Repository interfaces — the outbox exists and is implemented, though nothing drains it yet. Idempotency is a `CivicTransaction.KeyStore`, taken in the transaction it guards, and used by the tax run to make an interrupted run resumable. Resident, town, nation, claim, area and role tables exist in the schema but **have no repositories yet**; those land in Phase 2 with the entities they serve
 - [ ] Offline SQLite ⇄ MariaDB migration tool with validation and backup
 - [ ] Backup and integrity-check commands
 - [!] MariaDB runtime verification — **no MariaDB in this workspace**; the MariaDB migration is written and reviewed but has never been applied. See R-07

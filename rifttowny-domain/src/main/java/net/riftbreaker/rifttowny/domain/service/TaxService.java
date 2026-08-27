@@ -38,6 +38,18 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class TaxService {
 
+    /**
+     * How long an unfinished run is left alone before another attempt takes it over.
+     *
+     * <p>Generous, because the cost of waiting is one late tax run and the cost of being hasty is
+     * two servers sweeping at once. Not that the second is unsafe — every charge claims its own key
+     * — but a run doing nothing but losing key claims is wasted work against a live database.</p>
+     */
+    private static final java.time.Duration STALE_AFTER = java.time.Duration.ofHours(2);
+
+    /** The scope written beside every key this service takes, so a prune can find them. */
+    private static final String KEY_SCOPE = "tax";
+
     private final CivicStore store;
     private final Clock clock;
     private final PlayerWallet wallet;
@@ -91,7 +103,7 @@ public final class TaxService {
         final String period = policy.periodKey(now);
 
         return store.inTransaction(transaction ->
-                        transaction.taxes().claimPeriod(period, serverId, now))
+                        transaction.taxes().claimPeriod(period, serverId, now, STALE_AFTER))
                 .thenCompose(claimed -> claimed
                         ? collect(period, now).thenApply(Optional::of)
                         : CompletableFuture.completedFuture(Optional.empty()));
@@ -120,7 +132,7 @@ public final class TaxService {
 
     private CompletableFuture<TaxRun> collect(final String period, final Instant now) {
         return store.inTransaction(transaction -> transaction.taxes().allTowns())
-                .thenCompose(towns -> chargeEach(towns, now))
+                .thenCompose(towns -> chargeEach(towns, period, now))
                 .thenCompose(tally -> endBankruptTowns(tally, now))
                 .thenCompose(tally -> store.inTransaction(transaction -> {
                     transaction.taxes().finishRun(period, tally.townsCharged,
@@ -137,20 +149,27 @@ public final class TaxService {
      * plugin, and a hundred towns charging concurrently would be a hundred concurrent transactions
      * against a database sized for a game server. A tax run has all interval to finish in.</p>
      */
-    private CompletableFuture<Tally> chargeEach(final List<TownId> towns, final Instant now) {
+    private CompletableFuture<Tally> chargeEach(
+            final List<TownId> towns, final String period, final Instant now) {
         CompletableFuture<Tally> chain = CompletableFuture.completedFuture(new Tally());
         for (final TownId townId : towns) {
-            chain = chain.thenCompose(tally -> chargeOne(townId, now, tally));
+            chain = chain.thenCompose(tally -> chargeOne(townId, period, now, tally));
         }
         return chain;
     }
 
     private CompletableFuture<Tally> chargeOne(
-            final TownId townId, final Instant now, final Tally tally) {
+            final TownId townId, final String period, final Instant now, final Tally tally) {
         // Residents first, so a town is judged on what it holds after its own people have paid in.
-        return collectResidentTax(townId).thenCompose(paid -> {
+        return collectResidentTax(townId, period, now).thenCompose(paid -> {
             tally.residentsCharged += paid;
             return store.inTransaction(transaction -> {
+                // Taken in the transaction that moves the money, so the two share a fate. A run
+                // that was interrupted part-way can therefore be resumed: towns already charged
+                // hold their key and are skipped, and the rest are charged exactly once.
+                if (!transaction.keys().claim(townKey(period, townId), KEY_SCOPE, now)) {
+                    return tally;
+                }
                 final Optional<Town> found = transaction.towns().find(townId);
                 if (found.isEmpty()) {
                     return tally;
@@ -236,10 +255,25 @@ public final class TaxService {
      *
      * @return how many actually paid
      */
-    private CompletableFuture<Integer> collectResidentTax(final TownId townId) {
+    private CompletableFuture<Integer> collectResidentTax(
+            final TownId townId, final String period, final Instant now) {
         if (!TaxPolicy.charged(policy.residentTax()) || !wallet.available()) {
             return CompletableFuture.completedFuture(0);
         }
+
+        // Claimed before the sweep rather than inside it, which is the opposite of the town charge
+        // above and deliberate. wallet.take reaches into another plugin, outside this transaction
+        // and outside this database, so nothing here can roll it back. Between skipping a town
+        // whose sweep may not have finished and taking from its residents a second time, the first
+        // costs the town one period of resident tax and the second costs real players real money.
+        return store.inTransaction(transaction ->
+                transaction.keys().claim(residentKey(period, townId), KEY_SCOPE, now))
+                .thenCompose(won -> won
+                        ? sweepResidents(townId)
+                        : CompletableFuture.completedFuture(0));
+    }
+
+    private CompletableFuture<Integer> sweepResidents(final TownId townId) {
         final Money due = policy.residentTax(wallet.currency());
 
         return store.inTransaction(transaction -> transaction.residents().findByTown(townId)
@@ -305,6 +339,22 @@ public final class TaxService {
         });
     }
 
+
+    /**
+     * The key for one town's own bill in one period.
+     *
+     * <p>The period is in the key rather than the table being cleared between runs, so a resumed
+     * run recognises its own earlier work and the next period starts with a clean set of keys
+     * regardless.</p>
+     */
+    private static String townKey(final String period, final TownId town) {
+        return "tax:" + period + ":town:" + town.value();
+    }
+
+    /** The key for one town's resident sweep in one period. */
+    private static String residentKey(final String period, final TownId town) {
+        return "tax:" + period + ":residents:" + town.value();
+    }
     /** Mutable running totals for one run. Confined to the chain that builds it. */
     private static final class Tally {
         private int townsCharged;

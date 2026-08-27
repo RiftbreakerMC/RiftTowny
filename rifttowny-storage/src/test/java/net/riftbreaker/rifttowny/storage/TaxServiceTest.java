@@ -318,4 +318,159 @@ class TaxServiceTest extends SqliteFixture {
             return CompletableFuture.completedFuture(true);
         }
     }
+
+    /**
+     * Picking a run back up after it was interrupted.
+     *
+     * <p>The defect these exist for: {@code claimPeriod} was a bare insert on the primary key, so a
+     * run that died part-way left the row behind and every later attempt lost the insert. The towns
+     * it had not yet reached were never charged for that period — silently, because nothing read
+     * {@code finished_at} either.</p>
+     *
+     * <p>Resuming is only safe because each charge now claims its own key in the transaction that
+     * moves the money, so the half already done cannot be done twice.</p>
+     */
+    @Nested
+    @DisplayName("resuming an interrupted run")
+    class Resuming {
+
+        private static final Duration LONG_AGO = Duration.ofHours(6);
+
+        /** Leaves the table looking like a run that claimed the period and then died. */
+        private void abandonedRun(final String period, final Instant startedAt) {
+            store.inTransaction(t ->
+                    t.taxes().claimPeriod(period, "alpha", startedAt, Duration.ofHours(2))).join();
+        }
+
+        /** Marks one town as already charged in that period, as a completed half-run would have. */
+        private void alreadyCharged(final String period, final Town town, final Instant when) {
+            store.inTransaction(t -> t.keys().claim(
+                    "tax:" + period + ":town:" + town.id().value(), "tax", when)).join();
+        }
+
+        private String periodOf(final TaxPolicy policy, final Instant when) {
+            return policy.periodKey(when);
+        }
+
+        @Test
+        @DisplayName("charges the towns the interrupted run never reached")
+        void resumesTheRemainder() {
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            final Town town = riftholm(NOW);
+            bank.pay(town.id(), coins("50"), LedgerEntry.Reason.ADMIN, null).join();
+            final String period = periodOf(policy, NOW);
+
+            abandonedRun(period, NOW.minus(LONG_AGO));
+
+            final var resumed = taxes(policy, NOW, "beta").runIfDue().join();
+
+            assertThat(resumed).as("an abandoned run must not block the period for ever").isPresent();
+            assertThat(resumed.orElseThrow().townsCharged()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("and leaves alone the ones it did reach")
+        void doesNotChargeTwice() {
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            final Town town = riftholm(NOW);
+            bank.pay(town.id(), coins("50"), LedgerEntry.Reason.ADMIN, null).join();
+            final String period = periodOf(policy, NOW);
+
+            abandonedRun(period, NOW.minus(LONG_AGO));
+            alreadyCharged(period, town, NOW.minus(LONG_AGO));
+
+            final var resumed = taxes(policy, NOW, "beta").runIfDue().join();
+
+            assertThat(resumed.orElseThrow().townsCharged())
+                    .as("its key was already held, so the resumed run must skip it")
+                    .isZero();
+            assertThat(bank.balanceOf(town.id()).join())
+                    .as("and its money must be untouched")
+                    .isEqualTo(coins("50"));
+        }
+
+        @Test
+        @DisplayName("a run somebody is still working is not taken over")
+        void freshRunsAreLeftAlone() {
+            // The window is what separates "crashed" from "busy". Without it a second server would
+            // join a run already in progress, which the keys make harmless but which is still two
+            // servers doing the same sweep against one database.
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            riftholm(NOW);
+            final String period = periodOf(policy, NOW);
+
+            abandonedRun(period, NOW.minusSeconds(30));
+
+            assertThat(taxes(policy, NOW, "beta").runIfDue().join()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a finished run is never taken over, however old it gets")
+        void finishedRunsAreFinished() {
+            // The original guarantee, which the takeover must not weaken: finished_at is what
+            // separates a run that ended from one that stopped.
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            final Town town = riftholm(NOW);
+            bank.pay(town.id(), coins("50"), LedgerEntry.Reason.ADMIN, null).join();
+
+            taxes(policy, NOW, "alpha").runIfDue().join();
+            final Money afterFirst = bank.balanceOf(town.id()).join();
+
+            assertThat(taxes(policy, NOW.plus(LONG_AGO), "beta").runIfDue().join())
+                    .as("the period is done, and age does not undo that")
+                    .isEmpty();
+            assertThat(bank.balanceOf(town.id()).join()).isEqualTo(afterFirst);
+        }
+
+        @Test
+        @DisplayName("the keys are scoped to the period, so the next one starts clean")
+        void keysDoNotLeakIntoTheNextPeriod() {
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            final Town town = riftholm(NOW);
+            bank.pay(town.id(), coins("50"), LedgerEntry.Reason.ADMIN, null).join();
+
+            taxes(policy, NOW, "alpha").runIfDue().join();
+            final var next = taxes(policy, NOW.plus(Duration.ofDays(1)), "alpha").runIfDue().join();
+
+            assertThat(next.orElseThrow().townsCharged())
+                    .as("last period's key must not silence this period's charge")
+                    .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("the last run can be read back, finished or not")
+        void lastRunIsReadable() {
+            // rt_tax_run had no SELECT anywhere: six columns written on every run and read by
+            // nothing, so an unfinished run was invisible - which is most of why one that died
+            // part-way could go unnoticed.
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            final Town town = riftholm(NOW);
+            bank.pay(town.id(), coins("50"), LedgerEntry.Reason.ADMIN, null).join();
+
+            assertThat(store.inTransaction(t -> t.taxes().lastRun()).join())
+                    .as("nothing has run yet")
+                    .isEmpty();
+
+            taxes(policy, NOW, "alpha").runIfDue().join();
+
+            final var last = store.inTransaction(t -> t.taxes().lastRun()).join().orElseThrow();
+            assertThat(last.finished()).isTrue();
+            assertThat(last.townsCharged()).isEqualTo(1);
+            assertThat(last.serverId()).isEqualTo("alpha");
+        }
+
+        @Test
+        @DisplayName("and an interrupted one reads back as unfinished")
+        void unfinishedRunIsVisible() {
+            final TaxPolicy policy = policy("0", "1", Duration.ofDays(3));
+            riftholm(NOW);
+
+            abandonedRun(periodOf(policy, NOW), NOW.minus(LONG_AGO));
+
+            final var last = store.inTransaction(t -> t.taxes().lastRun()).join().orElseThrow();
+            assertThat(last.finished())
+                    .as("this is the state an operator needs to be able to see")
+                    .isFalse();
+        }
+    }
 }

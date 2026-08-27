@@ -617,6 +617,26 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
             }
         });
 
+        // The last tax run, for the same reason as the outbox depth: it is a question an operator
+        // asks after something looked wrong, and an unfinished run is exactly what they are looking
+        // for. Nothing read this table at all until now.
+        plugin().civicStore().inTransaction(transaction -> transaction.taxes().lastRun())
+                .whenComplete((run, failure) -> {
+                    if (failure != null || run == null || run.isEmpty()) {
+                        return;
+                    }
+                    final var last = run.get();
+                    messages.sendRaw(replyTo(sender),
+                            last.finished()
+                                    ? MessageKey.STATUS_TAX_RUN
+                                    : MessageKey.STATUS_TAX_RUN_UNFINISHED,
+                            MessageService.value("period", last.periodKey()),
+                            MessageService.value("towns", last.townsCharged()),
+                            MessageService.value("residents", last.residentsCharged()),
+                            MessageService.value("fallen", last.townsFallen()),
+                            MessageService.value("server", last.serverId()));
+                });
+
         messages.sendRaw(sender, MessageKey.STATUS_INTEGRATIONS_HEADER);
         for (final CapabilityStatus status : plugin().capabilities().statuses()) {
             final MessageKey key = switch (status.state()) {

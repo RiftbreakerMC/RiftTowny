@@ -56,7 +56,9 @@ Exclusion is enforced **before** the message reaches a spy session, not filtered
 
 ## 2. Financial integrity
 
-- Every monetary operation carries a stable idempotency key and is safe to retry.
+- Every monetary operation is atomic with the change that justifies it, and every operation
+  that spans more than one transaction carries a stable idempotency key per unit of work, so
+  it is safe to resume. Interactive commands are guarded by atomicity rather than by keys.
 - Escrow for war bonds, bounties and scheduled treaty payments; escrow release is itself
   idempotent.
 - **Two-person approval** available for large civic transactions, configurable by threshold.

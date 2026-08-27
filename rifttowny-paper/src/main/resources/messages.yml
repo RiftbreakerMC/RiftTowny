@@ -248,6 +248,8 @@ status:
   platform: '  <gray>Platform</gray> <white><platform></white> <dark_gray>|</dark_gray> <gray>API</gray> <white><api></white>'
   storage: '  <gray>Storage</gray> <white><backend></white> <dark_gray>|</dark_gray> <gray>schema</gray> <white><schema></white> <dark_gray>|</dark_gray> <gray>topology</gray> <white><topology></white>'
   outbox: '  <gray>Outbox</gray> <white><pending></white> pending, <white><claimed></white> claimed, <white><failed></white> failed'
+  tax-run: '  <gray>Last tax run</gray> <white><period></white> <dark_gray>-</dark_gray> <white><towns></white> town(s), <white><residents></white> resident(s), <white><fallen></white> fallen <gray>(<server>)</gray>'
+  tax-run-unfinished: '  <yellow>Last tax run <white><period></white> did not finish</yellow> <gray>(<server>); the next run will resume it</gray>'
   outbox-unavailable: '  <gray>Outbox</gray> <red>unavailable: <reason></red>'
   integrations-header: '  <gray>Integrations</gray>'
   integration-active: '    <green><capability></green> <dark_gray>-</dark_gray> <gray><detail></gray>'

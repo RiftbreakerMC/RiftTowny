@@ -59,6 +59,9 @@ public interface CivicTransaction {
     /** Who each town has declared unwelcome. */
     OutlawStore outlaws();
 
+    /** Keys that make an operation happen at most once. */
+    KeyStore keys();
+
     /** What each player has chosen for themselves. */
     PreferenceStore preferences();
 
@@ -457,13 +460,23 @@ public interface CivicTransaction {
         /**
          * Claims a period, and says whether this caller got it.
          *
-         * <p>An insert that fails on the primary key is the answer, not an error: it means another
-         * server — or this one before a restart — already ran that period. The whole idempotency
-         * guard is this one call.</p>
+         * <p>An insert that fails on the primary key means somebody has this period: another
+         * server, or this one before a restart. That alone used to be the whole guard, and it was
+         * one-shot - a run that crashed part-way left the row behind, so every later attempt lost
+         * the insert and the towns it had not reached were never charged for that period.</p>
+         *
+         * <p>So an unfinished run older than {@code staleAfter} is taken over instead of refused.
+         * That is only safe because each charge inside a run claims its own key through
+         * {@link KeyStore}, in the transaction that moves the money: a resumed run charges what the
+         * first one did not reach and nothing more.</p>
          *
          * @return true if the caller now owns the run
          */
-        boolean claimPeriod(String periodKey, String serverId, java.time.Instant now);
+        boolean claimPeriod(
+                String periodKey,
+                String serverId,
+                java.time.Instant now,
+                java.time.Duration staleAfter);
 
         /** Records what a claimed run did. */
         void finishRun(
@@ -479,10 +492,71 @@ public interface CivicTransaction {
         /** Records that a town could not pay, or — with null — that it has caught up. */
         void markUnpaid(TownId town, java.time.Instant since);
 
+        /**
+         * The most recent run, or empty when none has ever been attempted.
+         *
+         * <p>{@code rt_tax_run} had no {@code SELECT} at all: six columns were written on every run
+         * and read by nothing, so the one question the table exists to answer — what did the last
+         * run do, and did it finish — could not be asked. An unfinished run was therefore
+         * invisible, which is a large part of why a run that died part-way went unnoticed.</p>
+         */
+        Optional<TaxRunRow> lastRun();
+
+        /**
+         * One row of {@code rt_tax_run}. A null {@code finishedAt} means it is running, or stopped.
+         */
+        record TaxRunRow(
+                String periodKey,
+                java.time.Instant startedAt,
+                java.time.Instant finishedAt,
+                int townsCharged,
+                int residentsCharged,
+                int townsFallen,
+                String serverId) {
+
+            public boolean finished() {
+                return finishedAt != null;
+            }
+        }
+
         /** Every town on the server, for a run that has to visit all of them. */
         List<TownId> allTowns();
     }
 
+
+    /**
+     * Keys that make an operation happen at most once, inside the transaction that performs it.
+     *
+     * <p>There was already an {@code IdempotencyStore} — an asynchronous, standalone repository with
+     * {@code claim}, {@code complete}, {@code release} and {@code prune}. It was built, tested and
+     * called by nothing, and the reason is its shape rather than anybody forgetting it: every
+     * operation here that needs a key runs inside a {@link CivicTransaction}, and a claim taken in a
+     * <em>different</em> transaction from the effect it guards is not a guard at all. A crash
+     * between the two loses the work with the key still held, which is precisely the hole that
+     * interface's {@code release} existed to patch.</p>
+     *
+     * <p>Claimed in the same transaction as the effect, none of that is needed. The key row and the
+     * work commit together or roll back together, so there is no in-flight state to complete and
+     * nothing to release: a failed attempt leaves no key behind, and a successful one cannot leave a
+     * key without its effect. {@code claim} and {@code prune} are the whole interface.</p>
+     */
+    interface KeyStore {
+
+        /**
+         * Takes a key, and says whether this caller got it.
+         *
+         * @param scope what kind of operation it guards, for pruning and for reading the table
+         * @return true if the key is newly held by this transaction and the work should happen;
+         *         false if somebody already did it
+         */
+        boolean claim(String key, String scope, java.time.Instant now);
+
+        /** Whether a key is already held. For diagnostics; a caller doing work wants {@link #claim}. */
+        boolean holds(String key);
+
+        /** Deletes keys taken before {@code before}. Returns how many rows went. */
+        int prune(java.time.Instant before);
+    }
     /** Nations, inside the transaction. */
     interface NationStore {
         Optional<Nation> find(NationId id);
