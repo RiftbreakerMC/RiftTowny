@@ -228,6 +228,26 @@ objective/leaderboard provider SPI and test toolkit · two-person financial appr
 treasury freezes, scoped API keys, retention and privacy tooling · heraldry and cosmetic
 reward surfaces.
 
+
+## 7a. Written and never read
+
+A sweep on 2026-08-26 for mechanisms that exist, are documented, and are reachable by
+nothing. Most were wired or deleted in that pass; what stayed is listed here so it is
+tracked rather than merely absent. A row here is a promise the schema or an enum is
+making that the code does not yet keep.
+
+| Thing | State | Why it stays |
+|---|---|---|
+| `rt_idempotency`, `IdempotencyStore`, `JdbcIdempotencyStore` | Constructed at enable, never consulted. No production code calls `claim`, `complete`, `find`, `release` or `prune` | Money paths were meant to be retry-safe through it; `TaxService` instead rolled its own guard on `rt_tax_run`'s primary key. Either `BankService`/`TaxService` become the callers or the whole thing goes — an unused idempotency store is worse than none, because it reads as protection |
+| `rt_audit` | Declared in V1, zero writers | Waiting on **RT-CORE-LOG** / RiftLogger. The claims that it was populated have been removed from this file and from `docs/dependency-report.md` |
+| `rt_tax_run` counters | `started_at`, `finished_at`, `towns_charged`, `residents_charged`, `towns_fallen`, `server_id` written, never selected | Only the primary-key collision on `period_key` is load-bearing today. V11's stated purpose — "a run that charged a town more than it expected is a question somebody asks weeks later" — needs a reader before the counters earn their write |
+| `rt_role.display_name`, `icon`, `chat_prefix` | Written and read back, but only `Role.decorate` can set them and nothing calls it. Production creates through `Role.system`, which hard-codes name, null, null | Needs a `role set display\|icon\|prefix` action and a renderer. Note `Role.renameTo` carries the old `displayName` forward, so this must be fixed before anything starts reading it |
+| `rt_role_permission.granted` | Inserted as a literal `1`, only ever read as `granted = 1` | An explicit deny has no code path: revocation deletes and re-inserts. The column is a constant until a deny case is actually designed |
+| `rt_town_spawn.set_by`/`set_at`, `rt_organisation_balance.updated_at`, `rt_resident_preference.updated_at`, `rt_role_member.granted_at` | Written on every save, in no `SELECT` list | Each costs a write and answers nothing. Either a provenance line uses them or they go |
+| `Permission.CHAT_TOWN`, `CHAT_NATION` | In `MEMBER.defaultPermissions()`, checked by nothing | Blocked on a cached permission oracle — see **RT-MOD-CHAT** |
+| `rt_area`, `rt_organisation_currency` | No production reference | Named blockers: **RT-CORE-AREA** and **RT-MOD-BANK** multi-currency. Worth noting `rt_organisation_balance` and `rt_bank_ledger` key on a free-text `currency` column that does not reference `rt_organisation_currency`, so the two designs need reconciling when multi-currency lands |
+| `TownClaims`' `EMBASSY` contiguity exemption | A live safety exemption for a `PlotType` nothing can currently produce | Needs a test pinning it before something else changes contiguity underneath it |
+
 ## 8. Permanently excluded
 
 Never built, in any release. Restated from
