@@ -84,20 +84,6 @@ final class ConnectionResidentStore implements CivicTransaction.ResidentStore {
     }
 
     @Override
-    public int countByTown(final TownId town) {
-        Objects.requireNonNull(town, "town");
-        return StorageFailure.wrapping(() -> {
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT COUNT(*) FROM rt_resident WHERE town_id = ?")) {
-                statement.setString(1, town.value().toString());
-                try (ResultSet results = statement.executeQuery()) {
-                    return results.next() ? results.getInt(1) : 0;
-                }
-            }
-        });
-    }
-
-    @Override
     public java.util.Map<net.riftbreaker.rifttowny.domain.org.ResidentId, String>
             namesOfTownMembers() {
         return StorageFailure.wrapping(() -> {

@@ -128,7 +128,6 @@ public interface CivicTransaction {
 
         List<Resident> findByTown(TownId town);
 
-        int countByTown(TownId town);
 
         /**
          * Every town member's last known name.

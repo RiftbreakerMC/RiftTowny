@@ -130,7 +130,7 @@ class JdbcCivicStoreTest extends SqliteFixture {
             // Loaded back through the store, so membership is rebuilt from the resident row that
             // was written a moment ago and is not yet committed.
             return transaction.towns().find(town.id()).orElseThrow()
-                    .residents().size() + ":" + transaction.residents().countByTown(town.id());
+                    .residents().size() + ":" + transaction.residents().findByTown(town.id()).size();
         }).join();
 
         assertThat(observed).isEqualTo("1:1");

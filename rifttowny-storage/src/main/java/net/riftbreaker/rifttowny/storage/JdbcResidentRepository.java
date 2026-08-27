@@ -52,11 +52,6 @@ public final class JdbcResidentRepository implements ResidentRepository {
     }
 
     @Override
-    public CompletableFuture<Integer> countByTown(final TownId town) {
-        return Async.read(database, executor, store -> store.countByTown(town));
-    }
-
-    @Override
     public CompletableFuture<Optional<Resident>> findByName(final String name) {
         return Async.read(database, executor, store -> store.findByName(name));
     }

@@ -35,9 +35,6 @@ public interface ResidentRepository {
      */
     CompletableFuture<List<Resident>> findByTown(TownId town);
 
-    /** How many residents a town has. Cheaper than loading them when only the count is needed. */
-    CompletableFuture<Integer> countByTown(TownId town);
-
     /** Looks a resident up by their last known Minecraft name, case-insensitively. */
     CompletableFuture<Optional<Resident>> findByName(String name);
 }

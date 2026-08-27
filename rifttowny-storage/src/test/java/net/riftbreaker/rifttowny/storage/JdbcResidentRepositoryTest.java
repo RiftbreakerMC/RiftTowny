@@ -68,7 +68,7 @@ class JdbcResidentRepositoryTest extends SqliteFixture {
         final Resident loaded = residents.find(alder.id()).join().orElseThrow();
         assertThat(loaded.town()).contains(RIFTHOLM);
         assertThat(loaded.lastSeenAt()).isEqualTo(DAY_TWO);
-        assertThat(residents.countByTown(RIFTHOLM).join()).isEqualTo(1);
+        assertThat(residents.findByTown(RIFTHOLM).join().size()).isEqualTo(1);
     }
 
     @Test
@@ -92,7 +92,7 @@ class JdbcResidentRepositoryTest extends SqliteFixture {
         residents.save(joined.leaveTown().orElseThrow()).join();
 
         assertThat(residents.find(alder.id()).join().orElseThrow().town()).isEmpty();
-        assertThat(residents.countByTown(RIFTHOLM).join()).isZero();
+        assertThat(residents.findByTown(RIFTHOLM).join().size()).isZero();
     }
 
     @Test
@@ -115,7 +115,7 @@ class JdbcResidentRepositoryTest extends SqliteFixture {
         residents.save(newcomer("Briar", DAY_ONE).joinTown(ASHFORD).orElseThrow()).join();
 
         assertThat(residents.findByTown(RIFTHOLM).join()).hasSize(1);
-        assertThat(residents.countByTown(ASHFORD).join()).isEqualTo(1);
+        assertThat(residents.findByTown(ASHFORD).join().size()).isEqualTo(1);
     }
 
     @Test
