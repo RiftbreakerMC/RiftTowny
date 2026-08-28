@@ -399,6 +399,12 @@ public enum MessageKey {
     TOWN_SET_BOARD("town.set-board",
             "<green>The board of <white><town></white> is now: <white><value></white></green>"),
 
+
+    TOWN_SET_TAXES("town.set-taxes",
+            "<green>Residents now pay <white><amount></white> each tax run.</green>"),
+
+    TOWN_SET_TAXES_DEFAULT("town.set-taxes-default",
+            "<yellow>Your town follows the server's resident tax again.</yellow>"),
     TOWN_SET_TAG("town.set-tag",
             "<green>The tag of <white><town></white> is now <white><value></white>.</green>"),
 

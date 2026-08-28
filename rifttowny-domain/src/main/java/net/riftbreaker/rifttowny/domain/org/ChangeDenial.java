@@ -297,6 +297,16 @@ public enum ChangeDenial {
     /** Zero is not an amount. */
     AMOUNT_MUST_BE_POSITIVE,
 
+    /**
+     * A town tried to set a tax rate above what the server permits.
+     *
+     * <p>The cap exists because the rate is charged to every resident automatically, on a schedule,
+     * from their own wallet. A mayor who could set it without limit could empty the pockets of
+     * everybody who joined their town, once per interval, with one command and no further consent.
+     * The server decides the ceiling; the town decides where under it to sit.</p>
+     */
+    TAX_ABOVE_SERVER_MAXIMUM,
+
     /** The player does not have that much. */
     INSUFFICIENT_FUNDS,
 

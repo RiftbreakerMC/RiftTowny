@@ -257,7 +257,10 @@ public final class TaxService {
      */
     private CompletableFuture<Integer> collectResidentTax(
             final TownId townId, final String period, final Instant now) {
-        if (!TaxPolicy.charged(policy.residentTax()) || !wallet.available()) {
+        // Deliberately not short-circuited on the server's rate any more. A town may charge when
+        // the server charges nothing, so the rate that decides whether there is anything to collect
+        // is the town's, and it is not known until the sweep reads it.
+        if (!wallet.available()) {
             return CompletableFuture.completedFuture(0);
         }
 
@@ -274,13 +277,19 @@ public final class TaxService {
     }
 
     private CompletableFuture<Integer> sweepResidents(final TownId townId) {
-        final Money due = policy.residentTax(wallet.currency());
-
-        return store.inTransaction(transaction -> transaction.residents().findByTown(townId)
-                        .stream()
-                        .map(net.riftbreaker.rifttowny.domain.org.Resident::id)
-                        .toList())
-                .thenCompose(people -> {
+        // The rate and the roll are read in one transaction, so a town cannot be charged its old
+        // rate against its new membership or the other way round.
+        return store.inTransaction(transaction -> new Sweep(
+                        rateFor(transaction, townId),
+                        transaction.residents().findByTown(townId).stream()
+                                .map(net.riftbreaker.rifttowny.domain.org.Resident::id)
+                                .toList()))
+                .thenCompose(sweep -> {
+                    final Money due = sweep.due();
+                    if (!TaxPolicy.charged(due.amount())) {
+                        return CompletableFuture.completedFuture(0);
+                    }
+                    final java.util.List<ResidentId> people = sweep.people();
                     CompletableFuture<Integer> chain = CompletableFuture.completedFuture(0);
                     for (final ResidentId who : people) {
                         chain = chain.thenCompose(paid -> wallet.take(who, due)
@@ -339,6 +348,24 @@ public final class TaxService {
         });
     }
 
+
+    /** One town's rate and its people, read together so the two cannot come from different states. */
+    private record Sweep(Money due, java.util.List<ResidentId> people) {
+    }
+
+    /**
+     * What this town charges its residents.
+     *
+     * <p>The town's own rate when it has set one, and the server's otherwise. Absent is not zero:
+     * a town that has deliberately set zero keeps charging nothing when the server raises its
+     * default, which is the whole point of letting a town decide.</p>
+     */
+    private Money rateFor(final CivicTransaction transaction, final TownId townId) {
+        return transaction.towns().find(townId)
+                .flatMap(town -> town.profile().residentTaxRate())
+                .map(rate -> Money.of(rate, wallet.currency()))
+                .orElseGet(() -> policy.residentTax(wallet.currency()));
+    }
 
     /**
      * The key for one town's own bill in one period.

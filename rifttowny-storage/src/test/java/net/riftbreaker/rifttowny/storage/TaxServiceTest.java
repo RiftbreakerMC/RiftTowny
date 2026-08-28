@@ -5,6 +5,7 @@ import net.riftbreaker.rifttowny.domain.bank.CivicPrices;
 import net.riftbreaker.rifttowny.domain.bank.LedgerEntry;
 import net.riftbreaker.rifttowny.domain.bank.Money;
 import net.riftbreaker.rifttowny.domain.bank.PlayerWallet;
+import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
 import net.riftbreaker.rifttowny.domain.bank.TaxPolicy;
 import net.riftbreaker.rifttowny.domain.civic.CivicCache;
 import net.riftbreaker.rifttowny.domain.flag.FlagOverrides;
@@ -94,7 +95,7 @@ class TaxServiceTest extends SqliteFixture {
     private static TaxPolicy policy(
             final String resident, final String upkeep, final Duration grace) {
         return new TaxPolicy(true, Duration.ofDays(1), new BigDecimal(resident),
-                new BigDecimal(upkeep), BigDecimal.ZERO, grace);
+                new BigDecimal(upkeep), BigDecimal.ZERO, grace, new BigDecimal("1000"));
     }
 
     /** Riftholm with two chunks and two residents. */
@@ -269,7 +270,7 @@ class TaxServiceTest extends SqliteFixture {
     void negativeTaxesAreRefused() {
         assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> new TaxPolicy(
                 true, Duration.ofDays(1), new BigDecimal("-1"), BigDecimal.ZERO, BigDecimal.ZERO,
-                Duration.ZERO)))
+                Duration.ZERO, BigDecimal.ZERO)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -473,4 +474,115 @@ class TaxServiceTest extends SqliteFixture {
                     .isFalse();
         }
     }
+    /**
+     * A town setting its own resident tax.
+     *
+     * <p>The engine shipped reading one server-wide rate, so Permission.MANAGE_TAXES could be
+     * granted to a role and gated nothing. These cover the lever it now gates, and the distinction
+     * the whole design turns on: a town that has set nothing is not a town that has set zero.</p>
+     */
+    @Nested
+    @DisplayName("a town's own resident tax")
+    class TownRate {
+
+        private static final java.math.BigDecimal CAP = new java.math.BigDecimal("1000");
+
+        private TownService townService() {
+            return towns(NOW);
+        }
+
+        @Test
+        @DisplayName("is charged instead of the server's")
+        void townRateReplacesTheDefault() {
+            final Town town = riftholm(NOW);
+            wallet.balances.put(MAYOR, coins("50"));
+            wallet.balances.put(CITIZEN, coins("50"));
+            townService().setResidentTax(MAYOR, town.id(), new java.math.BigDecimal("7"), CAP)
+                    .join();
+
+            taxes(policy("2", "0", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(wallet.balances.get(MAYOR))
+                    .as("the town's seven, not the server's two")
+                    .isEqualTo(coins("43"));
+            assertThat(bank.balanceOf(town.id()).join()).isEqualTo(coins("14"));
+        }
+
+        @Test
+        @DisplayName("set to zero stops charging, and stays stopped when the server raises its rate")
+        void zeroIsADecision() {
+            // The reason the column is nullable and null is not zero. A town that has deliberately
+            // stopped charging must not start again because the server changed its default.
+            final Town town = riftholm(NOW);
+            wallet.balances.put(MAYOR, coins("50"));
+            townService().setResidentTax(MAYOR, town.id(), java.math.BigDecimal.ZERO, CAP).join();
+
+            taxes(policy("9", "0", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(wallet.balances.get(MAYOR)).isEqualTo(coins("50"));
+        }
+
+        @Test
+        @DisplayName("cleared falls back to the server's rate again")
+        void clearingRestoresTheDefault() {
+            final Town town = riftholm(NOW);
+            wallet.balances.put(MAYOR, coins("50"));
+            townService().setResidentTax(MAYOR, town.id(), new java.math.BigDecimal("7"), CAP)
+                    .join();
+            townService().setResidentTax(MAYOR, town.id(), null, CAP).join();
+
+            taxes(policy("2", "0", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(wallet.balances.get(MAYOR)).isEqualTo(coins("48"));
+        }
+
+        @Test
+        @DisplayName("cannot be set above the server's ceiling")
+        void theCeilingHolds() {
+            // Without it a mayor could empty the pockets of everybody who joined their town, once
+            // per interval, with one command and no further consent.
+            final Town town = riftholm(NOW);
+
+            assertThat(townService()
+                    .setResidentTax(MAYOR, town.id(), new java.math.BigDecimal("1001"), CAP)
+                    .join().denial())
+                    .contains(ChangeDenial.TAX_ABOVE_SERVER_MAXIMUM);
+        }
+
+        @Test
+        @DisplayName("cannot be negative, because that would be the town paying its residents")
+        void negativeIsRefused() {
+            final Town town = riftholm(NOW);
+
+            assertThat(townService()
+                    .setResidentTax(MAYOR, town.id(), new java.math.BigDecimal("-1"), CAP)
+                    .join().denial())
+                    .contains(ChangeDenial.AMOUNT_MUST_BE_POSITIVE);
+        }
+
+        @Test
+        @DisplayName("needs MANAGE_TAXES, which is what the permission finally gates")
+        void needsThePermission() {
+            final Town town = riftholm(NOW);
+
+            assertThat(townService()
+                    .setResidentTax(CITIZEN, town.id(), new java.math.BigDecimal("5"), CAP)
+                    .join().denial())
+                    .contains(ChangeDenial.MISSING_PERMISSION);
+        }
+
+        @Test
+        @DisplayName("survives a round trip through storage")
+        void ratePersists() {
+            final Town town = riftholm(NOW);
+            final var outcome = townService()
+                    .setResidentTax(MAYOR, town.id(), new java.math.BigDecimal("7"), CAP).join();
+            assertThat(outcome.succeeded()).as("denial: %s", outcome.denial()).isTrue();
+
+            assertThat(store.inTransaction(t -> t.towns().find(town.id()).orElseThrow())
+                    .join().profile().residentTaxRate())
+                    .contains(new java.math.BigDecimal("7"));
+        }
+    }
+
 }

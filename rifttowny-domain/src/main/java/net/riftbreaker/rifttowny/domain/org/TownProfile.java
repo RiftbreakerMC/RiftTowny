@@ -33,14 +33,26 @@ public record TownProfile(
         MapColour colour,
         boolean neutral,
         boolean open,
-        boolean publicSpawn
+        boolean publicSpawn,
+        java.math.BigDecimal residentTax
 ) {
 
-    private static final TownProfile EMPTY = new TownProfile("", "", null, false, false, false);
+    private static final TownProfile EMPTY =
+            new TownProfile("", "", null, false, false, false, null);
 
     public TownProfile {
         board = CivicText.clean(board, CivicText.MAXIMUM_BOARD);
         tag = CivicText.clean(tag, CivicText.MAXIMUM_TAG);
+        if (residentTax != null && residentTax.signum() < 0) {
+            // Thrown rather than clamped. A town paying its residents is a different feature from
+            // a town charging them, and silently reading one as the other would be worse than
+            // refusing: the service checks the number and answers with a denial long before here.
+            throw new IllegalArgumentException("resident tax must not be negative: " + residentTax);
+        }
+        // Normalised so equals and hashCode can agree on it. BigDecimal.equals compares scale, so 7
+        // and 7.00 are different objects describing the same rate, and a profile differing only in
+        // how somebody typed a number would read as a change worth saving.
+        residentTax = residentTax == null ? null : residentTax.stripTrailingZeros();
     }
 
     /** What a freshly founded town has: nothing said, nobody let in automatically. */
@@ -65,28 +77,44 @@ public record TownProfile(
         return !tag.isEmpty();
     }
 
+    /**
+     * What this town charges each of its residents, if it has decided for itself.
+     *
+     * <p>Empty means the server-wide rate applies, which is not the same as zero: zero is a town
+     * that has deliberately stopped charging, and a server that later raises its default should not
+     * start charging that town's residents again on its behalf.</p>
+     */
+    public Optional<java.math.BigDecimal> residentTaxRate() {
+        return Optional.ofNullable(residentTax);
+    }
+
+    /** Sets the town's own rate, or clears it back to the server default with null. */
+    public TownProfile withResidentTax(final java.math.BigDecimal value) {
+        return new TownProfile(board, tag, colour, neutral, open, publicSpawn, value);
+    }
+
     public TownProfile withBoard(final String value) {
-        return new TownProfile(value, tag, colour, neutral, open, publicSpawn);
+        return new TownProfile(value, tag, colour, neutral, open, publicSpawn, residentTax);
     }
 
     public TownProfile withTag(final String value) {
-        return new TownProfile(board, value, colour, neutral, open, publicSpawn);
+        return new TownProfile(board, value, colour, neutral, open, publicSpawn, residentTax);
     }
 
     public TownProfile withColour(final MapColour value) {
-        return new TownProfile(board, tag, value, neutral, open, publicSpawn);
+        return new TownProfile(board, tag, value, neutral, open, publicSpawn, residentTax);
     }
 
     public TownProfile withNeutral(final boolean value) {
-        return new TownProfile(board, tag, colour, value, open, publicSpawn);
+        return new TownProfile(board, tag, colour, value, open, publicSpawn, residentTax);
     }
 
     public TownProfile withOpen(final boolean value) {
-        return new TownProfile(board, tag, colour, neutral, value, publicSpawn);
+        return new TownProfile(board, tag, colour, neutral, value, publicSpawn, residentTax);
     }
 
     public TownProfile withPublicSpawn(final boolean value) {
-        return new TownProfile(board, tag, colour, neutral, open, value);
+        return new TownProfile(board, tag, colour, neutral, open, value, residentTax);
     }
 
     /** Rebuilds from storage, where the colour is six hex digits or null. */
@@ -96,7 +124,8 @@ public record TownProfile(
             final String colourHex,
             final boolean neutral,
             final boolean open,
-            final boolean publicSpawn
+            final boolean publicSpawn,
+            final String residentTax
     ) {
         return new TownProfile(
                 board, tag,
@@ -104,7 +133,29 @@ public record TownProfile(
                 // corrupt row: a town is still a town, and refusing to load it over its map
                 // colour would be a catastrophic response to a cosmetic problem.
                 colourHex == null ? null : MapColour.parse(colourHex).orElse(null),
-                neutral, open, publicSpawn);
+                neutral, open, publicSpawn,
+                // Unparseable is treated as unset, on the same reasoning as the colour above: a
+                // town is still a town, and refusing to load it over a tax rate would be worse
+                // than falling back to the server's.
+                rate(residentTax));
+    }
+
+    /** Reads a stored rate, treating anything unreadable as unset. */
+    private static java.math.BigDecimal rate(final String stored) {
+        if (stored == null || stored.isBlank()) {
+            return null;
+        }
+        try {
+            final java.math.BigDecimal parsed = new java.math.BigDecimal(stored.trim());
+            return parsed.signum() < 0 ? null : parsed;
+        } catch (final NumberFormatException unreadable) {
+            return null;
+        }
+    }
+
+    /** The rate as storage holds it, or null. */
+    public String residentTaxForStorage() {
+        return residentTax == null ? null : residentTax.toPlainString();
     }
 
     /** The colour as storage holds it, or null. */
@@ -120,11 +171,14 @@ public record TownProfile(
                 && Objects.equals(colour, profile.colour)
                 && neutral == profile.neutral
                 && open == profile.open
-                && publicSpawn == profile.publicSpawn;
+                && publicSpawn == profile.publicSpawn
+                // Part of equality, and it has to be: withProfile refuses a change that compares
+                // equal, so leaving the rate out made setting it silently NOTHING_TO_CHANGE.
+                && Objects.equals(residentTax, profile.residentTax);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(board, tag, colour, neutral, open, publicSpawn);
+        return Objects.hash(board, tag, colour, neutral, open, publicSpawn, residentTax);
     }
 }

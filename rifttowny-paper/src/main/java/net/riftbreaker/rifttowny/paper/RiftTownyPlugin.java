@@ -229,7 +229,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 townService, townRoleService, territoryService, flagService, ruinService,
                 spawnService, teleportService, bankService, outlawService, residentNames, residentRepository,
                 townRepository, nationRepository, directory, territoryMap, messages,
-                denialText).tree());
+                denialText, settings.taxes().maxResidentTax()).tree());
 
         registerTree("plot", new net.riftbreaker.rifttowny.paper.command.PlotCommands(
                 plotService, residentNames, residentRepository, townRepository, messages,

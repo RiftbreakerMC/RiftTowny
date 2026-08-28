@@ -83,6 +83,16 @@ taxes:
   # wants somebody gone has /town kick and a person to decide it.
   resident: 0
 
+  # The most a town may charge its own residents through /town set taxes. A town that has set
+  # nothing follows `resident` above; one that has set a rate uses its own, up to this ceiling.
+  #
+  # The ceiling is not optional. The rate is taken automatically from each resident's wallet, once
+  # per interval, with no further consent, so a mayor able to set it without limit could empty the
+  # pockets of everybody who joined their town with a single command. The server decides how far
+  # this can go; the town decides where under it to sit.
+  max-resident: 100
+
+
   # Charged to the town treasury for every chunk it holds, and it leaves the economy. This is the
   # pressure that stops a town claiming land it has no use for.
   upkeep-per-chunk: 0

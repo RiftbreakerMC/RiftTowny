@@ -83,6 +83,9 @@ public final class TownCommands {
     private final MessageService messages;
     private final DenialText denials;
 
+    /** The server's ceiling on what a town may charge its residents. See config.yml taxes.max-resident. */
+    private final java.math.BigDecimal maximumResidentTax;
+
     public TownCommands(
             final TownService towns,
             final TownRoleService roles,
@@ -100,9 +103,12 @@ public final class TownCommands {
             final CivicDirectory directory,
             final TerritoryMap maps,
             final MessageService messages,
-            final DenialText denials
+            final DenialText denials,
+            final java.math.BigDecimal maximumResidentTax
     ) {
         this.towns = Objects.requireNonNull(towns, "towns");
+        this.maximumResidentTax =
+                Objects.requireNonNull(maximumResidentTax, "maximumResidentTax");
         this.roles = Objects.requireNonNull(roles, "roles");
         this.territory = Objects.requireNonNull(territory, "territory");
         this.flags = Objects.requireNonNull(flags, "flags");
@@ -321,6 +327,16 @@ public final class TownCommands {
                         .describedAs("A message for your residents")
                         .runs((actor, args) -> setText(actor, args, "town set board <text|clear>",
                                 MessageKey.TOWN_SET_BOARD, TownProfile::withBoard), Surface.CHAT))
+                .child(CommandNode.action("taxes")
+                        .aliases("tax")
+                        .permission("rifttowny.town.tax")
+                        .usage("town set taxes <amount|default>")
+                        .describedAs("What each resident pays your town")
+                        .completer((actor, args) -> args.size() <= 1
+                                ? List.of("default")
+                                : List.of())
+                        .runs(this::setTaxes, Surface.CHAT))
+
                 .child(CommandNode.action("tag")
                         .permission("rifttowny.town.set")
                         .usage("town set tag <text|clear>")
@@ -709,6 +725,40 @@ public final class TownCommands {
             }
         });
     }
+    /**
+     * What a town charges each of its residents per tax run.
+     *
+     * <p>{@code default} clears the town's own rate rather than setting zero. The two are different
+     * on purpose: cleared follows whatever the server charges, and zero is a decision to charge
+     * nothing that survives the server raising its rate.</p>
+     *
+     * <p>Gated on {@code MANAGE_TAXES}, which until this command existed could be granted to a role
+     * and gated nothing at all.</p>
+     */
+    private void setTaxes(final CommandActor actor, final List<String> args) {
+        if (args.isEmpty()) {
+            usage(actor, "town set taxes <amount|default>");
+            return;
+        }
+        final String raw = args.getFirst();
+        final java.math.BigDecimal rate;
+        if ("default".equalsIgnoreCase(raw) || "clear".equalsIgnoreCase(raw)) {
+            rate = null;
+        } else {
+            try {
+                rate = new java.math.BigDecimal(raw);
+            } catch (final NumberFormatException notANumber) {
+                usage(actor, "town set taxes <amount|default>");
+                return;
+            }
+        }
+        withTown(actor, (who, town) -> reply(actor,
+                towns.setResidentTax(who, town.id(), rate, maximumResidentTax),
+                updated -> messages.send(actor::send,
+                        rate == null ? MessageKey.TOWN_SET_TAXES_DEFAULT : MessageKey.TOWN_SET_TAXES,
+                        MessageService.value("amount", rate == null ? "" : rate.toPlainString()))));
+    }
+
     /**
      * The {@code /town flag} tree.
      *

@@ -225,7 +225,8 @@ public record RiftTownySettings(
                         price(config, "taxes.upkeep-per-chunk"),
                         price(config, "taxes.nation-per-town"),
                         java.time.Duration.ofHours(
-                                Math.max(0L, config.getLong("taxes.grace-hours", 72L)))),
+                                Math.max(0L, config.getLong("taxes.grace-hours", 72L))),
+                        price(config, "taxes.max-resident")),
                 new TruthWords(
                         config.getString("placeholders.true", "true"),
                         config.getString("placeholders.false", "false")),

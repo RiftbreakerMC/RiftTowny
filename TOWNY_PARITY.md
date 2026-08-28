@@ -46,7 +46,7 @@ rows as the truth.
 | `/resident friend add|remove` | — | **MISSING** — the town trust list exists, personal friends do not |
 | `/resident toggle` — bordertitles, plotborder, etc. | — | **MISSING** |
 | `/resident jail …` | — | **MISSING** — `RT-MOD-JUSTICE` |
-| Resident tax charged per day | `taxes.resident`, on the configured interval | DONE |
+| Resident tax charged per day | `taxes.resident` sets the server default; a town sets its own with `/town set taxes`, under the `taxes.max-resident` ceiling | DONE |
 
 ## 2. Towns
 

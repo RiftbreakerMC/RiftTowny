@@ -131,7 +131,7 @@ class TownyPlaceholderManifestTest {
                 new CivicPrices(BigDecimal.valueOf(100), BigDecimal.TEN, BigDecimal.valueOf(5),
                         BigDecimal.valueOf(25), BigDecimal.valueOf(50), BigDecimal.ONE),
                 new TaxPolicy(true, Duration.ofHours(24), BigDecimal.ONE, BigDecimal.valueOf(2),
-                        BigDecimal.valueOf(3), Duration.ofHours(72)));
+                        BigDecimal.valueOf(3), Duration.ofHours(72), BigDecimal.valueOf(50)));
     }
 
     private TownyPlaceholders placeholdersWith(final CivicPrices prices, final TaxPolicy taxes) {

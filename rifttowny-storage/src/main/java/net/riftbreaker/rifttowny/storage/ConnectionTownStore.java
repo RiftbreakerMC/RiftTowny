@@ -37,10 +37,10 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
 
     private static final String COLUMNS =
             "town_id, name, name_normalised, nation_id, leader_id, bank_account_id, created_at, "
-                    + "board, tag, map_colour, neutral, is_open, public_spawn";
+                    + "board, tag, map_colour, neutral, is_open, public_spawn, resident_tax";
 
     /** One {@code ?} per column in {@link #COLUMNS}, so the two cannot drift apart by hand. */
-    private static final String PLACEHOLDERS = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
+    private static final String PLACEHOLDERS = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
 
     private final Connection connection;
     private final StorageBackend backend;
@@ -103,14 +103,16 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
                         + "leader_id = excluded.leader_id, board = excluded.board, "
                         + "tag = excluded.tag, map_colour = excluded.map_colour, "
                         + "neutral = excluded.neutral, is_open = excluded.is_open, "
-                        + "public_spawn = excluded.public_spawn";
+                        + "public_spawn = excluded.public_spawn, "
+                        + "resident_tax = excluded.resident_tax";
                 case MARIADB -> "INSERT INTO rt_town (" + COLUMNS + ") VALUES (" + PLACEHOLDERS + ") "
                         + "ON DUPLICATE KEY UPDATE name = VALUES(name), "
                         + "name_normalised = VALUES(name_normalised), nation_id = VALUES(nation_id), "
                         + "leader_id = VALUES(leader_id), board = VALUES(board), "
                         + "tag = VALUES(tag), map_colour = VALUES(map_colour), "
                         + "neutral = VALUES(neutral), is_open = VALUES(is_open), "
-                        + "public_spawn = VALUES(public_spawn)";
+                        + "public_spawn = VALUES(public_spawn), "
+                        + "resident_tax = VALUES(resident_tax)";
             };
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, town.id().value().toString());
@@ -135,6 +137,7 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
                 statement.setBoolean(11, profile.neutral());
                 statement.setBoolean(12, profile.open());
                 statement.setBoolean(13, profile.publicSpawn());
+                setTextOrNull(statement, 14, profile.residentTaxForStorage());
                 statement.executeUpdate();
             }
             replaceTrust(town);
@@ -207,7 +210,8 @@ final class ConnectionTownStore implements CivicTransaction.TownStore {
                                     results.getString("map_colour"),
                                     results.getBoolean("neutral"),
                                     results.getBoolean("is_open"),
-                                    results.getBoolean("public_spawn"))));
+                                    results.getBoolean("public_spawn"),
+                                    results.getString("resident_tax"))));
                 }
             }
         }

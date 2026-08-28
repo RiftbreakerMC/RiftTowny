@@ -122,6 +122,7 @@ permissions:
       rifttowny.town.trust: true
       rifttowny.town.merge: true
       rifttowny.town.set: true
+      rifttowny.town.tax: true
       rifttowny.role.view: true
       rifttowny.role.manage: true
       rifttowny.role.assign: true
@@ -209,6 +210,9 @@ permissions:
     default: true
   rifttowny.town.set:
     description: Set your town's board, tag, map colour, openness and neutrality. The MANAGE_SETTINGS role permission decides who really can.
+    default: true
+  rifttowny.town.tax:
+    description: Set what your town charges its own residents. The MANAGE_TAXES role permission decides who really can.
     default: true
   rifttowny.role.view:
     description: View your town's roles.

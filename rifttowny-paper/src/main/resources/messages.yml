@@ -102,6 +102,8 @@ town:
   outlaw-list-line: '  <white><resident></white> <dark_gray>-</dark_gray> <gray>by <white><by></white>, <when></gray>'
   outlaw-list-empty: '<gray><white><town></white> has outlawed nobody.</gray>'
   set-board: '<green>The board of <white><town></white> is now: <white><value></white></green>'
+  set-taxes: '<green>Residents now pay <white><amount></white> each tax run.</green>'
+  set-taxes-default: "<yellow>Your town follows the server's resident tax again.</yellow>"
   set-tag: '<green>The tag of <white><town></white> is now <white><value></white>.</green>'
   set-colour: '<green><white><town></white> is drawn in <white><value></white> on maps.</green>'
   set-open: '<green><white><town></white> is now <white><state></white> to anybody joining without an invitation.</green>'
@@ -306,6 +308,7 @@ denial:
   no-town-spawn: 'Your town has no spawn. Someone with the permission can set one with /town setspawn.'
   no-economy: 'No economy plugin is installed, so money cannot move between players and the town.'
   amount-must-be-positive: 'That is not an amount worth moving.'
+  tax-above-server-maximum: 'That is above the highest resident tax this server allows.'
   insufficient-funds: 'You do not have that much.'
   insufficient-civic-funds: 'The treasury does not hold that much.'
   economy-refused: 'The economy plugin would not pay you, so the money is back in the treasury.'

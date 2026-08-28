@@ -27,8 +27,21 @@ public record TaxPolicy(
         BigDecimal residentTax,
         BigDecimal upkeepPerChunk,
         BigDecimal nationTaxPerTown,
-        Duration grace
+        Duration grace,
+        BigDecimal maxResidentTax
 ) {
+
+    /**
+     * The most a town may charge its own residents.
+     *
+     * <p>A ceiling rather than a rate. {@link #residentTax} is what a town charges when it has said
+     * nothing; this is how far one may go when it decides for itself. The two are separate because
+     * a server usually wants a low default and a high ceiling, and a single number cannot be
+     * both.</p>
+     */
+    public BigDecimal maxResidentTax() {
+        return maxResidentTax == null ? BigDecimal.ZERO : maxResidentTax;
+    }
 
     /** The shortest period worth having. Anything under this is a scheduler bug, not a policy. */
     public static final Duration MINIMUM_INTERVAL = Duration.ofMinutes(10);
@@ -48,7 +61,7 @@ public record TaxPolicy(
     public static TaxPolicy off() {
         return new TaxPolicy(
                 false, Duration.ofDays(1), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                Duration.ofDays(3));
+                Duration.ofDays(3), BigDecimal.ZERO);
     }
 
     /** Whether a run would actually do anything. */

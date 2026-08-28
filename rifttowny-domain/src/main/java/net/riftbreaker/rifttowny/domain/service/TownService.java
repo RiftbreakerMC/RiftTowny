@@ -580,13 +580,29 @@ public final class TownService {
             final TownId townId,
             final java.util.function.UnaryOperator<net.riftbreaker.rifttowny.domain.org.TownProfile> change
     ) {
+        return setProfile(actor, townId, Permission.MANAGE_SETTINGS, change);
+    }
+
+    /**
+     * The same, for a field the role model gates separately.
+     *
+     * <p>The tax rate is the first: MANAGE_SETTINGS covers the board, the tag and the map colour,
+     * and somebody trusted to write a message of the day is not thereby trusted to decide what
+     * everybody in town pays.</p>
+     */
+    public CompletableFuture<ServiceResult<Town>> setProfile(
+            final ResidentId actor,
+            final TownId townId,
+            final Permission permission,
+            final java.util.function.UnaryOperator<net.riftbreaker.rifttowny.domain.org.TownProfile> change
+    ) {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(townId, "townId");
         Objects.requireNonNull(change, "change");
 
         return refreshing(transaction(transaction -> {
             final Town town = town(transaction, townId);
-            requirePermission(transaction, town, actor, Permission.MANAGE_SETTINGS);
+            requirePermission(transaction, town, actor, permission);
 
             final Outcome<Town> changed = town.withProfile(change.apply(town.profile()));
             final Town updated = require(changed);
@@ -594,6 +610,34 @@ public final class TownService {
             transaction.publishAll(changed.events(), correlation("profile", townId));
             return updated;
         }), Town::id);
+    }
+
+    /**
+     * Sets what a town charges each of its residents, or clears it back to the server's rate.
+     *
+     * <p>Requires {@link Permission#MANAGE_TAXES}, which until now was a permission that could be
+     * granted and gated nothing: the tax engine shipped reading a single server-wide rate, with no
+     * per-town lever for the permission to guard.</p>
+     *
+     * @param rate the town's own rate, or null to fall back to the server's. Refused above
+     *        {@code maximum}, so a mayor cannot empty their residents' pockets in one command, and
+     *        refused below zero, because a town paying its residents is a different feature
+     */
+    public CompletableFuture<ServiceResult<Town>> setResidentTax(
+            final ResidentId actor,
+            final TownId townId,
+            final java.math.BigDecimal rate,
+            final java.math.BigDecimal maximum
+    ) {
+        Objects.requireNonNull(maximum, "maximum");
+        if (rate != null && rate.signum() < 0) {
+            return completed(ServiceResult.refused(ChangeDenial.AMOUNT_MUST_BE_POSITIVE));
+        }
+        if (rate != null && rate.compareTo(maximum) > 0) {
+            return completed(ServiceResult.refused(ChangeDenial.TAX_ABOVE_SERVER_MAXIMUM));
+        }
+        return setProfile(actor, townId, Permission.MANAGE_TAXES,
+                profile -> profile.withResidentTax(rate));
     }
 
     /** Renames a town, keeping its id and civic account. Requires {@link Permission#RENAME_ORGANISATION}. */

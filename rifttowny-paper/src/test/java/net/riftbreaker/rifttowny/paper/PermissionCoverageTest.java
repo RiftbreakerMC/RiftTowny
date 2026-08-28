@@ -49,9 +49,6 @@ class PermissionCoverageTest {
         PENDING.put(Permission.MANAGE_DISTRICTS, "RT-CORE-AREA — districts are unbuilt");
         PENDING.put(Permission.MANAGE_SHOPS, "RT-MOD-SHOP");
         PENDING.put(Permission.MANAGE_SPAWNERS, "RT-MOD-SPAWNER");
-        PENDING.put(Permission.MANAGE_TAXES,
-                "RT-MOD-TAX's per-town lever — the engine runs on server-wide rates, and there is "
-                        + "no /town set taxes for this to gate");
         PENDING.put(Permission.VIEW_LOGS, "RT-CORE-LOG — rt_audit has no writer");
     }
 
