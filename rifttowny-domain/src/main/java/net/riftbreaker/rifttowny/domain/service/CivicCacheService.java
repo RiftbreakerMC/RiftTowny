@@ -151,7 +151,22 @@ public final class CivicCacheService implements CivicCacheRefresher {
             cache.replaceAll(loaded);
             // In the same transaction as the towns, so the two cannot be filled from either side of
             // a change and disagree about who belongs to what.
-            nationCache.replaceAll(transaction.nations().all());
+            final java.util.List<net.riftbreaker.rifttowny.domain.civic.NationFacts> nations =
+                    new java.util.ArrayList<>();
+            for (final net.riftbreaker.rifttowny.domain.org.Nation nation
+                    : transaction.nations().all()) {
+                // A nation with no role book is dropped, like a town with none. It answers no
+                // permission question either way; holding it would answer them from nothing.
+                transaction.roles()
+                        .find(net.riftbreaker.rifttowny.domain.org.OrganisationScope.NATION,
+                                nation.id().value())
+                        .ifPresentOrElse(
+                                book -> nations.add(
+                                        net.riftbreaker.rifttowny.domain.civic.NationFacts.of(
+                                                nation, book)),
+                                () -> unreadable.add(nation.name().display()));
+            }
+            nationCache.replaceAll(nations);
             return new CivicLoad(loaded.size(), List.copyOf(unreadable), nationCache.size());
         }).thenApply(summary -> {
             summary.warnAbout(warn);
@@ -196,6 +211,28 @@ public final class CivicCacheService implements CivicCacheRefresher {
     }
 
     /**
+     * Re-reads the nation a town belongs to, if it belongs to one.
+     *
+     * <p>For the paths that end somebody's citizenship without touching the nation directly: a
+     * resident leaving their town, and a purge removing several. Both revoke nation roles through
+     * {@code CitizenRoles}, and neither had any reason to think about the nation cache until the
+     * cache started holding nation role books.</p>
+     *
+     * <p>Reads the membership from storage rather than from the cache, because the caller has just
+     * changed the town and the cache is the thing being corrected.</p>
+     */
+    public CompletableFuture<Void> refreshNationOf(final TownId town) {
+        if (town == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return store.<net.riftbreaker.rifttowny.domain.org.NationId>inTransaction(transaction ->
+                        transaction.towns().find(town)
+                                .flatMap(net.riftbreaker.rifttowny.domain.org.Town::nation)
+                                .orElse(null))
+                .thenCompose(this::refreshNation);
+    }
+
+    /**
      * Re-reads one nation after it changed.
      *
      * <p>A dissolved nation is forgotten rather than reported as an error, exactly as a disbanded
@@ -209,14 +246,31 @@ public final class CivicCacheService implements CivicCacheRefresher {
             return CompletableFuture.completedFuture(null);
         }
         return store.<Void>inTransaction(transaction -> {
-            transaction.nations().find(nation).ifPresentOrElse(nationCache::remember, () -> {
+            final var found = transaction.nations().find(nation);
+            if (found.isEmpty()) {
                 nationCache.forget(nation);
                 // A dissolved nation's declarations cascade in the database, and the book has to
                 // be told separately or protection keeps granting the ALLY rung to a nation that
                 // no longer exists - until the next restart, which is the worst kind of bug to
                 // reproduce.
                 diplomacy.forget(nation);
-            });
+                return null;
+            }
+            // Two different failures, kept apart. A nation that is gone takes its declarations with
+            // it; a nation whose role book cannot be read is still a nation, still at war or at
+            // peace with whoever it was, and only unable to answer permission questions. Forgetting
+            // its diplomacy for that would silently reset relations on a storage fault.
+            final var book = transaction.roles().find(
+                    net.riftbreaker.rifttowny.domain.org.OrganisationScope.NATION,
+                    found.get().id().value());
+            if (book.isEmpty()) {
+                nationCache.forget(nation);
+                warn.accept("Nation " + found.get().name().display() + " has no role book. Its "
+                        + "members will be refused every nation action until the book is restored.");
+                return null;
+            }
+            nationCache.remember(net.riftbreaker.rifttowny.domain.civic.NationFacts.of(
+                    found.get(), book.get()));
             return null;
         });
     }

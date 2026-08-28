@@ -681,6 +681,8 @@ public final class TownService {
             town.nation().ifPresent(nation -> transaction.publishAll(
                     CitizenRoles.revoke(transaction, nation, departing),
                     correlation("disband", townId)));
+            final net.riftbreaker.rifttowny.domain.org.NationId formerNation =
+                    town.nation().orElse(null);
 
             // Flag overrides are swept before the claims go, because the claim rows are where the
             // chunk list comes from. They have no foreign key to sweep them - the target column
@@ -718,7 +720,7 @@ public final class TownService {
             transaction.publish(
                     new DomainEvent.TownDisbanded(townId, town.name(), released),
                     correlation("disband", townId));
-            return new Disbanded(townId, List.copyOf(flagTargets), fallen.orElse(null));
+            return new Disbanded(townId, List.copyOf(flagTargets), fallen.orElse(null), formerNation);
         }).thenApply(result -> {
             // After the commit, never inside it. A rolled-back disband whose claims had already
             // left the cache would leave the town's land unprotected until the next restart.
@@ -739,7 +741,12 @@ public final class TownService {
             if (result.value().isEmpty()) {
                 return CompletableFuture.completedFuture(map(result));
             }
-            return civic.refresh(result.value().orElseThrow().town())
+            final Disbanded disbanded = result.value().orElseThrow();
+            // The nation as well as the town. Its member list no longer includes this town, and
+            // every citizen role its people held has just been revoked - both of which the cache
+            // would otherwise keep answering from until the nation changed for some other reason.
+            return civic.refresh(disbanded.town())
+                    .thenCompose(ignored -> civic.refreshNation(disbanded.nation()))
                     .thenApply(ignored -> map(result));
         });
     }
@@ -751,7 +758,10 @@ public final class TownService {
      * cache-maintenance detail and no caller has a use for them.</p>
      */
     private record Disbanded(
-            TownId town, List<FlagTarget> flagTargets, RuinService.Fallen fallen) {
+            TownId town,
+            List<FlagTarget> flagTargets,
+            RuinService.Fallen fallen,
+            net.riftbreaker.rifttowny.domain.org.NationId nation) {
     }
 
     private static ServiceResult<TownId> map(final ServiceResult<Disbanded> result) {
@@ -812,7 +822,7 @@ public final class TownService {
         Objects.requireNonNull(inactiveFor, "inactiveFor");
         final Instant before = clock.instant().minus(inactiveFor);
 
-        return refreshing(transaction(transaction -> {
+        return refreshingCitizenship(transaction(transaction -> {
             Town town = town(transaction, townId);
             requirePermission(transaction, town, actor, Permission.KICK_RESIDENT);
 
@@ -892,7 +902,7 @@ public final class TownService {
             final boolean voluntary,
             final ResidentId actor
     ) {
-        return refreshing(transaction(transaction -> {
+        return refreshingCitizenship(transaction(transaction -> {
             final Town town = town(transaction, townId);
             if (actor != null) {
                 requirePermission(transaction, town, actor, Permission.KICK_RESIDENT);
@@ -1303,6 +1313,7 @@ public final class TownService {
      *
      * @param which where to find the town id in a successful result
      */
+
     private <T> CompletableFuture<ServiceResult<T>> refreshing(
             final CompletableFuture<ServiceResult<T>> pending,
             final java.util.function.Function<T, TownId> which
@@ -1313,6 +1324,24 @@ public final class TownService {
                 return CompletableFuture.completedFuture(result);
             }
             return civic.refresh(town.get()).thenApply(ignored -> result);
+        });
+    }
+    /**
+     * The same, for a change that also ended somebody's citizenship of a nation.
+     *
+     * <p>Only the paths that call {@code CitizenRoles.revoke} need this. Folding it into
+     * {@link #refreshing} would put a nation lookup behind every claim and every role edit, to
+     * correct something those cannot have changed.</p>
+     */
+    private <T> CompletableFuture<ServiceResult<T>> refreshingCitizenship(
+            final CompletableFuture<ServiceResult<T>> pending,
+            final java.util.function.Function<T, TownId> which
+    ) {
+        return refreshing(pending, which).thenCompose(result -> {
+            final Optional<TownId> town = result.value().map(which);
+            return town.isEmpty()
+                    ? CompletableFuture.completedFuture(result)
+                    : civic.refreshNationOf(town.get()).thenApply(ignored -> result);
         });
     }
 

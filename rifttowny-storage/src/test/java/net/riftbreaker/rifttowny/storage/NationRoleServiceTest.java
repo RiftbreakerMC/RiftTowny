@@ -54,16 +54,23 @@ class NationRoleServiceTest extends SqliteFixture {
     private NationService nations;
     private TownService towns;
     private JdbcResidentRepository residents;
+    private CivicCache civicCache;
+    private net.riftbreaker.rifttowny.domain.civic.NationCache nationCache;
+    private CivicCacheService civic;
 
     @BeforeEach
     void createServices() {
         store = new JdbcCivicStore(database, DIRECT, CLOCK);
-        final CivicCacheService civic =
-                new CivicCacheService(store, CivicCache.empty(), warning -> { });
+        civicCache = CivicCache.empty();
+        nationCache = net.riftbreaker.rifttowny.domain.civic.NationCache.empty();
+        civic = new CivicCacheService(
+                store, civicCache, nationCache,
+                net.riftbreaker.rifttowny.domain.diplomacy.DiplomacyBook.empty(),
+                net.riftbreaker.rifttowny.domain.justice.Outlaws.empty(), warning -> { });
         towns = new TownService(
                 store, NamePolicy.defaults(), CLOCK, TerritoryIndex.empty(), civic);
         nations = new NationService(store, NamePolicy.defaults(), CLOCK, civic);
-        roles = new NationRoleService(store, CLOCK, Set.of());
+        roles = new NationRoleService(store, CLOCK, Set.of(), civic);
         residents = new JdbcResidentRepository(database, DIRECT);
     }
 
@@ -407,4 +414,92 @@ class NationRoleServiceTest extends SqliteFixture {
                 .as("a nation role in a town's book would be authority nobody granted")
                 .isEmpty();
     }
+    /**
+     * The nation cache, which now carries role books.
+     *
+     * <p>It did not until chat needed CHAT_NATION and a nation role's prefix answered inside
+     * AsyncChatEvent, where a query is not available. Caching them means every path that can change
+     * a nation's roles has to say so, and the ones that end citizenship are the awkward half: they
+     * are town operations - somebody leaves, somebody is purged, a town is disbanded - that revoke
+     * nation roles through CitizenRoles without otherwise touching the nation at all. Each of those
+     * is pinned here, because a missed one is somebody keeping an audience their nation took back,
+     * and nothing would say so until a restart.</p>
+     */
+    @Nested
+    @DisplayName("the nation cache")
+    class Caching {
+
+        private boolean cachedAllows(
+                final Nation nation, final ResidentId who, final Permission permission) {
+            return nationCache.facts(nation.id())
+                    .map(facts -> facts.allows(who, permission, civicCache.townOf(who).orElse(null)))
+                    .orElse(false);
+        }
+
+        @Test
+        @DisplayName("a role edit reaches it, so a revoked permission is answered from memory")
+        void roleEditsRefreshTheCache() {
+            final Nation nation = valen();
+            civic.loadAll().join();
+
+            assertThat(cachedAllows(nation, MAYOR, Permission.CHAT_NATION))
+                    .as("MEMBER holds it by default")
+                    .isTrue();
+
+            final RoleId member = nationCache.facts(nation.id()).orElseThrow().roles()
+                    .systemRole(net.riftbreaker.rifttowny.domain.role.SystemRole.MEMBER)
+                    .orElseThrow().id();
+            roles.revoke(KING, nation.id(), member, Permission.CHAT_NATION).join();
+
+            assertThat(cachedAllows(nation, MAYOR, Permission.CHAT_NATION))
+                    .as("the edit must reach the cache, not wait for a restart")
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("a resident leaving their town loses their nation role in the cache too")
+        void leavingRefreshesTheNation() {
+            // The path with no reason of its own to think about nations: TownService.release
+            // revokes nation roles through CitizenRoles and refreshed only the town.
+            //
+            // The assertion is deliberately about an ASSIGNED role rather than about CHAT_NATION.
+            // Losing the town alone turns their nation standing into VISITOR, so a MEMBER-default
+            // permission reads false either way and the test would pass with no nation refresh at
+            // all - which is exactly what the first version of it did.
+            final Nation nation = valen();
+            final ResidentId envoy = ResidentId.of(UUID.randomUUID());
+            residents.save(Resident.newcomer(envoy, "Envoy", NOW)).join();
+            final TownId ashford = civicCache.townOf(MAYOR).orElseThrow();
+            towns.join(MAYOR, envoy, ashford).join();
+            final RoleId role = envoy(nation, Permission.MANAGE_TAXES);
+            roles.assign(KING, nation.id(), envoy, role).join();
+            civic.loadAll().join();
+            assertThat(cachedAllows(nation, envoy, Permission.MANAGE_TAXES))
+                    .as("the assigned role grants it regardless of standing")
+                    .isTrue();
+
+            towns.leave(envoy, ashford).join();
+
+            assertThat(cachedAllows(nation, envoy, Permission.MANAGE_TAXES))
+                    .as("the role was revoked with their citizenship, and the cache must know")
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("and a member town disbanding reaches it as well")
+        void disbandRefreshesTheNation() {
+            final Nation nation = valen();
+            civic.loadAll().join();
+            final TownId ashford = civicCache.townOf(MAYOR).orElseThrow();
+            assertThat(nationCache.facts(nation.id()).orElseThrow().nation().hasTown(ashford))
+                    .isTrue();
+
+            towns.disband(MAYOR, ashford).join();
+
+            assertThat(nationCache.facts(nation.id()).orElseThrow().nation().hasTown(ashford))
+                    .as("a dissolved town must not stay a member in memory")
+                    .isFalse();
+        }
+    }
+
 }

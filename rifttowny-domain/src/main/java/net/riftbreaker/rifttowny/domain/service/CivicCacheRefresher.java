@@ -35,12 +35,25 @@ public interface CivicCacheRefresher {
      * Re-reads one nation and updates the cache.
      *
      * <p>A default no-op rather than a second abstract method, which keeps this a functional
-     * interface and keeps every existing test's one-line lambda working. The staleness it guards
-     * against is milder than the town case — nothing enforces a rule from a nation's cached name —
-     * so a caller that only cares about protection can correctly ignore it.</p>
+     * interface and keeps every existing test's one-line lambda working.</p>
+     *
+     * <p>This used to say the staleness was milder than the town case, because nothing enforced a
+     * rule from a nation's cached name. That stopped being true when the nation cache began holding
+     * role books: {@code CHAT_NATION} is now answered from it, and a stale book is somebody keeping
+     * an audience their nation has taken back. Milder than protection, still a rule.</p>
      */
     default CompletableFuture<Void> refreshNation(
             final net.riftbreaker.rifttowny.domain.org.NationId nation) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    /**
+     * Re-reads the nation a town belongs to, if any.
+     *
+     * <p>For a change to a town that ends somebody's citizenship — leaving, being purged — and so
+     * revokes nation roles without the caller ever naming the nation.</p>
+     */
+    default CompletableFuture<Void> refreshNationOf(final TownId town) {
         return CompletableFuture.completedFuture(null);
     }
 

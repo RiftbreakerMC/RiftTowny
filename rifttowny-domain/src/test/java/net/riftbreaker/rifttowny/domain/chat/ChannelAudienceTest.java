@@ -56,7 +56,7 @@ class ChannelAudienceTest {
         }
         final Nation valen = Nation.restore(id, CivicFixture.name("Valen"), mayor,
                 members[0].id(), UUID.randomUUID(), ids, CivicFixture.NOW);
-        nations.remember(valen);
+        nations.remember(CivicFixture.facts(valen));
         return valen;
     }
 
@@ -137,8 +137,8 @@ class ChannelAudienceTest {
             // A missing town should cost its residents the message, not cost everybody else theirs.
             final NationId id = NationId.random();
             towns.remember(CivicFixture.facts(ashford.joinNation(id).orElseThrow()));
-            nations.remember(Nation.restore(id, CivicFixture.name("Valen"), mayor, ashford.id(),
-                    UUID.randomUUID(), Set.of(ashford.id(), TownId.random()), CivicFixture.NOW));
+            nations.remember(CivicFixture.facts(Nation.restore(id, CivicFixture.name("Valen"), mayor, ashford.id(),
+                    UUID.randomUUID(), Set.of(ashford.id(), TownId.random()), CivicFixture.NOW)));
 
             assertThat(audiences.forSpeaker(mayor, ChatChannel.NATION).orElseThrow().members())
                     .containsExactlyInAnyOrder(mayor, citizen);

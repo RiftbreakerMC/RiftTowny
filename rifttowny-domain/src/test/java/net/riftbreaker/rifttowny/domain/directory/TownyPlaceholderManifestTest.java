@@ -119,7 +119,7 @@ class TownyPlaceholderManifestTest {
                 NationProfile.empty().withBoard("For Valen").withTag("VAL")
                         .withColour(MapColour.parse("#445566").orElseThrow()).withNeutral(true),
                 CivicFixture.NOW);
-        nations.remember(valen);
+        nations.remember(CivicFixture.facts(valen));
 
         claims.put(Claim.of(new ChunkKey(WORLD, 0, 0), ashford.id(),
                 ClaimKind.HOMEBLOCK, CivicFixture.NOW));
@@ -427,9 +427,9 @@ class TownyPlaceholderManifestTest {
                             stranger, UUID.randomUUID(), CivicFixture.NOW)
                     .joinNation(ashmarkId).orElseThrow();
             towns.remember(CivicFixture.facts(elsewhere));
-            nations.remember(Nation.restore(ashmarkId, CivicFixture.name("Ashmark"), stranger,
+            nations.remember(CivicFixture.facts(Nation.restore(ashmarkId, CivicFixture.name("Ashmark"), stranger,
                     elsewhere.id(), UUID.randomUUID(), java.util.Set.of(elsewhere.id()),
-                    NationProfile.empty(), CivicFixture.NOW));
+                    NationProfile.empty(), CivicFixture.NOW)));
 
             // The neighbour's own homeblock, which is where the viewer has to be standing for the
             // ally and enemy placeholders to have anything to say.

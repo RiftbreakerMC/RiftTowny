@@ -248,12 +248,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
                         messages, () -> chatAdapter.service());
         final net.riftbreaker.rifttowny.paper.command.ChatCommands chatCommands =
                 new net.riftbreaker.rifttowny.paper.command.ChatCommands(
-                        activeChannels, channelAudience, channelRenderer, messages, civicCache);
+                        activeChannels, channelAudience, channelRenderer, messages, civicCache, nationCache);
         registerTree("townchat", chatCommands.townTree());
         registerTree("nationchat", chatCommands.nationTree());
         getServer().getPluginManager().registerEvents(
                 new net.riftbreaker.rifttowny.paper.chat.ChannelChatListener(
-                        activeChannels, civicCache, channelAudience, channelRenderer, messages),
+                        activeChannels, civicCache, nationCache, channelAudience, channelRenderer, messages),
                 this);
 
         registerProtection();
@@ -382,7 +382,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                     flagOverrides);
             this.nationRoleService =
                     new net.riftbreaker.rifttowny.domain.service.NationRoleService(
-                            civicStore, clock, lockedPermissions());
+                            civicStore, clock, lockedPermissions(), civicCacheService);
             this.nationService = new net.riftbreaker.rifttowny.domain.service.NationService(
                     civicStore,
                     net.riftbreaker.rifttowny.domain.naming.NamePolicy.defaults(),

@@ -2,6 +2,7 @@ package net.riftbreaker.rifttowny.paper.command;
 
 import net.kyori.adventure.text.Component;
 import net.riftbreaker.rifttowny.domain.civic.CivicCache;
+import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.role.Permission;
 import net.riftbreaker.rifttowny.domain.chat.ActiveChannels;
 import net.riftbreaker.rifttowny.domain.chat.ChannelAudience;
@@ -39,19 +40,22 @@ public final class ChatCommands {
     private final ChannelRenderer renderer;
     private final MessageService messages;
     private final CivicCache civic;
+    private final net.riftbreaker.rifttowny.domain.civic.NationCache nations;
 
     public ChatCommands(
             final ActiveChannels active,
             final ChannelAudience audiences,
             final ChannelRenderer renderer,
             final MessageService messages,
-            final CivicCache civic
+            final CivicCache civic,
+            final net.riftbreaker.rifttowny.domain.civic.NationCache nations
     ) {
         this.active = Objects.requireNonNull(active, "active");
         this.audiences = Objects.requireNonNull(audiences, "audiences");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.civic = Objects.requireNonNull(civic, "civic");
+        this.nations = Objects.requireNonNull(nations, "nations");
     }
 
     /** The {@code /tc} tree. A single action, since a channel command takes free text. */
@@ -102,6 +106,17 @@ public final class ChatCommands {
         send(actor, who.get(), channel, audience.get(), String.join(" ", args));
     }
 
+    /** The speaker's role prefix on this channel, town or nation, or empty. */
+    private String prefixOf(final ResidentId who, final ChatChannel channel) {
+        if (channel == ChatChannel.TOWN) {
+            return civic.townFactsOf(who).flatMap(facts -> facts.chatPrefixOf(who)).orElse("");
+        }
+        final TownId theirTown = civic.townOf(who).orElse(null);
+        return civic.nationOfResident(who)
+                .flatMap(nations::facts)
+                .flatMap(facts -> facts.chatPrefixOf(who, theirTown))
+                .orElse("");
+    }
 
     /**
      * Whether this player's roles let them speak on this channel.
@@ -111,21 +126,28 @@ public final class ChatCommands {
      * town that revoked chat from a role changed nothing. A permission granted by default is still
      * a permission — the whole point is that it can be taken away.</p>
      *
-     * <p>The town answer comes from the civic cache, which already carries each town's role book
-     * because protection reads it on every block a player touches. A nation's book is deliberately
-     * not cached, so the nation channel is checked here, on the command, and not again per message;
-     * the listener's own audience check is what catches somebody who has left. The window that
-     * leaves — still in the nation, but the nation revoked chat from their role since they toggled
-     * — costs one misplaced message to an audience they were until recently entitled to.</p>
+     * <p>Both answers come from memory. A town's role book was always cached, because protection
+     * reads it on every block a player touches; a nation's is cached too now, which is what closed
+     * the window this javadoc used to describe — the nation channel was checked once here and never
+     * again, so somebody kept an audience their nation had taken back until they next toggled.</p>
+     *
+     * <p>A nation's standing needs the actor's town as well as the actor, because its citizens are
+     * residents of its member towns rather than of the nation. Being in no town answers VISITOR,
+     * which is the safe direction.</p>
      */
     private boolean mayUse(final ResidentId who, final ChatChannel channel) {
-        if (channel != ChatChannel.TOWN) {
-            return true;
+        if (channel == ChatChannel.TOWN) {
+            return civic.townFactsOf(who)
+                    .map(facts -> facts.allows(who, Permission.CHAT_TOWN))
+                    .orElse(false);
         }
-        return civic.townFactsOf(who)
-                .map(facts -> facts.allows(who, Permission.CHAT_TOWN))
+        final TownId theirTown = civic.townOf(who).orElse(null);
+        return civic.nationOfResident(who)
+                .flatMap(nations::facts)
+                .map(facts -> facts.allows(who, Permission.CHAT_NATION, theirTown))
                 .orElse(false);
     }
+
     private void toggle(
             final CommandActor actor, final ResidentId who, final ChatChannel channel) {
         final Optional<ChatChannel> now = active.toggle(who.value(), channel);
@@ -160,9 +182,7 @@ public final class ChatCommands {
         final Component body = Component.text(text);
 
         int heard = 0;
-        final String prefix = channel == ChatChannel.TOWN
-                ? civic.townFactsOf(who).flatMap(facts -> facts.chatPrefixOf(who)).orElse("")
-                : "";
+        final String prefix = prefixOf(who, channel);
         for (final ResidentId member : audience.members()) {
             final Player viewer = Bukkit.getPlayer(member.value());
             if (viewer == null) {

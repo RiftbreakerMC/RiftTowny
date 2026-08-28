@@ -238,7 +238,6 @@ making that the code does not yet keep.
 
 | Thing | State | Why it stays |
 |---|---|---|
-| Nation role decoration and `CHAT_NATION` | A nation's chat prefix is never rendered, and `CHAT_NATION` is checked on the command but not per message | A nation's role book is deliberately not cached — protection reads a town's roles on every block a player touches and never a nation's — so there is nothing to read synchronously inside `AsyncChatEvent`. The town halves of both are done. Caching nation books would close this, and should be weighed against adding an invalidation surface for a chat gate |
 | `rt_audit` | Declared in V1, zero writers | Waiting on **RT-CORE-LOG** / RiftLogger. The claims that it was populated have been removed from this file and from `docs/dependency-report.md` |
 | `rt_role_permission.granted` | Inserted as a literal `1`, only ever read as `granted = 1` | An explicit deny has no code path: revocation deletes and re-inserts. The column is a constant until a deny case is actually designed |
 | `rt_area`, `rt_organisation_currency` | No production reference | Named blockers: **RT-CORE-AREA** and **RT-MOD-BANK** multi-currency. Worth noting `rt_organisation_balance` and `rt_bank_ledger` key on a free-text `currency` column that does not reference `rt_organisation_currency`, so the two designs need reconciling when multi-currency lands |

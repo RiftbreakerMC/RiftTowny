@@ -151,8 +151,8 @@ Towns and nations both carry a configurable role set, in the style of Lands.
 
 - Roles may be created, cloned, renamed, reordered and deleted.
 - Each role has a display name, icon, chat prefix, integer priority and a permission set. A
-  town role prefix is rendered in town chat, read from the civic cache the protection path
-  already consults. A nation role prefix is not: nation role books are deliberately uncached.
+  role prefix is rendered in that organisation's chat, town or nation, read from the caches
+  rather than queried: chat is rendered inside an async event that cannot afford a lookup.
 - **A role may only manage roles of strictly lower priority.** This is enforced in the
   service layer, not only in commands.
 - Three roles per organisation are immutable system roles: leader (mayor / king),

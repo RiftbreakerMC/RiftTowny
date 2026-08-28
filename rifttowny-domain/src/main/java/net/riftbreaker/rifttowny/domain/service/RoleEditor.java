@@ -437,12 +437,17 @@ final class RoleEditor {
             // on each method instead would leave the next one added to be the one that forgets, and
             // a forgotten refresh is a permission check answering from a role that no longer exists.
             //
-            // Only a town's book is cached: protection reads a town's roles on every block a player
-            // touches, and never a nation's.
-            if (!result.succeeded() || organisation.scope() != OrganisationScope.TOWN) {
+            // Both scopes now. A town's book was always cached because protection reads it on every
+            // block a player touches; a nation's is cached too since chat began asking CHAT_NATION
+            // and a nation role's prefix inside AsyncChatEvent, where a query is not available.
+            if (!result.succeeded()) {
                 return CompletableFuture.completedFuture(result);
             }
-            return civic.refresh((TownId) organisation).thenApply(ignored -> result);
+            return switch (organisation.scope()) {
+                case TOWN -> civic.refresh((TownId) organisation).thenApply(ignored -> result);
+                case NATION -> civic.refreshNation((net.riftbreaker.rifttowny.domain.org.NationId)
+                        organisation).thenApply(ignored -> result);
+            };
         });
     }
 

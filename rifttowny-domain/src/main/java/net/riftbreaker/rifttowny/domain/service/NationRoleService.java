@@ -38,12 +38,19 @@ public final class NationRoleService {
      * @param lockedByAdmin permissions the server administrator has forbidden to configurable roles.
      *        The same set as a town's: a permission dangerous enough to lock away from a town's
      *        officers is not less dangerous in a nation's
+     * @param civic told after every accepted edit. This used to be hard-coded to
+     *        {@link CivicCacheRefresher#none()}, on the grounds that only a town's book was cached
+     *        because protection reads a town's roles on every block and never a nation's. That
+     *        stopped being true when the nation cache began holding role books for chat, and the
+     *        refresher being absent made the refresh in {@code RoleEditor} unreachable for nations -
+     *        so a revoked nation permission was answered from memory until the next restart
      */
     public NationRoleService(
-            final CivicStore store, final Clock clock, final Set<Permission> lockedByAdmin) {
-        // No cache refresher: only a town's role book is cached, because protection reads a town's
-        // roles on every block a player touches and never a nation's.
-        this.editor = new RoleEditor(store, clock, lockedByAdmin, CivicCacheRefresher.none());
+            final CivicStore store,
+            final Clock clock,
+            final Set<Permission> lockedByAdmin,
+            final CivicCacheRefresher civic) {
+        this.editor = new RoleEditor(store, clock, lockedByAdmin, civic);
     }
 
     /** Creates a configurable role. Requires {@link Permission#MANAGE_ROLES} in the nation. */

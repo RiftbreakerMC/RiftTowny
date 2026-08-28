@@ -473,7 +473,7 @@ public enum MessageKey {
             "<gray><prefix></gray><dark_green>[Town]</dark_green> <white><sender></white><gray>:</gray> <message>"),
 
     CHAT_NATION_FORMAT("chat.nation-format",
-            "<dark_aqua>[Nation]</dark_aqua> <white><sender></white><gray>:</gray> <message>"),
+            "<gray><prefix></gray><dark_aqua>[Nation]</dark_aqua> <white><sender></white><gray>:</gray> <message>"),
 
     CHAT_CHANNEL_ON("chat.channel-on",
             "<green>You are now speaking to your <white><channel></white>. "

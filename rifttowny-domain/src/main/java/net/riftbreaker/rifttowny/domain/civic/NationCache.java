@@ -34,7 +34,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class NationCache {
 
-    private final Map<NationId, Nation> nations = new ConcurrentHashMap<>();
+    // Facts rather than the aggregate alone, so a nation's role book is reachable without a query.
+    // Chat is why: CHAT_NATION and a nation role's prefix are both wanted inside AsyncChatEvent.
+    private final Map<NationId, NationFacts> nations = new ConcurrentHashMap<>();
 
     /**
      * Which nation each town belongs to.
@@ -60,14 +62,14 @@ public final class NationCache {
      * a cleared cache reports every nation as unknown, and a placeholder resolving during that
      * window would render a player's nation as blank.</p>
      */
-    public synchronized void replaceAll(final Collection<Nation> loaded) {
+    public synchronized void replaceAll(final Collection<NationFacts> loaded) {
         Objects.requireNonNull(loaded, "loaded");
-        final Map<NationId, Nation> replacement = new HashMap<>();
+        final Map<NationId, NationFacts> replacement = new HashMap<>();
         final Map<TownId, NationId> replacementMembers = new HashMap<>();
-        for (final Nation nation : loaded) {
-            replacement.put(nation.id(), nation);
-            for (final TownId town : nation.towns()) {
-                replacementMembers.put(town, nation.id());
+        for (final NationFacts facts : loaded) {
+            replacement.put(facts.id(), facts);
+            for (final TownId town : facts.nation().towns()) {
+                replacementMembers.put(town, facts.id());
             }
         }
         nations.keySet().retainAll(replacement.keySet());
@@ -78,11 +80,12 @@ public final class NationCache {
     }
 
     /** Records a nation's current state, reconciling its member towns against the previous version. */
-    public synchronized void remember(final Nation nation) {
-        Objects.requireNonNull(nation, "nation");
-        final Nation previous = nations.put(nation.id(), nation);
+    public synchronized void remember(final NationFacts facts) {
+        Objects.requireNonNull(facts, "facts");
+        final Nation nation = facts.nation();
+        final NationFacts previous = nations.put(nation.id(), facts);
         if (previous != null) {
-            for (final TownId departed : previous.towns()) {
+            for (final TownId departed : previous.nation().towns()) {
                 if (!nation.hasTown(departed)) {
                     membership.remove(departed, nation.id());
                 }
@@ -109,7 +112,17 @@ public final class NationCache {
     // --- reading -------------------------------------------------------------------------------
 
     public Optional<Nation> nation(final NationId id) {
+        return facts(id).map(NationFacts::nation);
+    }
+
+    /** A nation and its roles, for a question the aggregate alone cannot answer. */
+    public Optional<NationFacts> facts(final NationId id) {
         return id == null ? Optional.empty() : Optional.ofNullable(nations.get(id));
+    }
+
+    /** The facts for the nation a town belongs to, if any. */
+    public Optional<NationFacts> factsOf(final TownId town) {
+        return town == null ? Optional.empty() : facts(membership.get(town));
     }
 
     /** The nation a town belongs to, if any. */
@@ -128,7 +141,7 @@ public final class NationCache {
 
     /** Every nation held, for a listing. A copy, so a caller may sort it. */
     public List<Nation> all() {
-        return List.copyOf(nations.values());
+        return nations.values().stream().map(NationFacts::nation).toList();
     }
 
     // --- diagnostics ---------------------------------------------------------------------------

@@ -36,6 +36,7 @@ public final class ChannelChatListener implements Listener {
 
     private final ActiveChannels active;
     private final net.riftbreaker.rifttowny.domain.civic.CivicCache civic;
+    private final net.riftbreaker.rifttowny.domain.civic.NationCache nations;
     private final ChannelAudience audiences;
     private final ChannelRenderer renderer;
     private final MessageService messages;
@@ -43,12 +44,14 @@ public final class ChannelChatListener implements Listener {
     public ChannelChatListener(
             final ActiveChannels active,
             final net.riftbreaker.rifttowny.domain.civic.CivicCache civic,
+            final net.riftbreaker.rifttowny.domain.civic.NationCache nations,
             final ChannelAudience audiences,
             final ChannelRenderer renderer,
             final MessageService messages
     ) {
         this.active = Objects.requireNonNull(active, "active");
         this.civic = Objects.requireNonNull(civic, "civic");
+        this.nations = Objects.requireNonNull(nations, "nations");
         this.audiences = Objects.requireNonNull(audiences, "audiences");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -77,10 +80,11 @@ public final class ChannelChatListener implements Listener {
         }
 
         // Re-checked on every message rather than only when the channel was switched on, because
-        // the answer is a synchronous read of a cache protection already consults on every block a
-        // player touches. So a town that revokes chat from a role is obeyed on the next line typed
-        // rather than the next time somebody happens to toggle.
-        if (channel.get() == ChatChannel.TOWN && !mayStillSpeak(who)) {
+        // the answer is a synchronous read of a cache. So revoking chat from a role is obeyed on
+        // the next line typed rather than the next time somebody happens to toggle. Both channels
+        // now: the nation half waited on the nation cache holding role books, and until it did, a
+        // player kept an audience their nation had taken back.
+        if (!mayStillSpeak(who, channel.get())) {
             event.setCancelled(true);
             active.clear(speaker.getUniqueId());
             messages.send(speaker::sendMessage, MessageKey.CHAT_NOT_ALLOWED,
@@ -93,11 +97,21 @@ public final class ChannelChatListener implements Listener {
     }
 
 
-    /** The town half of the chat permission, from the cache. See ChatCommands.mayUse. */
-    private boolean mayStillSpeak(final ResidentId who) {
-        return civic.townFactsOf(who)
+    /** The chat permission for either channel, from the caches. See ChatCommands.mayUse. */
+    private boolean mayStillSpeak(final ResidentId who, final ChatChannel channel) {
+        if (channel == ChatChannel.TOWN) {
+            return civic.townFactsOf(who)
+                    .map(facts -> facts.allows(
+                            who, net.riftbreaker.rifttowny.domain.role.Permission.CHAT_TOWN))
+                    .orElse(false);
+        }
+        final net.riftbreaker.rifttowny.domain.org.TownId theirTown =
+                civic.townOf(who).orElse(null);
+        return civic.nationOfResident(who)
+                .flatMap(nations::facts)
                 .map(facts -> facts.allows(
-                        who, net.riftbreaker.rifttowny.domain.role.Permission.CHAT_TOWN))
+                        who, net.riftbreaker.rifttowny.domain.role.Permission.CHAT_NATION,
+                        theirTown))
                 .orElse(false);
     }
 
@@ -143,16 +157,21 @@ public final class ChannelChatListener implements Listener {
     /**
      * The speaker's role prefix, or empty.
      *
-     * <p>Town only. A nation's role book is deliberately not cached - protection reads a town's
-     * roles on every block a player touches and never a nation's - so there is nothing here to read
-     * it from without a query, and a query inside AsyncChatEvent would put every line of chat on
-     * the server behind the database.</p>
+     * <p>Both channels, from memory. This said "town only" while a nation's role book was
+     * deliberately uncached; the nation cache carries one now, for exactly this and for
+     * CHAT_NATION. A query here is still out of the question - AsyncChatEvent runs on every line
+     * typed on the server.</p>
      */
     private String prefixOf(final ResidentId who, final ChatChannel channel) {
-        if (channel != ChatChannel.TOWN) {
-            return "";
+        if (channel == ChatChannel.TOWN) {
+            return civic.townFactsOf(who).flatMap(facts -> facts.chatPrefixOf(who)).orElse("");
         }
-        return civic.townFactsOf(who).flatMap(facts -> facts.chatPrefixOf(who)).orElse("");
+        final net.riftbreaker.rifttowny.domain.org.TownId theirTown =
+                civic.townOf(who).orElse(null);
+        return civic.nationOfResident(who)
+                .flatMap(nations::facts)
+                .flatMap(facts -> facts.chatPrefixOf(who, theirTown))
+                .orElse("");
     }
 
     /** A channel is a mode, and a mode does not survive a logout. */

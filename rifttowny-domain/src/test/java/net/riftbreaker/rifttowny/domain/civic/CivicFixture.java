@@ -60,4 +60,21 @@ public final class CivicFixture {
     public static TownFacts facts(final Town town) {
         return TownFacts.of(town, roles(town));
     }
+
+    /** A nation paired with the roles it starts life with. */
+    public static NationFacts facts(final net.riftbreaker.rifttowny.domain.org.Nation nation) {
+        return NationFacts.of(nation, RoleBook.defaultsFor(
+                net.riftbreaker.rifttowny.domain.org.OrganisationScope.NATION,
+                nation.id().value(), NOW));
+    }
+
+    /** The same, with one permission taken off the nation's MEMBER role. */
+    public static NationFacts factsWithout(
+            final net.riftbreaker.rifttowny.domain.org.Nation nation, final Permission permission) {
+        final RoleBook book = RoleBook.defaultsFor(
+                net.riftbreaker.rifttowny.domain.org.OrganisationScope.NATION,
+                nation.id().value(), NOW);
+        final RoleId member = book.systemRole(SystemRole.MEMBER).orElseThrow().id();
+        return NationFacts.of(nation, book.revoke(member, permission).orElseThrow());
+    }
 }
