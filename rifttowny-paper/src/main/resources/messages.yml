@@ -210,9 +210,10 @@ role:
   permission-revoked: '<yellow><white><role></white> may no longer <white><permission></white>.</yellow>'
   reprioritised: '<green><white><role></white> now ranks <white><priority></white>.</green>'
   renamed: '<green><white><role></white> is now called <white><name></white>.</green>'
+  decorated: '<green><white><role></white> <white><field></white> is now <white><value></white>.</green>'
   unknown-permission: '<red>Unknown permission <white><input></white>. One of: <white><options></white></red>'
   list-header: '<gray>Roles in <white><town></white>, highest first:</gray>'
-  list-line: '  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> <dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>'
+  list-line: '  <aqua><role></aqua><gray><label></gray> <dark_gray>@</dark_gray><gray><priority></gray> <dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>'
 
 flag:
   set: '<green><white><flag></white> for <white><relationship></white> is now <white><state></white> <gray>(<scope>)</gray>.</green>'

@@ -320,6 +320,10 @@ public enum MessageKey {
     ROLE_RENAMED("role.renamed",
             "<green><white><role></white> is now called <white><name></white>.</green>"),
 
+    ROLE_DECORATED("role.decorated",
+            "<green><white><role></white> <white><field></white> is now "
+                    + "<white><value></white>.</green>"),
+
     ROLE_UNKNOWN_PERMISSION("role.unknown-permission",
             "<red>Unknown permission <white><input></white>. "
                     + "One of: <white><options></white></red>"),
@@ -328,7 +332,7 @@ public enum MessageKey {
             "<gray>Roles in <white><town></white>, highest first:</gray>"),
 
     ROLE_LIST_LINE("role.list-line",
-            "  <aqua><role></aqua> <dark_gray>@</dark_gray><gray><priority></gray> "
+            "  <aqua><role></aqua><gray><label></gray> <dark_gray>@</dark_gray><gray><priority></gray> "
                     + "<dark_gray>-</dark_gray> <gray><permissions> permission(s)</gray>"),
 
     /** The land refused it. {@code <town>} is empty in wilderness, which no default message uses. */

@@ -142,6 +142,29 @@ final class RoleEditor {
         });
     }
 
+
+    /**
+     * Sets a role's display name, icon and chat prefix.
+     *
+     * <p>Guarded by {@code requireManages} like every other edit, so a role you do not outrank
+     * cannot be relabelled — a leader's rank being renamed by somebody below them would be a way to
+     * confuse a town about who is in charge without touching a single permission.</p>
+     */
+    CompletableFuture<ServiceResult<RoleId>> decorate(
+            final ResidentId actor,
+            final OrganisationId organisation,
+            final RoleId roleId,
+            final String displayName,
+            final String icon,
+            final String chatPrefix
+    ) {
+        return transaction(organisation, actor, Permission.MANAGE_ROLES, (transaction, context) -> {
+            requireManages(context, roleId);
+            save(transaction, organisation,
+                    context.book().decorate(roleId, displayName, icon, chatPrefix));
+            return roleId;
+        });
+    }
     CompletableFuture<ServiceResult<RoleId>> reprioritise(
             final ResidentId actor,
             final OrganisationId organisation,

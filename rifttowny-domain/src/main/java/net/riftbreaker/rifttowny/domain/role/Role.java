@@ -133,8 +133,14 @@ public final class Role {
         if (trimmed.equals(name)) {
             return Outcome.denied(ChangeDenial.NAME_UNCHANGED);
         }
+        // The display name follows the rename unless somebody set it to something of their own.
+        // Carrying it over unconditionally - which this did - left a role called Jarl still
+        // displaying as Mayor, and the mismatch was invisible only because nothing read the column
+        // yet. A display name that was never customised is not a decision anybody made, so there is
+        // nothing to preserve; one that was is exactly the case renaming must not trample.
+        final String display = displayName.equals(name) ? trimmed : displayName;
         return Outcome.applied(new Role(
-                id, scope, organisationId, trimmed, displayName, icon, chatPrefix, priority,
+                id, scope, organisationId, trimmed, display, icon, chatPrefix, priority,
                 systemRole, permissions, createdAt));
     }
 

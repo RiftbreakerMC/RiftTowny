@@ -84,6 +84,18 @@ public final class NationRoleService {
         return editor.rename(actor, nationId, roleId, newName);
     }
 
+
+    /** Sets a role's display name, icon and chat prefix. Requires {@link Permission#MANAGE_ROLES}. */
+    public CompletableFuture<ServiceResult<RoleId>> decorate(
+            final ResidentId actor,
+            final NationId nationId,
+            final RoleId roleId,
+            final String displayName,
+            final String icon,
+            final String chatPrefix
+    ) {
+        return editor.decorate(actor, nationId, roleId, displayName, icon, chatPrefix);
+    }
     /** Moves a role in the ranking. */
     public CompletableFuture<ServiceResult<RoleId>> reprioritise(
             final ResidentId actor, final NationId nationId, final RoleId roleId, final int priority) {

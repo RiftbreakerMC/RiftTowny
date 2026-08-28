@@ -83,6 +83,18 @@ public final class TownRoleService {
         return editor.rename(actor, townId, roleId, newName);
     }
 
+
+    /** Sets a role's display name, icon and chat prefix. Requires {@link Permission#MANAGE_ROLES}. */
+    public CompletableFuture<ServiceResult<RoleId>> decorate(
+            final ResidentId actor,
+            final TownId townId,
+            final RoleId roleId,
+            final String displayName,
+            final String icon,
+            final String chatPrefix
+    ) {
+        return editor.decorate(actor, townId, roleId, displayName, icon, chatPrefix);
+    }
     /** Moves a role in the ranking. Requires {@link Permission#MANAGE_ROLES}. */
     public CompletableFuture<ServiceResult<RoleId>> reprioritise(
             final ResidentId actor, final TownId townId, final RoleId roleId, final int priority) {

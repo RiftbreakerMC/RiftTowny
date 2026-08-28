@@ -827,6 +827,15 @@ public final class TownCommands {
                         .describedAs("Rename a role")
                         .completer((actor, args) -> List.of())
                         .runs(this::roleRename, Surface.CHAT))
+                .child(CommandNode.action("set")
+                        .aliases("label")
+                        .permission("rifttowny.role.manage")
+                        .usage("town role set <role> <display|icon|prefix> <value|clear>")
+                        .describedAs("Set a role's label, icon or chat prefix")
+                        .completer((actor, args) -> args.size() == 2
+                                ? List.of("display", "icon", "prefix")
+                                : List.of())
+                        .runs(this::roleSet, Surface.CHAT))
                 .build();
     }
 
@@ -1419,11 +1428,29 @@ public final class TownCommands {
                 messages.sendRaw(actor::send, MessageKey.ROLE_LIST_LINE,
                         MessageService.value("role", role.name()),
                         MessageService.value("priority", role.priority()),
+                        MessageService.value("label", label(role)),
                         MessageService.value("permissions", role.permissions().size()));
             }
         }));
     }
 
+
+    /**
+     * How a role is labelled, when that differs from what it is called.
+     *
+     * <p>Empty for a role nobody has decorated, which is every role until somebody runs
+     * {@code role set} — so the listing stays exactly as it was for a town that does not use this.
+     * A decoration nobody can see is the reason these three columns sat unread for so long.</p>
+     */
+    private static String label(final Role role) {
+        final List<String> parts = new ArrayList<>(3);
+        role.icon().ifPresent(parts::add);
+        if (!role.displayName().equals(role.name())) {
+            parts.add('"' + role.displayName() + '"');
+        }
+        role.chatPrefix().ifPresent(prefix -> parts.add("prefix " + prefix));
+        return parts.isEmpty() ? "" : " " + String.join(" ", parts);
+    }
     private void roleCreate(final CommandActor actor, final List<String> args) {
         if (args.size() < 2) {
             usage(actor, "town role new <name> <priority>");
@@ -1525,6 +1552,44 @@ public final class TownCommands {
                         MessageService.value("role", made.name()))));
     }
 
+
+    /**
+     * Setting a role's label, icon and chat prefix.
+     *
+     * <p>{@code SPECIFICATION.md} says a role has "a display name, icon, chat prefix, integer
+     * priority and a permission set". Three of those five were stored on every role, written and
+     * read back by the role store, and settable by nothing: only {@code Role.decorate} could change
+     * them and its one caller was a storage test. So in production a display name always equalled
+     * the name and the other two were always null.</p>
+     *
+     * <p>{@code clear} is the way back, and it is a real argument rather than an empty string,
+     * because a player cannot type "nothing" into a command that splits on spaces.</p>
+     */
+    private void roleSet(final CommandActor actor, final List<String> args) {
+        if (args.size() < 2) {
+            usage(actor, "town role set <role> <display|icon|prefix> <value|clear>");
+            return;
+        }
+        final String field = args.get(1).toLowerCase(Locale.ROOT);
+        if (!List.of("display", "icon", "prefix").contains(field)) {
+            usage(actor, "town role set <role> <display|icon|prefix> <value|clear>");
+            return;
+        }
+        final String value = args.size() < 3
+                ? null
+                : String.join(" ", args.subList(2, args.size()));
+        final String wanted = value == null || "clear".equalsIgnoreCase(value) ? null : value;
+
+        withRole(actor, args, (who, town, role) -> reply(actor,
+                roles.decorate(who, town.id(), role.id(),
+                        "display".equals(field) ? wanted : role.displayName(),
+                        "icon".equals(field) ? wanted : role.icon().orElse(null),
+                        "prefix".equals(field) ? wanted : role.chatPrefix().orElse(null)),
+                ignored -> messages.send(actor::send, MessageKey.ROLE_DECORATED,
+                        MessageService.value("role", role.name()),
+                        MessageService.value("field", field),
+                        MessageService.value("value", wanted == null ? "cleared" : wanted))));
+    }
     private void roleRename(final CommandActor actor, final List<String> args) {
         if (args.size() < 2) {
             usage(actor, "town role rename <role> <new name>");

@@ -180,6 +180,33 @@ public final class RoleBook {
                 .orElseGet(() -> Outcome.denied(renamed.denial().orElseThrow()));
     }
 
+
+    /**
+     * Sets a role's display name, icon and chat prefix.
+     *
+     * <p>Unlike a rename this touches nothing structural: the name stays, so nothing that refers to
+     * the role by name breaks, and there is no uniqueness to check. Permitted on system roles, for
+     * the same reason renaming is — a server may want its Mayor shown as a Jarl without changing
+     * what the role is.</p>
+     *
+     * <p>A blank display name is not stored as blank. {@link Role#decorate} falls back to the name,
+     * which is also how a decoration is cleared.</p>
+     */
+    public Outcome<RoleBook> decorate(
+            final RoleId roleId,
+            final String displayName,
+            final String icon,
+            final String chatPrefix
+    ) {
+        final Optional<Role> found = find(roleId);
+        if (found.isEmpty()) {
+            return Outcome.denied(ChangeDenial.ROLE_NOT_FOUND);
+        }
+        final Role role = found.get();
+        final Role decorated = role.decorate(displayName, icon, chatPrefix);
+        return replace(decorated,
+                changed(decorated, DomainEvent.RoleAction.RENAMED, role.name()));
+    }
     /** Moves a configurable role in the ranking. */
     public Outcome<RoleBook> reprioritise(final RoleId roleId, final int priority) {
         final Optional<Role> found = find(roleId);

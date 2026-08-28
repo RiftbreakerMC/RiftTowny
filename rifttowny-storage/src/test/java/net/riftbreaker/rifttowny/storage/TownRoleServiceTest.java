@@ -400,6 +400,36 @@ class TownRoleServiceTest extends SqliteFixture {
             assertThat(book().findByName("Marshal")).isEmpty();
         }
 
+
+        @Test
+        @DisplayName("a decoration survives the round trip to the database")
+        void decorationPersists() {
+            // rt_role has carried display_name, icon and chat_prefix since V1. Both ends of the
+            // storage layer handled them; the only thing that could set them was Role.decorate,
+            // whose one caller was a storage test. This is the path that was missing.
+            final RoleId officer = roleFor(OFFICER, "Officer", 500);
+
+            assertThat(roles.decorate(MAYOR, riftholm.id(), officer, "Captain", "sword", "[Cpt]")
+                    .join().succeeded()).isTrue();
+
+            final Role loaded = book().find(officer).orElseThrow();
+            assertThat(loaded.name()).isEqualTo("Officer");
+            assertThat(loaded.displayName()).isEqualTo("Captain");
+            assertThat(loaded.icon()).contains("sword");
+            assertThat(loaded.chatPrefix()).contains("[Cpt]");
+        }
+
+        @Test
+        @DisplayName("and somebody without MANAGE_ROLES cannot decorate")
+        void decorationNeedsThePermission() {
+            addMember(CITIZEN, "Citizen");
+            final RoleId officer = roleFor(OFFICER, "Officer", 500);
+
+            assertThat(roles.decorate(CITIZEN, riftholm.id(), officer, "Captain", null, null)
+                    .join().denial())
+                    .contains(ChangeDenial.MISSING_PERMISSION);
+            assertThat(book().find(officer).orElseThrow().displayName()).isEqualTo("Officer");
+        }
         @Test
         @DisplayName("every accepted edit queues an announcement")
         void editsAreAnnounced() {

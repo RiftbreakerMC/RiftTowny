@@ -456,4 +456,103 @@ class RoleBookTest {
                     .isFalse();
         }
     }
+
+    /**
+     * The display name, icon and chat prefix.
+     *
+     * <p>Three columns that were written on every role and settable by nothing: only
+     * {@code Role.decorate} could change them and its one caller was a storage test. The rename bug
+     * below is what made fixing this urgent rather than tidy — {@code /town role rename} shipped
+     * before anything read the display name, so it had been quietly writing a stale one.</p>
+     */
+    @Nested
+    @DisplayName("decorating roles")
+    class Decorating {
+
+        private RoleId officer(final RoleBook book) {
+            return book.findByName("Officer").orElseThrow().id();
+        }
+
+        private RoleBook withOfficer() {
+            return book().create(officerRole(500), Set.of()).orElseThrow();
+        }
+
+        @Test
+        @DisplayName("a renamed role takes its display name with it")
+        void renameCarriesTheDisplayName() {
+            // The bug: renameTo kept the old displayName beside the new name, so a role renamed
+            // from Mayor to Jarl still displayed as Mayor. Invisible only because nothing read the
+            // column - and /town role rename now exists, so rows were being written wrong.
+            final RoleBook book = book();
+            final RoleId leader = book.systemRole(SystemRole.LEADER).orElseThrow().id();
+
+            final Role renamed = book.rename(leader, "Jarl").orElseThrow()
+                    .systemRole(SystemRole.LEADER).orElseThrow();
+
+            assertThat(renamed.name()).isEqualTo("Jarl");
+            assertThat(renamed.displayName())
+                    .as("a display name nobody chose is not a decision worth preserving")
+                    .isEqualTo("Jarl");
+        }
+
+        @Test
+        @DisplayName("but a display name somebody chose survives a rename")
+        void renameKeepsAChosenDisplayName() {
+            // The other half, and the reason this is not simply "displayName = newName".
+            final RoleBook book = withOfficer();
+            final RoleId officer = officer(book);
+
+            final Role after = book.decorate(officer, "Reeve of the Marches", null, null)
+                    .orElseThrow()
+                    .rename(officer, "Warden").orElseThrow()
+                    .find(officer).orElseThrow();
+
+            assertThat(after.name()).isEqualTo("Warden");
+            assertThat(after.displayName()).isEqualTo("Reeve of the Marches");
+        }
+
+        @Test
+        @DisplayName("sets all three, and leaves the name alone")
+        void setsTheThree() {
+            final RoleBook book = withOfficer();
+            final RoleId officer = officer(book);
+
+            final Role after = book.decorate(officer, "Captain", "sword", "[Cpt]")
+                    .orElseThrow().find(officer).orElseThrow();
+
+            assertThat(after.name()).as("nothing that refers to it by name may break").isEqualTo("Officer");
+            assertThat(after.displayName()).isEqualTo("Captain");
+            assertThat(after.icon()).contains("sword");
+            assertThat(after.chatPrefix()).contains("[Cpt]");
+        }
+
+        @Test
+        @DisplayName("a blank display name falls back to the name, which is how it is cleared")
+        void blankFallsBackToTheName() {
+            final RoleBook book = withOfficer();
+            final RoleId officer = officer(book);
+
+            final Role after = book.decorate(officer, "Captain", null, null).orElseThrow()
+                    .decorate(officer, "  ", null, null).orElseThrow()
+                    .find(officer).orElseThrow();
+
+            assertThat(after.displayName()).isEqualTo("Officer");
+        }
+
+        @Test
+        @DisplayName("a system role may be decorated, like it may be renamed")
+        void systemRolesMayBeDecorated() {
+            final RoleBook book = book();
+            final RoleId leader = book.systemRole(SystemRole.LEADER).orElseThrow().id();
+
+            assertThat(book.decorate(leader, "Jarl", null, "[J]").wasApplied()).isTrue();
+        }
+
+        @Test
+        @DisplayName("decorating a role that is not there is refused")
+        void unknownRoleIsRefused() {
+            assertThat(book().decorate(RoleId.random(), "Captain", null, null).denial())
+                    .contains(ChangeDenial.ROLE_NOT_FOUND);
+        }
+    }
 }
