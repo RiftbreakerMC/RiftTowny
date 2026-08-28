@@ -6,6 +6,7 @@ import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.Town;
 import net.riftbreaker.rifttowny.domain.org.TownId;
 import net.riftbreaker.rifttowny.domain.role.Permission;
+import net.riftbreaker.rifttowny.domain.role.Role;
 import net.riftbreaker.rifttowny.domain.role.RoleBook;
 import net.riftbreaker.rifttowny.domain.role.SystemRole;
 
@@ -95,6 +96,20 @@ public final class TownFacts {
         return who == null ? SystemRole.VISITOR : town.standingOf(who);
     }
 
+
+    /**
+     * The chat prefix of the role this person is shown as, if it has one.
+     *
+     * <p>Answered from the cache, which is what makes it usable from the chat listener: that runs
+     * inside {@code AsyncChatEvent}, where a database read would put the whole server's chat behind
+     * a query. A town's role book is here because protection already needs it on every block.</p>
+     */
+    public Optional<String> chatPrefixOf(final ResidentId who) {
+        if (who == null) {
+            return Optional.empty();
+        }
+        return roles.highestRole(who, town.standingOf(who)).flatMap(Role::chatPrefix);
+    }
     /**
      * May this person do this here, as far as their roles are concerned.
      *

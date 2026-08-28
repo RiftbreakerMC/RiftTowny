@@ -48,10 +48,11 @@ public final class ChannelRenderer {
             final UUID sender,
             final String senderName,
             final Component message,
-            final Player viewer
+            final Player viewer,
+            final String prefix
     ) {
         return throughRiftChat(channel, sender, senderName, message)
-                .orElseGet(() -> plain(channel, senderName, message));
+                .orElseGet(() -> plain(channel, senderName, message, prefix));
     }
 
     /**
@@ -97,14 +98,25 @@ public final class ChannelRenderer {
         }
     }
 
-    /** What a channel line looks like with no chat plugin installed. */
+    /**
+     * The built-in line, used when RiftChat is not installed.
+     *
+     * <p>{@code prefix} is the chat prefix of the role the speaker is shown as, or empty. It was
+     * stored on every role from the first migration and rendered nowhere; the value is read from
+     * the civic cache, which carries a town's role book because protection needs it on every
+     * block.</p>
+     */
     private Component plain(
-            final ChatChannel channel, final String senderName, final Component message) {
+            final ChatChannel channel,
+            final String senderName,
+            final Component message,
+            final String prefix) {
         return messages.render(
                 channel == ChatChannel.TOWN
                         ? MessageKey.CHAT_TOWN_FORMAT
                         : MessageKey.CHAT_NATION_FORMAT,
                 MessageService.value("sender", senderName),
+                MessageService.value("prefix", prefix == null ? "" : prefix),
                 net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component(
                         "message", message));
     }

@@ -372,6 +372,27 @@ public final class RoleBook {
     }
 
     /**
+     * The role a resident is shown as: the highest of their assigned roles and their baseline.
+     *
+     * <p>The same rule as {@link #rankOf}, returning the role rather than its number, because what
+     * a chat prefix or a GUI badge wants is the role itself. Highest rather than a union for the
+     * same reason rank is: being given a junior role must not change how somebody is announced.</p>
+     */
+    public Optional<Role> highestRole(final ResidentId who, final SystemRole baseline) {
+        Objects.requireNonNull(baseline, "baseline");
+        Optional<Role> highest = systemRole(baseline);
+        int rank = baseline.priority();
+        for (final RoleId held : rolesOf(who)) {
+            final Optional<Role> role = find(held);
+            if (role.isPresent() && role.get().priority() > rank) {
+                rank = role.get().priority();
+                highest = role;
+            }
+        }
+        return highest;
+    }
+
+    /**
      * The rank a resident carries: the highest of their assigned roles and their baseline.
      *
      * <p>Highest rather than union, unlike permissions. Rank is a position in an ordering, and

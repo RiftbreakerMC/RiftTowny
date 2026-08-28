@@ -35,17 +35,20 @@ import java.util.Optional;
 public final class ChannelChatListener implements Listener {
 
     private final ActiveChannels active;
+    private final net.riftbreaker.rifttowny.domain.civic.CivicCache civic;
     private final ChannelAudience audiences;
     private final ChannelRenderer renderer;
     private final MessageService messages;
 
     public ChannelChatListener(
             final ActiveChannels active,
+            final net.riftbreaker.rifttowny.domain.civic.CivicCache civic,
             final ChannelAudience audiences,
             final ChannelRenderer renderer,
             final MessageService messages
     ) {
         this.active = Objects.requireNonNull(active, "active");
+        this.civic = Objects.requireNonNull(civic, "civic");
         this.audiences = Objects.requireNonNull(audiences, "audiences");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -73,8 +76,29 @@ public final class ChannelChatListener implements Listener {
             return;
         }
 
+        // Re-checked on every message rather than only when the channel was switched on, because
+        // the answer is a synchronous read of a cache protection already consults on every block a
+        // player touches. So a town that revokes chat from a role is obeyed on the next line typed
+        // rather than the next time somebody happens to toggle.
+        if (channel.get() == ChatChannel.TOWN && !mayStillSpeak(who)) {
+            event.setCancelled(true);
+            active.clear(speaker.getUniqueId());
+            messages.send(speaker::sendMessage, MessageKey.CHAT_NOT_ALLOWED,
+                    MessageService.value("channel", channel.get().label()));
+            return;
+        }
+
         narrowTo(event, audience.get(), speaker);
         applyRenderer(event, channel.get(), speaker);
+    }
+
+
+    /** The town half of the chat permission, from the cache. See ChatCommands.mayUse. */
+    private boolean mayStillSpeak(final ResidentId who) {
+        return civic.townFactsOf(who)
+                .map(facts -> facts.allows(
+                        who, net.riftbreaker.rifttowny.domain.role.Permission.CHAT_TOWN))
+                .orElse(false);
     }
 
     /**
@@ -106,9 +130,29 @@ public final class ChannelChatListener implements Listener {
             final AsyncChatEvent event, final ChatChannel channel, final Player speaker) {
         final java.util.UUID senderId = speaker.getUniqueId();
         final String senderName = speaker.getName();
+        // Resolved once, here, rather than inside the renderer: the renderer runs once per viewer
+        // and the prefix belongs to the speaker, so looking it up per viewer would be the same
+        // answer fetched a hundred times for a busy town.
+        final String prefix = prefixOf(ResidentId.of(senderId), channel);
         event.renderer((source, displayName, message, viewer) -> renderer.render(
                 channel, senderId, senderName, message,
-                viewer instanceof Player player ? player : null));
+                viewer instanceof Player player ? player : null, prefix));
+    }
+
+
+    /**
+     * The speaker's role prefix, or empty.
+     *
+     * <p>Town only. A nation's role book is deliberately not cached - protection reads a town's
+     * roles on every block a player touches and never a nation's - so there is nothing here to read
+     * it from without a query, and a query inside AsyncChatEvent would put every line of chat on
+     * the server behind the database.</p>
+     */
+    private String prefixOf(final ResidentId who, final ChatChannel channel) {
+        if (channel != ChatChannel.TOWN) {
+            return "";
+        }
+        return civic.townFactsOf(who).flatMap(facts -> facts.chatPrefixOf(who)).orElse("");
     }
 
     /** A channel is a mode, and a mode does not survive a logout. */

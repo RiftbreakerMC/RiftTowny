@@ -248,12 +248,12 @@ public final class RiftTownyPlugin extends JavaPlugin {
                         messages, () -> chatAdapter.service());
         final net.riftbreaker.rifttowny.paper.command.ChatCommands chatCommands =
                 new net.riftbreaker.rifttowny.paper.command.ChatCommands(
-                        activeChannels, channelAudience, channelRenderer, messages);
+                        activeChannels, channelAudience, channelRenderer, messages, civicCache);
         registerTree("townchat", chatCommands.townTree());
         registerTree("nationchat", chatCommands.nationTree());
         getServer().getPluginManager().registerEvents(
                 new net.riftbreaker.rifttowny.paper.chat.ChannelChatListener(
-                        activeChannels, channelAudience, channelRenderer, messages),
+                        activeChannels, civicCache, channelAudience, channelRenderer, messages),
                 this);
 
         registerProtection();

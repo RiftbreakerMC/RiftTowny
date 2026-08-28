@@ -372,6 +372,46 @@ class RoleBookTest {
     @DisplayName("rank and who may manage whom")
     class Rank {
 
+
+        @Test
+        @DisplayName("the role somebody is shown as is the highest they hold, not the newest")
+        void highestRoleIsTheHighest() {
+            // The same rule rank follows, and for the same reason: being handed a junior role must
+            // not change how somebody is announced.
+            final Role junior = Role.custom(
+                    RoleId.random(), OrganisationScope.TOWN, TOWN, "Junior", 50, Set.of(), NOW);
+            final Role officer = officerRole(500);
+            final RoleBook book = book()
+                    .create(officer, Set.of()).orElseThrow()
+                    .create(junior, Set.of()).orElseThrow()
+                    .assign(OFFICER, officer.id()).orElseThrow()
+                    .assign(OFFICER, junior.id()).orElseThrow();
+
+            assertThat(book.highestRole(OFFICER, SystemRole.MEMBER).orElseThrow().name())
+                    .isEqualTo("Officer");
+        }
+
+        @Test
+        @DisplayName("somebody with no assigned role is shown as their standing")
+        void fallsBackToTheBaseline() {
+            assertThat(book().highestRole(CITIZEN, SystemRole.MEMBER).orElseThrow().systemRole())
+                    .contains(SystemRole.MEMBER);
+        }
+
+        @Test
+        @DisplayName("a role below somebody's standing does not become how they are shown")
+        void baselineWinsWhenItOutranks() {
+            // A mayor handed a junior role is still the mayor. The baseline is a rank like any
+            // other here, which is what stops an assignment quietly demoting the person holding it.
+            final Role junior = Role.custom(
+                    RoleId.random(), OrganisationScope.TOWN, TOWN, "Junior", 50, Set.of(), NOW);
+            final RoleBook book = book()
+                    .create(junior, Set.of()).orElseThrow()
+                    .assign(MAYOR, junior.id()).orElseThrow();
+
+            assertThat(book.highestRole(MAYOR, SystemRole.LEADER).orElseThrow().systemRole())
+                    .contains(SystemRole.LEADER);
+        }
         @Test
         @DisplayName("rank is the highest role held, so a low role never demotes anyone")
         void rankIsTheHighestNotTheUnion() {

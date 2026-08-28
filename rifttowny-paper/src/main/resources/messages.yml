@@ -115,12 +115,13 @@ town:
 # channels like every other one it draws, and these are never reached - RiftTowny owns who hears a
 # message, not what it looks like.
 chat:
-  town-format: '<dark_green>[Town]</dark_green> <white><sender></white><gray>:</gray> <message>'
+  town-format: '<gray><prefix></gray><dark_green>[Town]</dark_green> <white><sender></white><gray>:</gray> <message>'
   nation-format: '<dark_aqua>[Nation]</dark_aqua> <white><sender></white><gray>:</gray> <message>'
   channel-on: '<green>You are now speaking to your <white><channel></white>. Run the command again to stop.</green>'
   channel-off: '<yellow>You are back in ordinary chat.</yellow>'
   channel-lost: '<red>You are no longer in a <white><channel></white>, so that was not sent.</red>'
   no-channel: '<red>You have no <white><channel></white> to speak to.</red>'
+  not-allowed: '<red>Your role does not let you speak in <white><channel></white> chat.</red>'
   nobody-heard: '<gray>Nobody else from your <white><channel></white> is online.</gray>'
 
 # Shared by every listing that can run past one screen.

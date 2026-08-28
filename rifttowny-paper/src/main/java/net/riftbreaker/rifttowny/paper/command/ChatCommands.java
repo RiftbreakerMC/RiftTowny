@@ -1,6 +1,8 @@
 package net.riftbreaker.rifttowny.paper.command;
 
 import net.kyori.adventure.text.Component;
+import net.riftbreaker.rifttowny.domain.civic.CivicCache;
+import net.riftbreaker.rifttowny.domain.role.Permission;
 import net.riftbreaker.rifttowny.domain.chat.ActiveChannels;
 import net.riftbreaker.rifttowny.domain.chat.ChannelAudience;
 import net.riftbreaker.rifttowny.domain.chat.ChatChannel;
@@ -36,17 +38,20 @@ public final class ChatCommands {
     private final ChannelAudience audiences;
     private final ChannelRenderer renderer;
     private final MessageService messages;
+    private final CivicCache civic;
 
     public ChatCommands(
             final ActiveChannels active,
             final ChannelAudience audiences,
             final ChannelRenderer renderer,
-            final MessageService messages
+            final MessageService messages,
+            final CivicCache civic
     ) {
         this.active = Objects.requireNonNull(active, "active");
         this.audiences = Objects.requireNonNull(audiences, "audiences");
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.messages = Objects.requireNonNull(messages, "messages");
+        this.civic = Objects.requireNonNull(civic, "civic");
     }
 
     /** The {@code /tc} tree. A single action, since a channel command takes free text. */
@@ -84,6 +89,12 @@ public final class ChatCommands {
             return;
         }
 
+        if (!mayUse(who.get(), channel)) {
+            messages.send(actor::send, MessageKey.CHAT_NOT_ALLOWED,
+                    MessageService.value("channel", channel.label()));
+            return;
+        }
+
         if (args.isEmpty()) {
             toggle(actor, who.get(), channel);
             return;
@@ -91,6 +102,30 @@ public final class ChatCommands {
         send(actor, who.get(), channel, audience.get(), String.join(" ", args));
     }
 
+
+    /**
+     * Whether this player's roles let them speak on this channel.
+     *
+     * <p>{@code Permission.CHAT_TOWN} and {@code CHAT_NATION} are in {@code MEMBER}'s default set
+     * and were checked by nothing: {@code /tc} and {@code /nc} gated on the Bukkit node alone, so a
+     * town that revoked chat from a role changed nothing. A permission granted by default is still
+     * a permission — the whole point is that it can be taken away.</p>
+     *
+     * <p>The town answer comes from the civic cache, which already carries each town's role book
+     * because protection reads it on every block a player touches. A nation's book is deliberately
+     * not cached, so the nation channel is checked here, on the command, and not again per message;
+     * the listener's own audience check is what catches somebody who has left. The window that
+     * leaves — still in the nation, but the nation revoked chat from their role since they toggled
+     * — costs one misplaced message to an audience they were until recently entitled to.</p>
+     */
+    private boolean mayUse(final ResidentId who, final ChatChannel channel) {
+        if (channel != ChatChannel.TOWN) {
+            return true;
+        }
+        return civic.townFactsOf(who)
+                .map(facts -> facts.allows(who, Permission.CHAT_TOWN))
+                .orElse(false);
+    }
     private void toggle(
             final CommandActor actor, final ResidentId who, final ChatChannel channel) {
         final Optional<ChatChannel> now = active.toggle(who.value(), channel);
@@ -125,18 +160,21 @@ public final class ChatCommands {
         final Component body = Component.text(text);
 
         int heard = 0;
+        final String prefix = channel == ChatChannel.TOWN
+                ? civic.townFactsOf(who).flatMap(facts -> facts.chatPrefixOf(who)).orElse("")
+                : "";
         for (final ResidentId member : audience.members()) {
             final Player viewer = Bukkit.getPlayer(member.value());
             if (viewer == null) {
                 continue;
             }
-            viewer.sendMessage(renderer.render(channel, who.value(), senderName, body, viewer));
+            viewer.sendMessage(renderer.render(channel, who.value(), senderName, body, viewer, prefix));
             heard++;
         }
         // The speaker sees their own line even if they are somehow not in their own audience, and
         // is told when nobody else was there - otherwise an unanswered message reads as a bug.
         if (!audience.includes(who) && speaker != null) {
-            speaker.sendMessage(renderer.render(channel, who.value(), senderName, body, speaker));
+            speaker.sendMessage(renderer.render(channel, who.value(), senderName, body, speaker, prefix));
         } else if (heard <= 1) {
             messages.send(actor::send, MessageKey.CHAT_NOBODY_HEARD,
                     MessageService.value("channel", channel.label()));

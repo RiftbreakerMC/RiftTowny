@@ -470,7 +470,7 @@ public enum MessageKey {
     // and these are never reached - which is the point of not building a second chat formatter.
 
     CHAT_TOWN_FORMAT("chat.town-format",
-            "<dark_green>[Town]</dark_green> <white><sender></white><gray>:</gray> <message>"),
+            "<gray><prefix></gray><dark_green>[Town]</dark_green> <white><sender></white><gray>:</gray> <message>"),
 
     CHAT_NATION_FORMAT("chat.nation-format",
             "<dark_aqua>[Nation]</dark_aqua> <white><sender></white><gray>:</gray> <message>"),
@@ -488,6 +488,9 @@ public enum MessageKey {
 
     CHAT_NO_CHANNEL("chat.no-channel",
             "<red>You have no <white><channel></white> to speak to.</red>"),
+
+    CHAT_NOT_ALLOWED("chat.not-allowed",
+            "<red>Your role does not let you speak in <white><channel></white> chat.</red>"),
 
     CHAT_NOBODY_HEARD("chat.nobody-heard",
             "<gray>Nobody else from your <white><channel></white> is online.</gray>"),
