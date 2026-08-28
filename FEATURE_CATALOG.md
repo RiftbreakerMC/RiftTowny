@@ -239,7 +239,6 @@ making that the code does not yet keep.
 | Thing | State | Why it stays |
 |---|---|---|
 | `rt_audit` | Declared in V1, zero writers | Waiting on **RT-CORE-LOG** / RiftLogger. The claims that it was populated have been removed from this file and from `docs/dependency-report.md` |
-| `rt_role_permission.granted` | Inserted as a literal `1`, only ever read as `granted = 1` | An explicit deny has no code path: revocation deletes and re-inserts. The column is a constant until a deny case is actually designed |
 | `rt_area`, `rt_organisation_currency` | No production reference | Named blockers: **RT-CORE-AREA** and **RT-MOD-BANK** multi-currency. Worth noting `rt_organisation_balance` and `rt_bank_ledger` key on a free-text `currency` column that does not reference `rt_organisation_currency`, so the two designs need reconciling when multi-currency lands |
 
 ## 8. Permanently excluded

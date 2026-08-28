@@ -126,7 +126,7 @@ final class ConnectionRoleStore implements CivicTransaction.RoleStore {
 
     private Set<Permission> loadPermissions(final RoleId role) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT permission FROM rt_role_permission WHERE role_id = ? AND granted = 1")) {
+                "SELECT permission FROM rt_role_permission WHERE role_id = ?")) {
             statement.setString(1, role.value().toString());
             final EnumSet<Permission> permissions = EnumSet.noneOf(Permission.class);
             try (ResultSet results = statement.executeQuery()) {
@@ -207,7 +207,7 @@ final class ConnectionRoleStore implements CivicTransaction.RoleStore {
             return;
         }
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO rt_role_permission (role_id, permission, granted) VALUES (?, ?, 1)")) {
+                "INSERT INTO rt_role_permission (role_id, permission) VALUES (?, ?)")) {
             for (final Permission permission : role.permissions()) {
                 statement.setString(1, role.id().value().toString());
                 statement.setString(2, permission.name());

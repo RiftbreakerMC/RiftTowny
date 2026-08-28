@@ -73,8 +73,8 @@ class SqlitePragmaTest extends SqliteFixture {
                 statement.executeUpdate();
             }
             try (PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO rt_role_permission (role_id, permission, granted) "
-                            + "VALUES (?, 'BUILD', 1)")) {
+                    "INSERT INTO rt_role_permission (role_id, permission) "
+                            + "VALUES (?, 'BUILD')")) {
                 statement.setString(1, role);
                 statement.executeUpdate();
             }
