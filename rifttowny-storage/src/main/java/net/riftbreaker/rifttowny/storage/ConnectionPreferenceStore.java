@@ -34,14 +34,12 @@ final class ConnectionPreferenceStore implements CivicTransaction.PreferenceStor
         StorageFailure.wrapping(() -> {
             final String sql = switch (backend) {
                 case SQLITE -> "INSERT INTO rt_resident_preference "
-                        + "(resident_id, territory_notice, updated_at) VALUES (?, ?, ?) "
+                        + "(resident_id, territory_notice) VALUES (?, ?) "
                         + "ON CONFLICT (resident_id) DO UPDATE SET "
-                        + "territory_notice = excluded.territory_notice, "
-                        + "updated_at = excluded.updated_at";
+                        + "territory_notice = excluded.territory_notice";
                 case MARIADB -> "INSERT INTO rt_resident_preference "
-                        + "(resident_id, territory_notice, updated_at) VALUES (?, ?, ?) "
-                        + "ON DUPLICATE KEY UPDATE territory_notice = VALUES(territory_notice), "
-                        + "updated_at = VALUES(updated_at)";
+                        + "(resident_id, territory_notice) VALUES (?, ?) "
+                        + "ON DUPLICATE KEY UPDATE territory_notice = VALUES(territory_notice)";
             };
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, choice.who().value().toString());
@@ -50,7 +48,6 @@ final class ConnectionPreferenceStore implements CivicTransaction.PreferenceStor
                 } else {
                     statement.setString(2, choice.notice().name());
                 }
-                statement.setLong(3, when.toEpochMilli());
                 statement.executeUpdate();
             }
             return null;

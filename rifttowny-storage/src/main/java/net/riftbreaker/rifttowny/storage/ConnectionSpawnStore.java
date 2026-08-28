@@ -22,7 +22,7 @@ import java.util.UUID;
 final class ConnectionSpawnStore implements CivicTransaction.SpawnStore {
 
     private static final String COLUMNS =
-            "town_id, world_id, x, y, z, yaw, pitch, set_by, set_at";
+            "town_id, world_id, x, y, z, yaw, pitch";
 
     private final Connection connection;
     private final StorageBackend backend;
@@ -62,26 +62,22 @@ final class ConnectionSpawnStore implements CivicTransaction.SpawnStore {
     }
 
     @Override
-    public void set(
-            final TownId town, final SpawnPoint spawn, final ResidentId setBy, final Instant now) {
+    public void set(final TownId town, final SpawnPoint spawn) {
         Objects.requireNonNull(town, "town");
         Objects.requireNonNull(spawn, "spawn");
-        Objects.requireNonNull(now, "now");
         StorageFailure.wrapping(() -> {
             // Upsert: a town has one spawn, and moving it is the ordinary thing to do. Delete then
             // insert would leave a window with none, and a failure between the two would lose it.
             final String sql = switch (backend) {
                 case SQLITE -> "INSERT INTO rt_town_spawn (" + COLUMNS + ") "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?) "
                         + "ON CONFLICT(town_id) DO UPDATE SET world_id = excluded.world_id, "
                         + "x = excluded.x, y = excluded.y, z = excluded.z, yaw = excluded.yaw, "
-                        + "pitch = excluded.pitch, set_by = excluded.set_by, "
-                        + "set_at = excluded.set_at";
+                        + "pitch = excluded.pitch";
                 case MARIADB -> "INSERT INTO rt_town_spawn (" + COLUMNS + ") "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?) "
                         + "ON DUPLICATE KEY UPDATE world_id = VALUES(world_id), x = VALUES(x), "
-                        + "y = VALUES(y), z = VALUES(z), yaw = VALUES(yaw), pitch = VALUES(pitch), "
-                        + "set_by = VALUES(set_by), set_at = VALUES(set_at)";
+                        + "y = VALUES(y), z = VALUES(z), yaw = VALUES(yaw), pitch = VALUES(pitch)";
             };
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, town.value().toString());
@@ -91,12 +87,6 @@ final class ConnectionSpawnStore implements CivicTransaction.SpawnStore {
                 statement.setDouble(5, spawn.z());
                 statement.setFloat(6, spawn.yaw());
                 statement.setFloat(7, spawn.pitch());
-                if (setBy == null) {
-                    statement.setNull(8, Types.VARCHAR);
-                } else {
-                    statement.setString(8, setBy.value().toString());
-                }
-                statement.setLong(9, now.toEpochMilli());
                 statement.executeUpdate();
             }
             return null;

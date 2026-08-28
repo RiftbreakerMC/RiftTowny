@@ -66,19 +66,17 @@ final class ConnectionBankStore implements CivicTransaction.BankStore {
             // the order is only about reading the code: the new state, then the note about it.
             final String sql = switch (backend) {
                 case SQLITE -> "INSERT INTO rt_organisation_balance "
-                        + "(account_id, currency, amount, updated_at) VALUES (?, ?, ?, ?) "
+                        + "(account_id, currency, amount) VALUES (?, ?, ?) "
                         + "ON CONFLICT(account_id, currency) DO UPDATE SET "
-                        + "amount = excluded.amount, updated_at = excluded.updated_at";
+                        + "amount = excluded.amount";
                 case MARIADB -> "INSERT INTO rt_organisation_balance "
-                        + "(account_id, currency, amount, updated_at) VALUES (?, ?, ?, ?) "
-                        + "ON DUPLICATE KEY UPDATE amount = VALUES(amount), "
-                        + "updated_at = VALUES(updated_at)";
+                        + "(account_id, currency, amount) VALUES (?, ?, ?) "
+                        + "ON DUPLICATE KEY UPDATE amount = VALUES(amount)";
             };
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 statement.setString(1, entry.accountId().toString());
                 statement.setString(2, entry.balance().currency());
                 statement.setString(3, entry.balance().toStorage());
-                statement.setLong(4, now.toEpochMilli());
                 statement.executeUpdate();
             }
 

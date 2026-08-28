@@ -367,12 +367,17 @@ public interface CivicTransaction {
         /** Every town's spawn, for filling a cache at startup. */
         java.util.Map<TownId, net.riftbreaker.rifttowny.domain.territory.SpawnPoint> all();
 
-        /** Sets or replaces a town's spawn. A town has one, so this is an upsert. */
-        void set(
-                TownId town,
-                net.riftbreaker.rifttowny.domain.territory.SpawnPoint spawn,
-                ResidentId setBy,
-                java.time.Instant now);
+        /**
+         * Sets or replaces a town's spawn. A town has one, so this is an upsert.
+         *
+         * <p>No actor and no timestamp. rt_town_spawn carried set_by and set_at, written on every
+         * save and dropped by the row mapper, so the two parameters feeding them carried data
+         * nothing could read. "Who moved our spawn" is a fair question, and it belongs in the audit
+         * trail with every other civic change rather than in the one table that had columns for
+         * it.</p>
+         */
+        void set(TownId town, net.riftbreaker.rifttowny.domain.territory.SpawnPoint spawn);
+
 
         /** Removes it, as when the land it stood on stops being the town's. */
         boolean clear(TownId town);

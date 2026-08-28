@@ -43,9 +43,9 @@ class SchemaMigratorTest {
      * change here, and a migration added to only one of the two dialect directories still shows up
      * as a failure rather than passing quietly.</p>
      */
-    private static final String CURRENT_SCHEMA_VERSION = "16";
+    private static final String CURRENT_SCHEMA_VERSION = "17";
 
-    private static final int MIGRATION_COUNT = 16;
+    private static final int MIGRATION_COUNT = 17;
 
     @Test
     @DisplayName("the migrations apply and create every table the plan names")

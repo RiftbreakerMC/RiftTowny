@@ -184,7 +184,7 @@ public final class SpawnService {
                 throw new ChangeRefusedException(ChangeDenial.CHUNK_OWNED_BY_ANOTHER_TOWN);
             }
 
-            transaction.spawns().set(townId, spawn, actor, clock.instant());
+            transaction.spawns().set(townId, spawn);
             return spawn;
         }).thenApply(result -> {
             result.value().ifPresent(set -> cache.put(townId, set));

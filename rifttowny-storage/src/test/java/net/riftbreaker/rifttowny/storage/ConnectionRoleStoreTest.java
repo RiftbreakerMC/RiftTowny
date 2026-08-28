@@ -46,8 +46,73 @@ class ConnectionRoleStoreTest extends SqliteFixture {
                 transaction.roles().find(OrganisationScope.TOWN, TOWN).orElseThrow()).join();
     }
 
+
+
     @Test
-    @DisplayName("an organisation with no roles yet is empty, not corrupt")
+    @DisplayName("holders load in the order they were granted, not by id")
+    void holdersLoadInGrantOrder() throws Exception {
+        // rt_role_member.granted_at is load-bearing and does not look it: it is never selected into
+        // a field and never surfaced, so it reads as bookkeeping. The only thing that says
+        // otherwise is "ORDER BY granted_at, resident_id" in the assignment load, and nothing
+        // pinned it - a sweep for write-only columns nearly deleted it on that basis.
+        //
+        // The grant times are set by hand here because save() stamps them with Instant.now(), and
+        // three assignments in one test land in the same millisecond: the tie falls through to
+        // resident_id and the ordering this is about never shows.
+        final Role role = officer(500);
+        final java.util.List<ResidentId> holders = new java.util.ArrayList<>(java.util.List.of(
+                ResidentId.of(UUID.randomUUID()),
+                ResidentId.of(UUID.randomUUID()),
+                ResidentId.of(UUID.randomUUID())));
+        // Sorted by id, so "granted in reverse id order" is a real distinction to detect.
+        holders.sort(java.util.Comparator.comparing(id -> id.value().toString()));
+
+        RoleBook book = RoleBook.defaultsFor(OrganisationScope.TOWN, TOWN, NOW)
+                .create(role, Set.of()).orElseThrow();
+        for (final ResidentId holder : holders) {
+            book = book.assign(holder, role.id()).orElseThrow();
+        }
+        saveAndReload(book);
+
+        final java.util.List<ResidentId> granted = new java.util.ArrayList<>(holders);
+        java.util.Collections.reverse(granted);
+        for (int i = 0; i < granted.size(); i++) {
+            stampGrant(role.id(), granted.get(i), NOW.toEpochMilli() + i);
+        }
+
+        final RoleBook reloaded = store.inTransaction(transaction ->
+                transaction.roles().find(OrganisationScope.TOWN, TOWN).orElseThrow()).join();
+
+        assertThat(reloaded.holdersOf(role.id()))
+                .as("first granted, first listed - and deliberately not id order")
+                .containsExactlyElementsOf(granted);
+
+        // And it survives an edit that has nothing to do with the assignments. save() replaces
+        // every row, so without re-reading each holder's original time first they would all be
+        // stamped with one instant and the order would collapse back to id order.
+        final RoleBook afterRename =
+                saveAndReload(reloaded.rename(role.id(), "Marshal").orElseThrow());
+
+        assertThat(afterRename.holdersOf(afterRename.findByName("Marshal").orElseThrow().id()))
+                .as("a rename must not reshuffle who holds the role")
+                .containsExactlyElementsOf(granted);
+    }
+
+    /** Sets one assignment's grant time, which save() would otherwise stamp with the clock. */
+    private void stampGrant(final RoleId role, final ResidentId holder, final long at)
+            throws Exception {
+        database.write(connection -> {
+            try (java.sql.PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE rt_role_member SET granted_at = ? "
+                            + "WHERE role_id = ? AND resident_id = ?")) {
+                statement.setLong(1, at);
+                statement.setString(2, role.value().toString());
+                statement.setString(3, holder.value().toString());
+                statement.executeUpdate();
+            }
+            return null;
+        });
+    }
     void missingBookIsEmpty() {
         final var found = store.inTransaction(transaction ->
                 transaction.roles().find(OrganisationScope.TOWN, TOWN)).join();
