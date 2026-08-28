@@ -15,6 +15,9 @@ import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockSpreadEvent;
+import org.bukkit.event.block.BlockRedstoneEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.event.entity.EntityExplodeEvent;
 
 import java.util.List;
@@ -184,6 +187,64 @@ public final class WorldProtectionListener implements Listener {
             }
         }
         return false;
+    }
+
+
+    /**
+     * Redstone, which a town may switch off across its own land.
+     *
+     * <p>{@code BlockRedstoneEvent} is not {@code Cancellable} — it reports a current that is about
+     * to change, and the way to refuse it is to put the old current back. Verified against the
+     * pinned Paper API rather than assumed: the class has {@code getOldCurrent},
+     * {@code getNewCurrent} and {@code setNewCurrent} and implements nothing.</p>
+     *
+     * <p>The flag was settable through {@code /town flag} and persisted from the day it was written,
+     * and no listener ever read it, so a town could turn redstone off and watch it keep running.</p>
+     */
+    @EventHandler(priority = EventPriority.LOW)
+    public void onRedstone(final BlockRedstoneEvent event) {
+        if (!protection.allowsWorldAction(event.getBlock(), ProtectionFlag.REDSTONE)) {
+            event.setNewCurrent(event.getOldCurrent());
+        }
+    }
+
+    /**
+     * Mobs the world spawns on its own.
+     *
+     * <p>Only {@code NATURAL}. Every other reason in the enum traces back to
+     * something somebody did or built — an egg, a breeding pair, a snow golem, a spawner, a portal,
+     * a bucket, a command — and a town that turns off mob spawning is asking the ambient darkness to
+     * stop producing zombies, not asking its animal farm to stop breeding or its iron golem to fail
+     * to assemble. Blocking those would read as a bug on the first day it shipped.</p>
+     *
+     * <p>Spawners have their own flag, {@code SPAWNER_USE}, so treating {@code SPAWNER} here would
+     * also mean two levers fighting over one behaviour.</p>
+     *
+     * <p>Listed explicitly rather than as everything-but, because the enum moves in both
+     * directions: 26.2 added {@code BUILD_COPPERGOLEM}, which an exclusion list would have silently
+     * started suppressing, and deprecated {@code CHUNK_GEN} for removal, which this handler named
+     * until the compiler objected. A new reason should default to being allowed and be considered
+     * on its merits.</p>
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onCreatureSpawn(final CreatureSpawnEvent event) {
+        if (!ambient(event.getSpawnReason())) {
+            return;
+        }
+        if (!protection.allowsWorldAction(
+                Chunks.of(event.getLocation()), ProtectionFlag.MOB_SPAWNING)) {
+            event.setCancelled(true);
+        }
+    }
+    /**
+     * Whether the world produced this mob on its own.
+     *
+     * <p>Separated from the handler so it can be tested: the handler needs a live server for its
+     * Block and Location, but which reasons count as ambient is a decision made here rather than by
+     * Bukkit, and it is the part that can be got wrong quietly.</p>
+     */
+    static boolean ambient(final SpawnReason reason) {
+        return reason == SpawnReason.NATURAL;
     }
 
     private boolean refuses(final Optional<TownId> pistonOwner, final ChunkKey chunk) {
