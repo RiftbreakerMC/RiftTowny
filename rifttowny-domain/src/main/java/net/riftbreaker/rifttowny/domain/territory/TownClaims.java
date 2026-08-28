@@ -275,13 +275,26 @@ public final class TownClaims {
         return claims.isEmpty();
     }
 
-    /** Whether the chunk shares an edge with any claim this town already holds. */
+    /**
+     * Whether the chunk shares an edge with any claim this town already holds.
+     *
+     * <p>Embassies do not count. They are the one kind that cannot anchor connectivity, and letting
+     * one satisfy the touch requirement would produce a town that can never unclaim anything again:
+     * an ordinary claim placed beside an embassy is accepted here, because adding a claim does not
+     * run the reachability sweep, and is then unreachable from every anchor for ever - so the next
+     * unclaim of any chunk at all fails with UNCLAIM_WOULD_DISCONNECT and keeps failing.</p>
+     *
+     * <p>Not reachable today, because nothing produces an embassy. It is guarded rather than left
+     * because the two rules that combine into it - "never an anchor" and "exempt from the reach
+     * check" - are both deliberate, and the trap only appears when they meet a third rule that was
+     * written without them in mind.</p>
+     */
     public boolean touchesTown(final ChunkKey chunk) {
         if (chunk == null) {
             return false;
         }
-        for (final ChunkKey owned : claims.keySet()) {
-            if (owned.isAdjacentTo(chunk)) {
+        for (final Claim owned : claims.values()) {
+            if (owned.kind() != ClaimKind.EMBASSY && owned.chunk().isAdjacentTo(chunk)) {
                 return true;
             }
         }

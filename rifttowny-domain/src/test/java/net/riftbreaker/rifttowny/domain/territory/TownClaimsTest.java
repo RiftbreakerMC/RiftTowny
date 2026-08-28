@@ -153,6 +153,90 @@ class TownClaimsTest {
             assertThat(town().claim(new ChunkKey(OTHER_WORLD, 0, 0), ClaimKind.OUTPOST, NOW)
                     .wasApplied()).isTrue();
         }
+
+        /**
+         * Embassies, which are exempt from connectivity in both directions.
+         *
+         * <p>Nothing produces a {@code ClaimKind.EMBASSY} yet — the command offers ordinary and
+         * outpost, and the importer maps Towny's homeblock and outpost flags — so every rule about
+         * them is a promise about behaviour rather than a description of it. These pin the promise,
+         * because the exemption in the reachability sweep is live code that a change to contiguity
+         * would silently walk over.</p>
+         */
+        @Nested
+        @DisplayName("embassies")
+        class Embassies {
+
+            @Test
+            @DisplayName("a detached embassy does not make the town disconnected")
+            void embassiesAreExemptFromReachability() {
+                // Without the exemption a town holding an embassy could never unclaim anything:
+                // the embassy is unreachable from every anchor by definition, so the sweep would
+                // refuse every removal, for ever, including ones that touch nothing near it.
+                final TownClaims claims = town(at(1, 0))
+                        .claim(at(9, 9), ClaimKind.EMBASSY, NOW).orElseThrow();
+
+                assertThat(claims.unclaim(at(1, 0)).wasApplied())
+                        .as("the embassy is not the town's to connect to")
+                        .isTrue();
+            }
+
+            @Test
+            @DisplayName("and moving the homeblock is not blocked by one either")
+            void embassiesDoNotBlockAHomeblockMove() {
+                final TownClaims claims = town(at(1, 0))
+                        .claim(at(9, 9), ClaimKind.EMBASSY, NOW).orElseThrow();
+
+                assertThat(claims.moveHomeblock(at(1, 0)).wasApplied()).isTrue();
+            }
+
+            @Test
+            @DisplayName("an embassy does not anchor, so land may not grow from it")
+            void embassiesDoNotAnchor() {
+                // The trap this closes. touchesTown counted any claim, so an ordinary claim beside
+                // an embassy was accepted - adding a claim does not run the reachability sweep -
+                // and was then unreachable from every anchor. The town would have been left unable
+                // to unclaim any chunk at all, permanently, with nothing to say why.
+                final TownClaims claims = town()
+                        .claim(at(9, 9), ClaimKind.EMBASSY, NOW).orElseThrow();
+
+                assertThat(claims.claim(at(9, 10), ClaimKind.ORDINARY, NOW).denial())
+                        .as("an outpost there would anchor; an embassy must not")
+                        .contains(ChangeDenial.CLAIM_MUST_TOUCH_TOWN);
+            }
+
+            @Test
+            @DisplayName("an outpost may sit beside one, since it brings its own anchor")
+            void outpostsMayNeighbourAnEmbassy() {
+                final TownClaims claims = town()
+                        .claim(at(9, 9), ClaimKind.EMBASSY, NOW).orElseThrow();
+
+                assertThat(claims.claim(at(9, 10), ClaimKind.OUTPOST, NOW).wasApplied()).isTrue();
+            }
+
+            @Test
+            @DisplayName("an embassy may be claimed away from the town, unlike an ordinary claim")
+            void embassiesNeedNotTouch() {
+                assertThat(town().claim(at(9, 9), ClaimKind.EMBASSY, NOW).wasApplied()).isTrue();
+            }
+
+            @Test
+            @DisplayName("and a town beside one is never left unable to unclaim")
+            void noPermanentLockout() {
+                // The end state the guard prevents, stated as the symptom a player would report:
+                // "we cannot unclaim anything any more". Against the old touchesTown this claim was
+                // accepted and every later unclaim - here of a chunk on the far side of the town -
+                // failed with UNCLAIM_WOULD_DISCONNECT, with nothing to say why.
+                final TownClaims claims = town(at(1, 0))
+                        .claim(at(9, 9), ClaimKind.EMBASSY, NOW).orElseThrow();
+                final var beside = claims.claim(at(9, 10), ClaimKind.ORDINARY, NOW);
+
+                assertThat(beside.wasApplied()).isFalse();
+                assertThat(claims.unclaim(at(1, 0)).wasApplied())
+                        .as("the town can still manage its own land")
+                        .isTrue();
+            }
+        }
     }
 
     @Nested

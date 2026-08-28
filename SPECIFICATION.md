@@ -117,7 +117,9 @@ overrides.
 Claim kinds: homeblock (exactly one per town, the claim the town spawn lives in),
 ordinary claim, outpost (a disconnected claim group), plot, farm, market, district
 (a named grouping of claims), embassy (a claim inside town A owned by town B), and
-public area.
+public area. Of these, homeblock, ordinary and outpost are the ones anything can create
+today; the embassy kind exists in the model, and the connectivity rules that must hold for
+it are pinned by tests, but no command or importer produces one.
 
 Relationships, resolved for every protected action:
 `wilderness < visitor < trusted < ally < nation < town < resident`.
