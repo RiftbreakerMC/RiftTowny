@@ -382,7 +382,16 @@ public sealed interface DomainEvent {
 
         @Override
         public String type() {
-            return "role." + action.name().toLowerCase(java.util.Locale.ROOT);
+            // Hyphenated, like every other name here. This is the only computed type in the file,
+            // and it read PERMISSION_GRANTED straight out of the enum as "role.permission_granted"
+            // while all thirty-five written ones use a hyphen — "town.outlaw-declared",
+            // "tax.run-completed". A consumer filtering on the shape the rest of the plugin uses
+            // would have missed exactly these two, and the underscore came from Java's naming
+            // rather than from any decision about the wire.
+            //
+            // Free to change today because nothing consumes the outbox yet. It would not be free
+            // once something did, which is the argument for doing it now rather than later.
+            return "role." + action.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
         }
     }
 
