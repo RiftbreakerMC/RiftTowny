@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * knows the trees. Between them, the case this exists for is covered: a row naming something that
  * exists nowhere at all.
  */
-class CatalogueCommandsTest {
+class CatalogueConsistencyTest {
 
     private static final Path CATALOGUE = Path.of("..", "FEATURE_CATALOG.md");
     private static final Path PLUGIN_YML = Path.of("src/main/resources/plugin.yml");
@@ -96,6 +96,38 @@ class CatalogueCommandsTest {
         assertThat(missing)
                 .as("a command listed beside ACTIVE reads as one a player can type. Either build "
                         + "it, or move it into the row's Outstanding note where it belongs")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("every module a row depends on is a row itself")
+    void dependenciesExist() throws IOException {
+        // The same error as a permission blocked by an id nobody planned, in the column where it
+        // would do more damage: Requires is what somebody reads to decide what has to be built
+        // first, and a dependency on a module that does not exist cannot ever be satisfied or
+        // noticed. Checked here because it is exact - ids are a closed vocabulary, unlike the
+        // Optional column, where plugin names and capability constants are deliberately spelled
+        // differently and any check would need an alias table that goes stale on its own.
+        final String catalogue = Files.readString(CATALOGUE, StandardCharsets.UTF_8);
+        final Pattern id = Pattern.compile("R[TWS]-[A-Z]+-[A-Z]+");
+
+        final List<String> dangling = new ArrayList<>();
+        for (final String line : catalogue.split("\n")) {
+            final String[] cells = line.split("\\|");
+            if (!line.startsWith("| R") || cells.length < 4) {
+                continue;
+            }
+            final Matcher required = id.matcher(cells[3]);
+            while (required.find()) {
+                if (!catalogue.contains("| " + required.group() + " |")) {
+                    dangling.add(cells[1].trim() + " requires " + required.group());
+                }
+            }
+        }
+
+        assertThat(dangling)
+                .as("a row cannot depend on a module that has no row: the dependency can never be "
+                        + "satisfied, and nothing will ever report it as missing")
                 .isEmpty();
     }
 
