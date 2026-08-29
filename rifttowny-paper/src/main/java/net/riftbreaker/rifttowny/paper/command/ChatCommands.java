@@ -29,9 +29,11 @@ import java.util.Optional;
  * too. A player in a town says most of what they say to their town, and prefixing every line with a
  * command is the friction that makes people stop using the channel at all.</p>
  *
- * <p>There is no {@code /ac}. An ally channel needs allies, and allies need
- * {@code RT-MOD-DIPLOMACY}; a command that accepted a message and reached nobody would be worse
- * than one that does not exist, because a player would believe they had been heard.</p>
+ * <p>{@code /ac} joined them once diplomacy shipped. It was absent on the reasoning that an ally
+ * channel needs allies and a command reaching nobody is worse than one that does not exist — sound
+ * while {@code RT-MOD-DIPLOMACY} was unbuilt, and left standing for a while after it was not. The
+ * refusal that reasoning asked for is still enforced, by the audience rather than by the channel's
+ * absence: a speaker whose nation has no allies is told so.</p>
  */
 public final class ChatCommands {
 
@@ -76,6 +78,23 @@ public final class ChatCommands {
                 .usage("nc [message]")
                 .describedAs("Speak to your nation, or switch to its channel")
                 .runs((actor, args) -> speak(actor, args, ChatChannel.NATION), Surface.CHAT);
+    }
+
+    /**
+     * The {@code /ac} tree.
+     *
+     * <p>Later than its siblings because an ally channel needs allies. It existed as a
+     * {@code CHAT_ALLY} permission and a line in the catalogue for as long as diplomacy was
+     * unbuilt, and then for a while after diplomacy shipped, because the reason it was missing had
+     * been written down once and not revisited.</p>
+     */
+    public CommandNode allyTree() {
+        return CommandNode.group("allychat")
+                .aliases("ac")
+                .permission("rifttowny.chat.ally")
+                .usage("ac [message]")
+                .describedAs("Speak to your nation and its allies, or switch to that channel")
+                .runs((actor, args) -> speak(actor, args, ChatChannel.ALLY), Surface.CHAT);
     }
 
     private void speak(
@@ -142,9 +161,11 @@ public final class ChatCommands {
                     .orElse(false);
         }
         final TownId theirTown = civic.townOf(who).orElse(null);
+        final Permission needed =
+                channel == ChatChannel.ALLY ? Permission.CHAT_ALLY : Permission.CHAT_NATION;
         return civic.nationOfResident(who)
                 .flatMap(nations::facts)
-                .map(facts -> facts.allows(who, Permission.CHAT_NATION, theirTown))
+                .map(facts -> facts.allows(who, needed, theirTown))
                 .orElse(false);
     }
 

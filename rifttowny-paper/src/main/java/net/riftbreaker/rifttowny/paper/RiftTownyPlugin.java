@@ -251,6 +251,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                         activeChannels, channelAudience, channelRenderer, messages, civicCache, nationCache);
         registerTree("townchat", chatCommands.townTree());
         registerTree("nationchat", chatCommands.nationTree());
+        registerTree("allychat", chatCommands.allyTree());
         getServer().getPluginManager().registerEvents(
                 new net.riftbreaker.rifttowny.paper.chat.ChannelChatListener(
                         activeChannels, civicCache, nationCache, channelAudience, channelRenderer, messages),
@@ -411,7 +412,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.positions = net.riftbreaker.rifttowny.domain.directory.LastKnownChunk.empty();
             this.activeChannels = net.riftbreaker.rifttowny.domain.chat.ActiveChannels.empty();
             this.channelAudience = new net.riftbreaker.rifttowny.domain.chat.ChannelAudience(
-                    civicCache, nationCache);
+                    civicCache, nationCache, diplomacyBook);
             // Built here rather than beside the expansion so it exists whether PlaceholderAPI is
             // installed or not: RiftChat, the web panel and anything else that wants these answers
             // reach the same resolver, and only the PlaceholderAPI wrapper is optional.

@@ -42,9 +42,6 @@ class PermissionCoverageTest {
     private static final Map<Permission, String> PENDING = new LinkedHashMap<>();
 
     static {
-        PENDING.put(Permission.CHAT_ALLY,
-                "RT-MOD-CHAT's /ac — no ALLY constant in RiftChat, and no allies until "
-                        + "RT-MOD-DIPLOMACY");
         PENDING.put(Permission.MANAGE_AREAS, "RT-CORE-AREA — 3D areas are unbuilt");
         PENDING.put(Permission.MANAGE_DISTRICTS, "RT-CORE-AREA — districts are unbuilt");
         PENDING.put(Permission.MANAGE_SHOPS, "RT-MOD-SHOP");

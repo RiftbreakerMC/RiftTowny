@@ -481,6 +481,9 @@ public enum MessageKey {
     CHAT_NATION_FORMAT("chat.nation-format",
             "<gray><prefix></gray><dark_aqua>[Nation]</dark_aqua> <white><sender></white><gray>:</gray> <message>"),
 
+    CHAT_ALLY_FORMAT("chat.ally-format",
+            "<gray><prefix></gray><gold>[Ally]</gold> <white><sender></white><gray>:</gray> <message>"),
+
     CHAT_CHANNEL_ON("chat.channel-on",
             "<green>You are now speaking to your <white><channel></white>. "
                     + "Run the command again to stop.</green>"),

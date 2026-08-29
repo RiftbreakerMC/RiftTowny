@@ -112,9 +112,11 @@ public final class ChannelRenderer {
             final Component message,
             final String prefix) {
         return messages.render(
-                channel == ChatChannel.TOWN
-                        ? MessageKey.CHAT_TOWN_FORMAT
-                        : MessageKey.CHAT_NATION_FORMAT,
+                switch (channel) {
+                    case TOWN -> MessageKey.CHAT_TOWN_FORMAT;
+                    case NATION -> MessageKey.CHAT_NATION_FORMAT;
+                    case ALLY -> MessageKey.CHAT_ALLY_FORMAT;
+                },
                 MessageService.value("sender", senderName),
                 MessageService.value("prefix", prefix == null ? "" : prefix),
                 net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component(

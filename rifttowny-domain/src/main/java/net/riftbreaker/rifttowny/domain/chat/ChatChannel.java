@@ -6,15 +6,21 @@ import java.util.Optional;
 /**
  * A channel a player can speak into.
  *
- * <p>Two, and deliberately not three. An ally channel needs allies, and allies need
- * {@code RT-MOD-DIPLOMACY}, which is unbuilt — a {@code /ac} that silently reached nobody would be
- * worse than one that does not exist, because a player would use it believing they had been
- * heard.</p>
+ * <p>Three. This said two for a long time, on the grounds that an ally channel needs allies and
+ * allies need {@code RT-MOD-DIPLOMACY}, which was unbuilt — and a {@code /ac} that silently reached
+ * nobody would be worse than one that does not exist, because a player would use it believing they
+ * had been heard. Diplomacy shipped; the reasoning stood unchanged beside a module that had
+ * arrived, which is why the channel was still missing.</p>
+ *
+ * <p>The refusal it describes is still enforced, and now by the audience rather than by the absence
+ * of the channel: a speaker with no nation, or a nation with no allies, is told so instead of
+ * talking to an empty room.</p>
  */
 public enum ChatChannel {
 
     TOWN("town", "tc"),
-    NATION("nation", "nc");
+    NATION("nation", "nc"),
+    ALLY("ally", "ac");
 
     private final String label;
     private final String command;

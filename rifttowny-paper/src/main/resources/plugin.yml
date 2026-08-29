@@ -53,6 +53,10 @@ commands:
     aliases: [nc]
     description: Speak to your nation, or switch to its channel.
     usage: /nc [message]
+  allychat:
+    aliases: [ac]
+    description: Speak to your nation and its allies, or switch to that channel.
+    usage: /ac [message]
   plot:
     aliases: [p]
     description: Take and manage the plot you are standing on.
@@ -153,6 +157,9 @@ permissions:
     default: true
   rifttowny.chat.nation:
     description: Speak to your nation's channel.
+    default: true
+  rifttowny.chat.ally:
+    description: Speak to your nation's allies. The CHAT_ALLY role permission decides who really can.
     default: true
   rifttowny.town.add:
     description: Invite a player to your town, and withdraw the invitation.
