@@ -171,22 +171,52 @@ public final class WorldProtectionListener implements Listener {
             final Block piston, final List<Block> moved, final int deltaX, final int deltaZ) {
         final Optional<TownId> pistonOwner = protection.ownerAt(Chunks.of(piston));
         for (final Block block : moved) {
-            final ChunkKey origin = Chunks.of(block);
-            if (refuses(pistonOwner, origin)) {
-                return true;
-            }
-            if (deltaX == 0 && deltaZ == 0) {
-                continue;
-            }
-            final ChunkKey destination = new ChunkKey(
-                    origin.worldId(),
-                    (block.getX() + deltaX) >> 4,
-                    (block.getZ() + deltaZ) >> 4);
-            if (refuses(pistonOwner, destination)) {
-                return true;
+            for (final ChunkKey chunk
+                    : touched(Chunks.of(block), block.getX(), block.getZ(), deltaX, deltaZ)) {
+                if (refuses(pistonOwner, chunk)) {
+                    return true;
+                }
             }
         }
         return false;
+    }
+
+    /**
+     * The chunks one moved block puts at stake.
+     *
+     * <p>Its own, always: a block that starts in somebody's claim has been taken whatever happens
+     * next. And on an extend the chunk it lands in as well, because a block that starts outside a
+     * claim and ends inside it has been pushed into somebody's town.</p>
+     *
+     * <p>A retraction passes a zero delta and gets the origin alone. {@code getDirection()} reports
+     * the piston's own facing while the pulled blocks travel the opposite way, so a destination
+     * computed from it would be wrong in a direction nothing would notice — and pulling a
+     * wilderness block into your own land is not an attack worth stopping anyway.</p>
+     *
+     * <p>Separated from the event handler so it can be tested. The arithmetic behind it is the one
+     * place a chunk boundary is crossed by calculation rather than by a player walking, and the
+     * cost of it being wrong is a piston that either grabs land it should not or stops working
+     * inside a town's own walls.</p>
+     */
+    static List<ChunkKey> touched(
+            final ChunkKey origin,
+            final int blockX,
+            final int blockZ,
+            final int deltaX,
+            final int deltaZ
+    ) {
+        // A short circuit, not a rule. With a zero delta the destination is the origin, so the
+        // comparison below would answer the same thing; this only saves computing it. Said plainly
+        // because the branch reads like the place retraction is special-cased, and it is not —
+        // what makes a retraction different is the caller passing no delta at all.
+        if (deltaX == 0 && deltaZ == 0) {
+            return List.of(origin);
+        }
+        final ChunkKey destination =
+                Chunks.fromBlock(origin.worldId(), blockX + deltaX, blockZ + deltaZ);
+        // One entry when the block does not leave its chunk, which is the ordinary case: checking
+        // the same chunk twice would be harmless but says something untrue about what is at stake.
+        return origin.equals(destination) ? List.of(origin) : List.of(origin, destination);
     }
 
 
