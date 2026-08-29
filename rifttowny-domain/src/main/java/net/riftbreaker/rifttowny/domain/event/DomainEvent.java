@@ -92,6 +92,54 @@ public sealed interface DomainEvent {
     }
 
     /**
+     * A tax run finished, with what it did.
+     *
+     * <p>The counts rather than the detail. A run touches every town on the server, and an event
+     * carrying each charge would be thousands of rows in the outbox for one scheduled sweep;
+     * a consumer that wants the detail has the ledger, which is where each movement already is.</p>
+     *
+     * <p>Published in the same transaction that marks the run finished, so there is no state in
+     * which a run is complete in the table and unannounced in the outbox.</p>
+     */
+    record TaxRunCompleted(
+            String periodKey, int townsCharged, int residentsCharged, int townsFallen)
+            implements DomainEvent {
+
+        public TaxRunCompleted {
+            Objects.requireNonNull(periodKey, "periodKey");
+        }
+
+        @Override
+        public String type() {
+            return "tax.run-completed";
+        }
+    }
+
+    /**
+     * A town fell because it could not pay.
+     *
+     * <p>Separate from {@link TownDisbanded}, which the collapse also emits. That one says the town
+     * is gone; this one says why, and the difference matters to everybody downstream: a town that
+     * chose to disband and a town taken by a timer read identically in a Discord relay otherwise,
+     * and the second is the one a moderator gets asked about.</p>
+     *
+     * <p>Published after the collapse has committed. Announcing a fall that then failed to happen
+     * would be worse than announcing it late.</p>
+     */
+    record TownFellBankrupt(TownId town, String reason) implements DomainEvent {
+
+        public TownFellBankrupt {
+            Objects.requireNonNull(town, "town");
+            Objects.requireNonNull(reason, "reason");
+        }
+
+        @Override
+        public String type() {
+            return "tax.town-fell-bankrupt";
+        }
+    }
+
+    /**
      * One nation declared something about another.
      *
      * <p>Carries the declarer, the target and the kind — never "these two are now allied", because

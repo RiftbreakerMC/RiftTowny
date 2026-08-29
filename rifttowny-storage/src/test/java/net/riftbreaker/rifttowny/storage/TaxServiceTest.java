@@ -585,4 +585,69 @@ class TaxServiceTest extends SqliteFixture {
         }
     }
 
+    /**
+     * What a run announces.
+     *
+     * <p>FEATURE_CATALOG states the rule for the whole plugin: every mutating feature emits a typed
+     * post-event and writes an outbox row. The tax run - which moves money for every town on the
+     * server and can end one - emitted nothing at all, while its catalogue row listed two events it
+     * did not produce. These hold the rule to the largest scheduled mutation there is.</p>
+     */
+    @Nested
+    @DisplayName("what a run announces")
+    class Events {
+
+        /** Event types in the outbox, which is the only place a consumer would look. */
+        private java.util.List<String> announced() throws Exception {
+            final java.util.List<String> types = new java.util.ArrayList<>();
+            database.read(connection -> {
+                try (java.sql.PreparedStatement statement = connection.prepareStatement(
+                        "SELECT event_type FROM rt_outbox ORDER BY created_at, event_id");
+                        java.sql.ResultSet results = statement.executeQuery()) {
+                    while (results.next()) {
+                        types.add(results.getString("event_type"));
+                    }
+                }
+                return null;
+            });
+            return types;
+        }
+
+        @Test
+        @DisplayName("a completed run is announced, in the transaction that finished it")
+        void runIsAnnounced() throws Exception {
+            final Town town = riftholm(NOW);
+            bank.pay(town.id(), coins("100"), LedgerEntry.Reason.ADMIN, null).join();
+
+            taxes(policy("0", "7", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(announced()).contains("tax.run-completed");
+        }
+
+        @Test
+        @DisplayName("a town that falls for unpaid upkeep says so, beyond saying it is gone")
+        void bankruptcyIsAnnounced() throws Exception {
+            // TownDisbanded says the town is gone. Without this, a relay cannot tell a town that
+            // chose to disband from one taken by a timer, and the second is the one a moderator
+            // gets asked about.
+            final Town town = riftholm(NOW);
+            final TaxPolicy policy = policy("0", "7", Duration.ZERO);
+            taxes(policy, NOW, "alpha").runIfDue().join();
+
+            taxes(policy, NOW.plus(Duration.ofDays(1)), "alpha").runIfDue().join();
+
+            assertThat(announced()).contains("tax.town-fell-bankrupt");
+        }
+
+        @Test
+        @DisplayName("a run that charged nobody still announces itself")
+        void quietRunsAreAnnouncedToo() throws Exception {
+            // A consumer counting runs needs the ones that did nothing as much as the ones that
+            // did: a missing announcement reads as a run that never happened.
+            taxes(policy("0", "1", Duration.ofDays(3)), NOW, "alpha").runIfDue().join();
+
+            assertThat(announced()).contains("tax.run-completed");
+        }
+    }
+
 }

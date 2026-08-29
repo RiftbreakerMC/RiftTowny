@@ -4,6 +4,7 @@ import net.riftbreaker.rifttowny.domain.bank.LedgerEntry;
 import net.riftbreaker.rifttowny.domain.bank.Money;
 import net.riftbreaker.rifttowny.domain.bank.PlayerWallet;
 import net.riftbreaker.rifttowny.domain.bank.TaxPolicy;
+import net.riftbreaker.rifttowny.domain.event.DomainEvent;
 import net.riftbreaker.rifttowny.domain.org.Nation;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.Town;
@@ -137,6 +138,14 @@ public final class TaxService {
                 .thenCompose(tally -> store.inTransaction(transaction -> {
                     transaction.taxes().finishRun(period, tally.townsCharged,
                             tally.residentsCharged, tally.fallen.size(), now);
+                    // In the same transaction as finishing the run. The catalogue's own rule is
+                    // that every mutating feature emits a typed post-event and writes an outbox
+                    // row, and the tax run - which moves money for every town on the server -
+                    // emitted nothing at all until this.
+                    transaction.publish(
+                            new DomainEvent.TaxRunCompleted(period, tally.townsCharged,
+                                    tally.residentsCharged, tally.fallen.size()),
+                            "tax:" + period);
                     return new TaxRun(period, tally.townsCharged, tally.residentsCharged,
                             tally.fallen.size(), tally.fallenNames);
                 }));
@@ -337,11 +346,21 @@ public final class TaxService {
             CompletableFuture<Tally> chain = CompletableFuture.completedFuture(tally);
             for (final TownId townId : doomed) {
                 chain = chain.thenCompose(running -> fall.collapse(townId, "unpaid upkeep")
-                        .thenApply(fell -> {
-                            if (Boolean.TRUE.equals(fell)) {
-                                running.fallen.add(townId);
+                        .thenCompose(fell -> {
+                            if (!Boolean.TRUE.equals(fell)) {
+                                return CompletableFuture.completedFuture(running);
                             }
-                            return running;
+                            running.fallen.add(townId);
+                            // After the collapse has committed, not with it. The collapse emits
+                            // TownDisbanded, which says the town is gone; this says why, and a
+                            // relay cannot otherwise tell a town that chose to disband from one
+                            // taken by a timer - which is the one a moderator gets asked about.
+                            return store.<Void>inTransaction(transaction -> {
+                                transaction.publish(
+                                        new DomainEvent.TownFellBankrupt(townId, "unpaid upkeep"),
+                                        "tax:" + townId.value());
+                                return null;
+                            }).thenApply(ignored -> running);
                         }));
             }
             return chain;
