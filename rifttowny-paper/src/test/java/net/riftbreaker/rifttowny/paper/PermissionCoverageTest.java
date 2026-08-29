@@ -42,11 +42,26 @@ class PermissionCoverageTest {
     private static final Map<Permission, String> PENDING = new LinkedHashMap<>();
 
     static {
-        PENDING.put(Permission.MANAGE_AREAS, "RT-CORE-AREA — 3D areas are unbuilt");
-        PENDING.put(Permission.MANAGE_DISTRICTS, "RT-CORE-AREA — districts are unbuilt");
-        PENDING.put(Permission.MANAGE_SHOPS, "RT-MOD-SHOP");
-        PENDING.put(Permission.MANAGE_SPAWNERS, "RT-MOD-SPAWNER");
-        PENDING.put(Permission.VIEW_LOGS, "RT-CORE-LOG — rt_audit has no writer");
+        PENDING.put(Permission.MANAGE_AREAS,
+                "RT-CORE-AREA — the row is ACTIVE for plots, and 3D areas are its outstanding "
+                        + "half: no Area type, and rt_area has no production reference");
+        PENDING.put(Permission.MANAGE_DISTRICTS,
+                "RT-CORE-AREA — districts are the same outstanding half; 'district' appears in no "
+                        + "production code but this constant");
+        PENDING.put(Permission.MANAGE_SHOPS,
+                "RT-MOD-SHOP — PLANNED, and RiftShop exists only as a Capability entry. Not to be "
+                        + "confused with SHOP_USE, which is a protection action and is checked");
+        PENDING.put(Permission.MANAGE_SPAWNERS,
+                "RT-MOD-SPAWNER — PLANNED, and RiftSpawners exists only as a Capability entry. "
+                        + "SPAWNER_USE is the protection action and is checked");
+        // No module id, deliberately. This said "RT-CORE-LOG" until that was re-verified and found
+        // to be an id nothing planned: it was coined in this repository's own notes and then cited
+        // twice as a blocker, which is a worse kind of stale than a wrong status — a fictional
+        // owner cannot be checked, and reads as though somebody is coming to do the work.
+        PENDING.put(Permission.VIEW_LOGS,
+                "no owning module: rt_audit is declared in V1 with no writer, and "
+                        + "IMPLEMENTATION_PLAN records RiftTowny's RiftLogger adapter as unwritten "
+                        + "while the upstream support exists. Untracked rather than scheduled");
     }
 
     /** Where a permission is declared or defaulted rather than checked. */
@@ -93,6 +108,34 @@ class PermissionCoverageTest {
         assertThat(nowChecked)
                 .as("these are checked now, so the excuse recorded beside them is stale. Take them "
                         + "off the list — it is meant to shrink")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("every module named as a blocker is a real row in the catalogue")
+    void blockersExist() throws IOException {
+        // Added after VIEW_LOGS was found waiting on "RT-CORE-LOG", an id that appears nowhere in
+        // the catalogue: it was coined in this repository's own notes and then cited twice as
+        // though it were planned work. A wrong status can be checked against the code; an owner
+        // that does not exist cannot be checked against anything, and reads as though somebody is
+        // scheduled to do the work.
+        final String catalogue = Files.readString(
+                Path.of("..", "FEATURE_CATALOG.md"), StandardCharsets.UTF_8);
+        final java.util.regex.Pattern id = java.util.regex.Pattern.compile("RT-[A-Z]+-[A-Z]+");
+
+        final List<String> invented = new ArrayList<>();
+        for (final String reason : PENDING.values()) {
+            final java.util.regex.Matcher named = id.matcher(reason);
+            while (named.find()) {
+                if (!catalogue.contains("| " + named.group() + " |")) {
+                    invented.add(named.group());
+                }
+            }
+        }
+
+        assertThat(invented)
+                .as("named as blocking a permission but not a row in FEATURE_CATALOG. Either add "
+                        + "the row or describe the gap without inventing an owner for it")
                 .isEmpty();
     }
 

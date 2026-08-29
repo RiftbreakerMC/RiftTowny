@@ -62,8 +62,9 @@ only their **additional** criteria.
   All four are required unless the row says why one is meaningless.
 - Every mutating feature emits a typed post-event and writes an outbox row. Rows name only the
   events a consumer would care about. **`rt_audit` is declared in the baseline schema and has no
-  writer** — the audit trail arrives with RT-CORE-LOG, and no feature should be read as producing
-  one today.
+  writer**, and no feature should be read as producing one today. No catalogue row owns it: the
+  audit trail is an untracked gap rather than scheduled work, and IMPLEMENTATION_PLAN records
+  RiftTowny's RiftLogger adapter as unwritten while the upstream support exists.
 
 ---
 
@@ -238,7 +239,7 @@ making that the code does not yet keep.
 
 | Thing | State | Why it stays |
 |---|---|---|
-| `rt_audit` | Declared in V1, zero writers | Waiting on **RT-CORE-LOG** / RiftLogger. The claims that it was populated have been removed from this file and from `docs/dependency-report.md` |
+| `rt_audit` | Declared in V1, zero writers | **No owning row.** This said "waiting on RT-CORE-LOG" until that id was checked and found to appear nowhere but in these notes — it was coined here and then cited as a blocker, which is worse than a wrong status, because a fictional owner reads as work somebody is scheduled to do. The real position: RiftTowny's RiftLogger adapter is unwritten (IMPLEMENTATION_PLAN), and nothing tracks the audit trail as a feature |
 | `rt_area`, `rt_organisation_currency` | No production reference | Named blockers: **RT-CORE-AREA** and **RT-MOD-BANK** multi-currency. Worth noting `rt_organisation_balance` and `rt_bank_ledger` key on a free-text `currency` column that does not reference `rt_organisation_currency`, so the two designs need reconciling when multi-currency lands |
 
 ## 8. Permanently excluded
