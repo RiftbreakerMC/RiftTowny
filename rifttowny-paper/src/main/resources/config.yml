@@ -83,7 +83,9 @@ taxes:
   # wants somebody gone has /town kick and a person to decide it.
   resident: 0
 
-  # The most a town may charge its own residents through /town set taxes. A town that has set
+  # The most a town may charge its own residents through /town set taxes. Setting this to 0 also
+  # switches the whole tax run off when the three rates above are 0: permitting towns to charge is
+  # itself a reason to run, so a server that wants no tax machinery at all zeroes this too. A town that has set
   # nothing follows `resident` above; one that has set a rate uses its own, up to this ceiling.
   #
   # The ceiling is not optional. The rate is taken automatically from each resident's wallet, once

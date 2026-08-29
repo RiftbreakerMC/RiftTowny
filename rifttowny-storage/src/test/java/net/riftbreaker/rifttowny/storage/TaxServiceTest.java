@@ -145,8 +145,16 @@ class TaxServiceTest extends SqliteFixture {
             riftholm(NOW);
 
             assertThat(taxes(TaxPolicy.off(), NOW, "alpha").runIfDue().join()).isEmpty();
-            assertThat(taxes(policy("0", "0", Duration.ZERO), NOW, "alpha").runIfDue().join())
-                    .isEmpty();
+
+            // Zero rates AND a zero ceiling. The rates alone are no longer enough to say a server
+            // collects nothing: since towns can set their own, permitting them to is itself a
+            // reason to run. A server that wants no tax machinery sets the ceiling to zero, and
+            // this is the case that says so.
+            final TaxPolicy nothingAtAll = new TaxPolicy(
+                    true, Duration.ofDays(1), java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO,
+                    java.math.BigDecimal.ZERO, Duration.ZERO, java.math.BigDecimal.ZERO);
+
+            assertThat(taxes(nothingAtAll, NOW, "alpha").runIfDue().join()).isEmpty();
         }
     }
 
@@ -569,6 +577,26 @@ class TaxServiceTest extends SqliteFixture {
                     .setResidentTax(CITIZEN, town.id(), new java.math.BigDecimal("5"), CAP)
                     .join().denial())
                     .contains(ChangeDenial.MISSING_PERMISSION);
+        }
+
+        @Test
+        @DisplayName("is collected on a server that charges nothing of its own")
+        void collectedWhenTheServerChargesNothing() {
+            // The end of the bug TaxPolicyTest names: a server that charges nothing and lets towns
+            // decide is the natural way to use this, and the run was skipped before it began, so
+            // the rate was stored, shown by the command, and never taken from anybody.
+            final Town town = riftholm(NOW);
+            wallet.balances.put(MAYOR, coins("50"));
+            townService().setResidentTax(MAYOR, town.id(), new java.math.BigDecimal("4"), CAP)
+                    .join();
+            final TaxPolicy nothingServerSide = new TaxPolicy(
+                    true, Duration.ofDays(1), java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO,
+                    java.math.BigDecimal.ZERO, Duration.ofDays(3), CAP);
+
+            final var run = taxes(nothingServerSide, NOW, "alpha").runIfDue().join();
+
+            assertThat(run).as("the run must happen at all").isPresent();
+            assertThat(wallet.balances.get(MAYOR)).isEqualTo(coins("46"));
         }
 
         @Test

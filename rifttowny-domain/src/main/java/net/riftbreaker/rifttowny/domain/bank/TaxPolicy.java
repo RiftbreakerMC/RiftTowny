@@ -64,10 +64,21 @@ public record TaxPolicy(
                 Duration.ofDays(3), BigDecimal.ZERO);
     }
 
-    /** Whether a run would actually do anything. */
+    /**
+     * Whether a run would actually do anything.
+     *
+     * <p>{@code maxResidentTax} counts, and it has to. The three rates above are what the
+     * <em>server</em> charges, and a run is skipped entirely when all of them are zero — which was
+     * right until towns could set their own. A server that charges nothing itself and lets each
+     * town decide is the natural configuration for that feature, and under the old test it never
+     * ran a sweep at all: every town rate was stored, displayed, and never collected.</p>
+     *
+     * <p>A ceiling of zero means towns may not charge either, and the short circuit comes back. So
+     * a server that wants no tax machinery still pays nothing for it.</p>
+     */
     public boolean collectsAnything() {
         return enabled && (charged(residentTax) || charged(upkeepPerChunk)
-                || charged(nationTaxPerTown));
+                || charged(nationTaxPerTown) || charged(maxResidentTax));
     }
 
     /**
