@@ -100,6 +100,54 @@ class CatalogueConsistencyTest {
     }
 
     @Test
+    @DisplayName("nothing still listed as outstanding has already been built")
+    void outstandingWorkIsStillOutstanding() throws IOException {
+        // Rows go stale in their prose as readily as in their status. RT-CORE-TOWN listed merge,
+        // board, tag and outlaws as outstanding when all four had shipped; RT-CORE-NATION listed
+        // allies, a spendable nation bank, board and tag, likewise all four done. A row is what
+        // somebody reads before deciding what to build, and work listed as remaining is work
+        // somebody may start twice.
+        //
+        // Only commands are checkable - "UI" and "personal friends" are not names this can look up
+        // - so an Outstanding clause must not name a command that already exists. That also fixes
+        // where the explanation goes: what has shipped belongs in the row's prose, before the
+        // marker, and only what remains belongs after it.
+        final Set<String> declared = declaredCommands();
+        final List<String> shipped = new ArrayList<>();
+
+        for (final String line : Files.readString(CATALOGUE, StandardCharsets.UTF_8).split("\n")) {
+            final int marker = line.indexOf("**Outstanding**");
+            if (!line.startsWith("| RT-") || marker < 0) {
+                continue;
+            }
+            final Matcher named = COMMAND.matcher(line.substring(marker));
+            while (named.find()) {
+                if (declared.contains(named.group(1))
+                        && named.group(2).trim().chars().allMatch(Character::isLetterOrDigit)
+                        && nodes().containsAll(words(named.group(2)))) {
+                    shipped.add(line.split("\\|")[1].trim() + " still lists /" + named.group(1)
+                            + named.group(2));
+                }
+            }
+        }
+
+        assertThat(shipped)
+                .as("listed as outstanding, but it exists. Move what has shipped into the row's "
+                        + "prose before the marker, and leave only what remains after it")
+                .isEmpty();
+    }
+
+    private static List<String> words(final String tail) {
+        final List<String> words = new ArrayList<>();
+        for (final String word : tail.trim().split("\\s+")) {
+            if (word.matches("[a-z]+")) {
+                words.add(word);
+            }
+        }
+        return words;
+    }
+
+    @Test
     @DisplayName("every module a row depends on is a row itself")
     void dependenciesExist() throws IOException {
         // The same error as a permission blocked by an id nobody planned, in the column where it
