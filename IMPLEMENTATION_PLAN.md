@@ -95,7 +95,7 @@ but real public API, and fails loudly instead of silently when something is wron
 - [ ] Typed pre/post events — Phase 2, for the same reason
 
 ### 1.6 Integration capability registry
-- [x] Registry with per-integration state: `ABSENT`, `PRESENT_UNVERIFIED`, `ACTIVE`, `FAILED`, `BLOCKED`, `DISABLED`
+- [x] Registry with per-integration state: `ABSENT`, `UNIMPLEMENTED`, `PRESENT_UNVERIFIED`, `ACTIVE`, `FAILED`, `BLOCKED`, `DISABLED`
 - [x] `LinkageError` caught deliberately — a `NoSuchMethodError` from a version mismatch degrades one feature instead of aborting the enable
 - [x] Never over-reports: a plugin that is present but hands back no service is `PRESENT_UNVERIFIED`, never `ACTIVE`
 - [x] `DISCORD_CHANNEL_PROVISIONING` registered `BLOCKED` at startup with the reason, rather than silently absent
