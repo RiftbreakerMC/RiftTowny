@@ -577,7 +577,8 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
                 MessageService.value("command", "RiftTowny administration:"));
         messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
                 MessageService.value("usage", "/rifttowny status"),
-                MessageService.value("description", "platform, storage, outbox and integration state"));
+                MessageService.value("description",
+                        "platform, storage, protection, territory, outbox and integrations"));
         messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
                 MessageService.value("usage", "/rifttowny migrate towny"),
                 MessageService.value("description",
@@ -601,6 +602,23 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
                 MessageService.value("backend", plugin().settings().storage().backend()),
                 MessageService.value("schema", plugin().schema().currentVersion()),
                 MessageService.value("topology", plugin().settings().describeTopology()));
+
+        // Both counter sets already existed and nothing read them: the protection service has
+        // counted every check since it was written, and the index every lookup. A counter nobody
+        // can see is not a diagnostic, and these are the two an operator reaches for after "is
+        // protection running at all" and "why has this got slow".
+        final var guarded = plugin().protection().statistics();
+        messages.sendRaw(sender, MessageKey.STATUS_PROTECTION,
+                MessageService.value("checks", guarded.checks()),
+                MessageService.value("refusals", guarded.refusals()),
+                MessageService.value("bypasses", guarded.bypasses()));
+
+        final var land = plugin().territoryIndex().statistics();
+        messages.sendRaw(sender, MessageKey.STATUS_TERRITORY,
+                MessageService.value("claims", land.claims()),
+                MessageService.value("hits", land.hits()),
+                MessageService.value("misses", land.misses()),
+                MessageService.value("generation", land.generation()));
 
         // The outbox depth is a database read, so it is fetched asynchronously and printed when it
         // arrives. A status command that blocked the server thread to render a diagnostic would be

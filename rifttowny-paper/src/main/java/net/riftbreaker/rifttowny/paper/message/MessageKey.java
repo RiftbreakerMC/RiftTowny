@@ -761,6 +761,15 @@ public enum MessageKey {
                     + "<gray>schema</gray> <white><schema></white> <dark_gray>|</dark_gray> "
                     + "<gray>topology</gray> <white><topology></white>"),
 
+    STATUS_PROTECTION("status.protection",
+            "  <gray>Protection</gray> <white><checks></white> check(s), "
+                    + "<white><refusals></white> refused, <white><bypasses></white> bypassed"),
+
+    STATUS_TERRITORY("status.territory",
+            "  <gray>Territory</gray> <white><claims></white> claim(s) <dark_gray>|</dark_gray> "
+                    + "<gray>cache</gray> <white><hits></white> hit, <white><misses></white> miss "
+                    + "<gray>(generation <generation>)</gray>"),
+
     STATUS_OUTBOX("status.outbox",
             "  <gray>Outbox</gray> <white><pending></white> pending, <white><claimed></white> claimed, "
                     + "<white><failed></white> failed"),
