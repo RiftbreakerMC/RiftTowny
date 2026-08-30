@@ -324,6 +324,19 @@ public final class RiftTownyPlugin extends JavaPlugin {
             this.flagOverrides = net.riftbreaker.rifttowny.domain.flag.FlagOverrides.empty();
             this.flagService = new net.riftbreaker.rifttowny.domain.service.FlagService(
                     civicStore, clock, flagOverrides);
+            // Built before the first service that takes it, which SpawnService below is. It used to
+            // be assigned nine lines further down, after SpawnService and PlotService had already
+            // been handed the field while it was still null - so every start ended in
+            // "storage could not be opened or migrated - playerWallet" and the plugin disabled
+            // itself. Nothing in the test suite could see it: every test constructs these services
+            // directly with a wallet of its own, and only the plugin wires them in this order.
+            //
+            // RiftEco if it is here, and a wallet that refuses everything if it is not. The civic
+            // ledger works either way; what the wallet decides is whether money can cross between a
+            // player and the town at all. Bound through the registry below, which is what turns a
+            // version mismatch into a recorded status instead of a failed enable.
+            this.economyAdapter =
+                    new net.riftbreaker.rifttowny.integrations.economy.RiftEcoAdapter();
             this.spawnService = new net.riftbreaker.rifttowny.domain.service.SpawnService(
                     civicStore, clock, territoryIndex)
                     .pricedAt(settings.prices(), economyAdapter);
@@ -332,12 +345,6 @@ public final class RiftTownyPlugin extends JavaPlugin {
             civicCacheService.alsoForget(spawnService::forget);
             this.plotService = new net.riftbreaker.rifttowny.domain.service.PlotService(
                     civicStore, clock, territoryIndex, settings.prices(), economyAdapter);
-            // RiftEco if it is here, and a wallet that refuses everything if it is not. The civic
-            // ledger works either way; what the wallet decides is whether money can cross between a
-            // player and the town at all. Bound through the registry below, which is what turns a
-            // version mismatch into a recorded status instead of a failed enable.
-            this.economyAdapter =
-                    new net.riftbreaker.rifttowny.integrations.economy.RiftEcoAdapter();
             this.bankService = new net.riftbreaker.rifttowny.domain.service.BankService(
                     civicStore, clock, economyAdapter);
             // Given TownService::collapse rather than reaching into it: a tax run ending a town and
