@@ -208,8 +208,22 @@ class ChannelAudienceTest {
             assertThat(ChatChannel.parse("town")).contains(ChatChannel.TOWN);
             assertThat(ChatChannel.parse("TC")).contains(ChatChannel.TOWN);
             assertThat(ChatChannel.parse(" nation ")).contains(ChatChannel.NATION);
-            assertThat(ChatChannel.parse("ally")).isEmpty();
+            assertThat(ChatChannel.parse("ally")).contains(ChatChannel.ALLY);
+            assertThat(ChatChannel.parse("unknown")).isEmpty();
             assertThat(ChatChannel.parse(null)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("every channel answers to its own name and its own command")
+        void everyChannelIsReachable() {
+            // This line used to read parse("ally") is empty, which was true until the ally channel
+            // shipped and was then left standing - the same staleness the enum javadoc describes,
+            // repeated in the test that was supposed to catch it. Asserting over values() instead
+            // of naming channels one at a time is what stops a fourth channel repeating it.
+            for (final ChatChannel channel : ChatChannel.values()) {
+                assertThat(ChatChannel.parse(channel.label())).contains(channel);
+                assertThat(ChatChannel.parse(channel.command())).contains(channel);
+            }
         }
     }
     /**

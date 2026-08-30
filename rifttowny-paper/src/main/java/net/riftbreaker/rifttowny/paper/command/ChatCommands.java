@@ -63,9 +63,9 @@ public final class ChatCommands {
     /** The {@code /tc} tree. A single action, since a channel command takes free text. */
     public CommandNode townTree() {
         return CommandNode.group("townchat")
-                .aliases("tc")
+                .aliases(ChatChannel.TOWN.command())
                 .permission("rifttowny.chat.town")
-                .usage("tc [message]")
+                .usage(ChatChannel.TOWN.command() + " [message]")
                 .describedAs("Speak to your town, or switch to its channel")
                 .runs((actor, args) -> speak(actor, args, ChatChannel.TOWN), Surface.CHAT);
     }
@@ -73,9 +73,9 @@ public final class ChatCommands {
     /** The {@code /nc} tree. */
     public CommandNode nationTree() {
         return CommandNode.group("nationchat")
-                .aliases("nc")
+                .aliases(ChatChannel.NATION.command())
                 .permission("rifttowny.chat.nation")
-                .usage("nc [message]")
+                .usage(ChatChannel.NATION.command() + " [message]")
                 .describedAs("Speak to your nation, or switch to its channel")
                 .runs((actor, args) -> speak(actor, args, ChatChannel.NATION), Surface.CHAT);
     }
@@ -90,9 +90,9 @@ public final class ChatCommands {
      */
     public CommandNode allyTree() {
         return CommandNode.group("allychat")
-                .aliases("ac")
+                .aliases(ChatChannel.ALLY.command())
                 .permission("rifttowny.chat.ally")
-                .usage("ac [message]")
+                .usage(ChatChannel.ALLY.command() + " [message]")
                 .describedAs("Speak to your nation and its allies, or switch to that channel")
                 .runs((actor, args) -> speak(actor, args, ChatChannel.ALLY), Surface.CHAT);
     }

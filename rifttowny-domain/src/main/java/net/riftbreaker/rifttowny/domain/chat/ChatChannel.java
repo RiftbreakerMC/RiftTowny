@@ -47,6 +47,7 @@ public enum ChatChannel {
         return switch (raw.trim().toLowerCase(Locale.ROOT)) {
             case "town", "t", "tc" -> Optional.of(TOWN);
             case "nation", "n", "nc" -> Optional.of(NATION);
+            case "ally", "a", "ac" -> Optional.of(ALLY);
             default -> Optional.empty();
         };
     }
