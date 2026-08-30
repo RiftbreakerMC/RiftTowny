@@ -751,6 +751,11 @@ public final class RiftTownyPlugin extends JavaPlugin {
         return territoryIndex;
     }
 
+    /** The ruin index and its settings, for diagnostics and for the listeners that read ruins. */
+    public net.riftbreaker.rifttowny.domain.service.RuinService ruins() {
+        return ruinService;
+    }
+
     /** Brings another plugin's world in. Reached by {@code /rifttowny migrate}. */
     public net.riftbreaker.rifttowny.domain.service.CivicImporter importer() {
         return importer;

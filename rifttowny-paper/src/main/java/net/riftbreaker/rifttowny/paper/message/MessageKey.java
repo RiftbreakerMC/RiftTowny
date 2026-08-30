@@ -770,6 +770,14 @@ public enum MessageKey {
                     + "<gray>cache</gray> <white><hits></white> hit, <white><misses></white> miss "
                     + "<gray>(generation <generation>)</gray>"),
 
+    STATUS_RUINS("status.ruins",
+            "  <gray>Ruins</gray> <white><ruins></white> ruin(s) holding <white><chunks></white> "
+                    + "chunk(s) <dark_gray>|</dark_gray> <gray>standing for</gray> "
+                    + "<white><hours></white>h"),
+
+    STATUS_RUINS_DISABLED("status.ruins-disabled",
+            "  <gray>Ruins</gray> <dark_gray>disabled</dark_gray>"),
+
     STATUS_OUTBOX("status.outbox",
             "  <gray>Outbox</gray> <white><pending></white> pending, <white><claimed></white> claimed, "
                     + "<white><failed></white> failed"),

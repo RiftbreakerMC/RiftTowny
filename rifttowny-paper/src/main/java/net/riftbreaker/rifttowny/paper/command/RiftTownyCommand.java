@@ -578,7 +578,7 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
         messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
                 MessageService.value("usage", "/rifttowny status"),
                 MessageService.value("description",
-                        "platform, storage, protection, territory, outbox and integrations"));
+                        "platform, storage, protection, territory, ruins, outbox and integrations"));
         messages.sendRaw(sender, MessageKey.COMMAND_HELP_LINE,
                 MessageService.value("usage", "/rifttowny migrate towny"),
                 MessageService.value("description",
@@ -619,6 +619,20 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
                 MessageService.value("hits", land.hits()),
                 MessageService.value("misses", land.misses()),
                 MessageService.value("generation", land.generation()));
+
+        // Ruins were reportable and never reported: RuinService.index() said in its own javadoc
+        // that it existed "for listeners and for /rifttowny status", and status never asked. A
+        // fallen town's land is deliberately unprotected, so how much of the map is currently in
+        // that state is exactly the sort of thing an operator wants a number for.
+        final var ruins = plugin().ruins();
+        if (ruins.enabled()) {
+            messages.sendRaw(sender, MessageKey.STATUS_RUINS,
+                    MessageService.value("ruins", ruins.index().size()),
+                    MessageService.value("chunks", ruins.index().claimedChunks()),
+                    MessageService.value("hours", ruins.lifetime().toHours()));
+        } else {
+            messages.sendRaw(sender, MessageKey.STATUS_RUINS_DISABLED);
+        }
 
         // The outbox depth is a database read, so it is fetched asynchronously and printed when it
         // arrives. A status command that blocked the server thread to render a diagnostic would be
