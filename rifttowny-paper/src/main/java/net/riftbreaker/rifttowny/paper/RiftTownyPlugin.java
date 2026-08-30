@@ -480,8 +480,16 @@ public final class RiftTownyPlugin extends JavaPlugin {
             getLogger().info("Loaded " + named + " resident name(s) into memory.");
             return true;
         } catch (final RuntimeException failure) {
-            getLogger().severe("RiftTowny did not start: storage could not be opened or migrated - "
-                    + failure.getMessage());
+            // The stack trace matters more here than anywhere else: this is the one path that
+            // decides RiftTowny does not run, and it leaves the operator with unprotected land.
+            // Logging only getMessage() cost a real diagnosis once - a null leader_id on a single
+            // town row surfaced as "Cannot invoke String.length()" with nothing to say where.
+            // The wording no longer says "storage" alone either: this block covers opening the
+            // database, migrating it AND loading every cache, and naming only storage sent that
+            // same investigation to the wrong module first.
+            getLogger().log(java.util.logging.Level.SEVERE,
+                    "RiftTowny did not start: storage or cache loading failed - "
+                            + failure.getMessage(), failure);
             if (database != null) {
                 database.close();
                 database = null;
