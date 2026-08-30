@@ -12,6 +12,19 @@ public enum CapabilityState {
     /** The plugin is not installed. Normal, not an error. */
     ABSENT(false),
 
+    /**
+     * RiftTowny has no adapter for this capability yet, so nothing was looked for.
+     *
+     * <p>Distinct from {@link #ABSENT}, which is a claim about the server: absent means RiftTowny
+     * asked whether the plugin was installed and it was not. Seeding every capability as absent
+     * meant status reported "not installed" for plugins that were installed and running, because
+     * nothing had ever asked. Saying nothing was built is honest; saying it was not found is not.</p>
+     *
+     * <p>Also distinct from {@link #BLOCKED}, which is upstream's gap - the other plugin has no
+     * contract to bind to. This one is ours.</p>
+     */
+    UNIMPLEMENTED(false),
+
     /** The plugin is installed but its API has not been exercised yet. Not usable. */
     PRESENT_UNVERIFIED(false),
 

@@ -14,7 +14,7 @@ package net.riftbreaker.rifttowny.api;
 public record ApiVersion(int major, int minor) implements Comparable<ApiVersion> {
 
     /** The version implemented by this artifact. */
-    public static final ApiVersion CURRENT = new ApiVersion(0, 1);
+    public static final ApiVersion CURRENT = new ApiVersion(0, 2);
 
     public ApiVersion {
         if (major < 0 || minor < 0) {

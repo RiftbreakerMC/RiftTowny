@@ -803,6 +803,9 @@ public enum MessageKey {
     STATUS_INTEGRATION_PROBLEM("status.integration-problem",
             "    <red><capability></red> <white><state></white> <dark_gray>-</dark_gray> <gray><detail></gray>"),
 
+    STATUS_INTEGRATION_UNIMPLEMENTED("status.integration-unimplemented",
+            "    <dark_gray><capability> - no adapter written yet</dark_gray>"),
+
     STATUS_INTEGRATION_ABSENT("status.integration-absent",
             "    <dark_gray><capability> - not installed</dark_gray>");
 

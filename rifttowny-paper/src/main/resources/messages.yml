@@ -263,6 +263,7 @@ status:
   integrations-header: '  <gray>Integrations</gray>'
   integration-active: '    <green><capability></green> <dark_gray>-</dark_gray> <gray><detail></gray>'
   integration-problem: '    <red><capability></red> <white><state></white> <dark_gray>-</dark_gray> <gray><detail></gray>'
+  integration-unimplemented: '    <dark_gray><capability> - no adapter written yet</dark_gray>'
   integration-absent: '    <dark_gray><capability> - not installed</dark_gray>'
 
 # One sentence per ChangeDenial constant. Plain text, not MiniMessage: they are inserted into

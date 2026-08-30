@@ -47,11 +47,16 @@ class DefaultCapabilityRegistryTest {
     }
 
     @Test
-    @DisplayName("every capability starts absent, so nothing is claimed before it is proven")
-    void everythingStartsAbsent() {
+    @DisplayName("every capability starts unimplemented, because nothing has been looked for yet")
+    void everythingStartsUnimplemented() {
+        // The intent was always "nothing is claimed before it is proven", and ABSENT is itself a
+        // claim: that the plugin is not installed. Seeding it made that claim about all 21
+        // capabilities on every server, including ones running the plugin in question, because
+        // only the three with adapters were ever asked. UNIMPLEMENTED claims only what is true
+        // before any adapter has run.
         assertThat(registry.statuses()).hasSize(Capability.values().length);
         assertThat(registry.statuses()).allSatisfy(status ->
-                assertThat(status.state()).isEqualTo(CapabilityState.ABSENT));
+                assertThat(status.state()).isEqualTo(CapabilityState.UNIMPLEMENTED));
     }
 
     @Test

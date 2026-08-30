@@ -40,7 +40,10 @@ public final class DefaultCapabilityRegistry implements CapabilityRegistry {
     public DefaultCapabilityRegistry(final Consumer<String> logger) {
         this.logger = Objects.requireNonNull(logger, "logger");
         for (final Capability capability : Capability.values()) {
-            statuses.put(capability, CapabilityStatus.absent(capability));
+            // Unimplemented, not absent. Absent is a claim that the plugin is not installed, and
+            // seeding it here made that claim about every capability before anything had looked.
+            // register() records absent properly, once it has actually asked.
+            statuses.put(capability, CapabilityStatus.unimplemented(capability));
         }
     }
 
@@ -103,7 +106,7 @@ public final class DefaultCapabilityRegistry implements CapabilityRegistry {
     @Override
     public CapabilityStatus status(final Capability capability) {
         Objects.requireNonNull(capability, "capability");
-        return statuses.getOrDefault(capability, CapabilityStatus.absent(capability));
+        return statuses.getOrDefault(capability, CapabilityStatus.unimplemented(capability));
     }
 
     @Override
@@ -142,7 +145,10 @@ public final class DefaultCapabilityRegistry implements CapabilityRegistry {
             case BLOCKED -> 3;
             case PRESENT_UNVERIFIED -> 2;
             case ACTIVE -> 1;
-            case DISABLED, ABSENT -> 0;
+            // Unimplemented sits with the non-problems: nothing is wrong, the adapter is simply
+            // not written. Ranking it as a fault would fill the report with alarm about work
+            // that has not started.
+            case DISABLED, ABSENT, UNIMPLEMENTED -> 0;
         };
     }
 

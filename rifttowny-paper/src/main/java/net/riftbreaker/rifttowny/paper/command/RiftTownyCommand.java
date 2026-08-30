@@ -675,6 +675,7 @@ public final class RiftTownyCommand implements CommandExecutor, TabCompleter {
                 case ACTIVE -> MessageKey.STATUS_INTEGRATION_ACTIVE;
                 case FAILED, BLOCKED, PRESENT_UNVERIFIED -> MessageKey.STATUS_INTEGRATION_PROBLEM;
                 case ABSENT, DISABLED -> MessageKey.STATUS_INTEGRATION_ABSENT;
+                case UNIMPLEMENTED -> MessageKey.STATUS_INTEGRATION_UNIMPLEMENTED;
             };
             messages.sendRaw(sender, key,
                     MessageService.value("capability", status.capability().name()),

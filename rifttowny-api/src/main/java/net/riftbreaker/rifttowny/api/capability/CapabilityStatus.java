@@ -28,6 +28,12 @@ public record CapabilityStatus(
         return new CapabilityStatus(capability, CapabilityState.ABSENT, "not installed", null);
     }
 
+    /** No adapter is written for this capability yet, so the server was never asked about it. */
+    public static CapabilityStatus unimplemented(final Capability capability) {
+        return new CapabilityStatus(
+                capability, CapabilityState.UNIMPLEMENTED, "no adapter written yet", null);
+    }
+
     public static CapabilityStatus active(final Capability capability, final String detail) {
         return new CapabilityStatus(capability, CapabilityState.ACTIVE, detail, null);
     }
