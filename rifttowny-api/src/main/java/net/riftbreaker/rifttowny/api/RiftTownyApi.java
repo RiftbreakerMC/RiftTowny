@@ -3,13 +3,15 @@ package net.riftbreaker.rifttowny.api;
 import net.riftbreaker.rifttowny.api.capability.CapabilityRegistry;
 import net.riftbreaker.rifttowny.api.scheduler.RiftScheduler;
 
+import java.util.Optional;
+import java.util.UUID;
+
 /**
  * The entry point sibling plugins compile against.
  *
- * <p>Obtain it through {@link RiftTownyProvider}. Everything reachable from here is either a
- * read-only view or a service method that performs its own permission and validation checks —
- * mutable internal entities are never exposed, so holding an API object can never be a way around
- * a permission check.</p>
+ * <p>Obtain it through {@link RiftTownyProvider}. Everything reachable from here is a read-only view or a narrowly scoped integration hook.
+ * Mutable internal entities are never exposed, so holding an API object cannot bypass a
+ * permission check.</p>
  */
 public interface RiftTownyApi {
 
@@ -44,4 +46,19 @@ public interface RiftTownyApi {
      * duplicating the detection logic.</p>
      */
     RiftScheduler scheduler();
+
+    /** Whether the supplied chunk has no RiftTowny claim. Safe for event/listener reads. */
+    boolean isWilderness(ChunkKey chunk);
+
+    /** The town containing a resident, if the resident is currently in a town. */
+    Optional<TownInfo> townOf(UUID residentId);
+
+    /**
+     * Register a guard consulted immediately before a town claims a territory chunk. Guards should be
+     * fast, non-blocking, and return an explanatory denial only when the claim must be refused.
+     */
+    AutoCloseable registerClaimGuard(ClaimGuard guard);
+
+    /** Checks registered guards in registration order and returns the first denial, if any. */
+    Optional<String> checkClaimGuards(UUID residentId, ChunkKey chunk);
 }
