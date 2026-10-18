@@ -69,8 +69,10 @@ final class RiftTownyApiImpl implements RiftTownyApi {
     }
 
     @Override
-    public void registerClaimGuard(final ClaimGuard guard) {
-        claimGuards.add(Objects.requireNonNull(guard, "guard"));
+    public AutoCloseable registerClaimGuard(final ClaimGuard guard) {
+        final ClaimGuard registered = Objects.requireNonNull(guard, "guard");
+        claimGuards.add(registered);
+        return () -> claimGuards.remove(registered);
     }
 
     @Override
