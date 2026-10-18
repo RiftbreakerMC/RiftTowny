@@ -58,7 +58,7 @@ public interface RiftTownyApi {
      * Register a guard consulted immediately before a player takes a plot. Guards should be
      * fast, non-blocking, and return an explanatory denial only when the claim must be refused.
      */
-    void registerClaimGuard(ClaimGuard guard);
+    AutoCloseable registerClaimGuard(ClaimGuard guard);
 
     /** Checks registered guards in registration order and returns the first denial, if any. */
     Optional<String> checkClaimGuards(UUID residentId, ChunkKey chunk);
