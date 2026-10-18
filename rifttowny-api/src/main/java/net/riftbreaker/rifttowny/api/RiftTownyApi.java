@@ -55,7 +55,7 @@ public interface RiftTownyApi {
     Optional<TownInfo> townOf(UUID residentId);
 
     /**
-     * Register a guard consulted immediately before a player takes a plot. Guards should be
+     * Register a guard consulted immediately before a town claims a territory chunk. Guards should be
      * fast, non-blocking, and return an explanatory denial only when the claim must be refused.
      */
     AutoCloseable registerClaimGuard(ClaimGuard guard);
