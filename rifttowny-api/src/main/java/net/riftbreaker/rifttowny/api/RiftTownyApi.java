@@ -9,10 +9,9 @@ import java.util.UUID;
 /**
  * The entry point sibling plugins compile against.
  *
- * <p>Obtain it through {@link RiftTownyProvider}. Everything reachable from here is either a
- * read-only view or a service method that performs its own permission and validation checks —
- * mutable internal entities are never exposed, so holding an API object can never be a way around
- * a permission check.</p>
+ * <p>Obtain it through {@link RiftTownyProvider}. Everything reachable from here is a read-only view or a narrowly scoped integration hook.
+ * Mutable internal entities are never exposed, so holding an API object cannot bypass a
+ * permission check.</p>
  */
 public interface RiftTownyApi {
 
