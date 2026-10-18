@@ -1,7 +1,6 @@
 package net.riftbreaker.rifttowny.paper.command;
 
 import net.riftbreaker.rifttowny.api.ChunkKey;
-import net.riftbreaker.rifttowny.api.RiftTownyProvider;
 import net.riftbreaker.rifttowny.domain.org.ChangeDenial;
 import net.riftbreaker.rifttowny.domain.org.ResidentId;
 import net.riftbreaker.rifttowny.domain.org.ResidentRepository;
@@ -130,20 +129,10 @@ public final class PlotCommands {
     }
 
     private void take(final CommandActor actor, final List<String> args) {
-        player(actor).ifPresent(who -> whereTheyStand(actor, chunk -> {
-            final var api = RiftTownyProvider.get();
-            if (api.isPresent()) {
-                final var denial = api.get().checkClaimGuards(who.value(), chunk);
-                if (denial.isPresent()) {
-                    messages.sendRaw(actor::send, MessageKey.COMMAND_DENIED,
-                            MessageService.value("reason", denial.get()));
-                    return;
-                }
-            }
-            reply(actor, plots.take(who, chunk), plot ->
-                    messages.send(actor::send, MessageKey.PLOT_TAKEN,
-                            MessageService.value("chunk", describe(chunk))));
-        }));
+        player(actor).ifPresent(who -> whereTheyStand(actor, chunk ->
+                reply(actor, plots.take(who, chunk), plot ->
+                        messages.send(actor::send, MessageKey.PLOT_TAKEN,
+                                MessageService.value("chunk", describe(chunk))))));
     }
 
     private void release(final CommandActor actor, final List<String> args) {
