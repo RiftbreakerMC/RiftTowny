@@ -3,6 +3,9 @@ package net.riftbreaker.rifttowny.api;
 import net.riftbreaker.rifttowny.api.capability.CapabilityRegistry;
 import net.riftbreaker.rifttowny.api.scheduler.RiftScheduler;
 
+import java.util.Optional;
+import java.util.UUID;
+
 /**
  * The entry point sibling plugins compile against.
  *
@@ -44,4 +47,19 @@ public interface RiftTownyApi {
      * duplicating the detection logic.</p>
      */
     RiftScheduler scheduler();
+
+    /** Whether the supplied chunk has no RiftTowny claim. Safe for event/listener reads. */
+    boolean isWilderness(ChunkKey chunk);
+
+    /** The town containing a resident, if the resident is currently in a town. */
+    Optional<TownInfo> townOf(UUID residentId);
+
+    /**
+     * Register a guard consulted immediately before a player takes a plot. Guards should be
+     * fast, non-blocking, and return an explanatory denial only when the claim must be refused.
+     */
+    void registerClaimGuard(ClaimGuard guard);
+
+    /** Checks registered guards in registration order and returns the first denial, if any. */
+    Optional<String> checkClaimGuards(UUID residentId, ChunkKey chunk);
 }
