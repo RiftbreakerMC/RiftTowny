@@ -10,9 +10,10 @@ class TownInfoTest {
     @Test
     void townIdentityDoesNotChangeWhenItsNameChanges() {
         UUID id = UUID.randomUUID();
+        TownInfo oldName = new TownInfo(id, "Old Name");
+        TownInfo newName = new TownInfo(id, "New Name");
 
-        assertThat(new TownInfo(id, "Old Name"))
-                .isEqualTo(new TownInfo(id, "New Name"))
-                .hasSameHashCodeAs(new TownInfo(id, "Another Name"));
+        assertThat(oldName).isEqualTo(newName);
+        assertThat(oldName.hashCode()).isEqualTo(newName.hashCode());
     }
 }
