@@ -16,6 +16,13 @@ import java.util.UUID;
  * can be added without removing the polling/revision fallback.</p>
  */
 public interface RiftTownyMapApi {
+    /**
+     * Read three atomic counters without enumerating any claims or civic rows.
+     * Poll this first; build a full snapshot only when a relevant counter changes.
+     * Each counter is independent and resets when the plugin restarts.
+     */
+    MapRevisions revisions();
+
     /** Complete, atomically copied claimed chunks for a single world. */
     TerritoryMapSnapshot claims(UUID worldId);
 
