@@ -91,11 +91,15 @@ all snapshots without considering the configured privacy rules.
 ## Coordination with pending API PR
 
 [RiftTowny PR #1](https://github.com/RiftbreakerMC/RiftTowny/pull/1)
-introduces API 0.3 territory queries and claim guards against `main`. This
-branch starts from a separate `dev` integration branch and reserves version
-0.4 for the additive map API. Before merging them into the same integration
-branch, reconcile the API interface, implementation constructor and version
-constant so **both** feature sets survive. Do not overwrite PR #1.
+introduces API 0.3 territory queries and claim guards and now targets `dev`.
+This 0.4 draft branch **also carries those 0.3 source changes** and has a
+dedicated compatibility test confirming that claim guards, wilderness queries,
+and map snapshots coexist on the same provider. The duplicate 0.3 diff
+will disappear when PR #1 merges first into `dev`.
+
+Integration sequence: run Jenkins for **both** PRs, merge #1 into `dev`
+when verified, re-check PR #3 against that updated base, then merge #3.
+Do not publish API 0.4 directly to `main` before these steps.
 
 Track integration usage in
 [RiftMap issue / territory contract](https://github.com/RiftbreakerMC/RiftMap/blob/dev/docs/TERRITORY_CONTRACT.md)
