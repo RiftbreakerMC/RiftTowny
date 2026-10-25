@@ -2,6 +2,7 @@ package net.riftbreaker.rifttowny.api;
 
 import net.riftbreaker.rifttowny.api.capability.CapabilityRegistry;
 import net.riftbreaker.rifttowny.api.scheduler.RiftScheduler;
+import net.riftbreaker.rifttowny.api.map.RiftTownyMapApi;
 
 /**
  * The entry point sibling plugins compile against.
@@ -44,4 +45,12 @@ public interface RiftTownyApi {
      * duplicating the detection logic.</p>
      */
     RiftScheduler scheduler();
+
+    /**
+     * Versioned read-only political map data for RiftMap and other map clients.
+     *
+     * <p>Requires RiftTowny API 0.4. This is an additive surface; it does not
+     * expose the territory index itself or its mutable cache internals.</p>
+     */
+    RiftTownyMapApi mapData();
 }
