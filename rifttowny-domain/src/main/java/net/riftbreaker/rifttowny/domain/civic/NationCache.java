@@ -144,6 +144,24 @@ public final class NationCache {
         return nations.values().stream().map(NationFacts::nation).toList();
     }
 
+    /**
+     * Coherent public-map source snapshot: nation facts and generation.
+     *
+     * <p>Snapshotting locks cache writes, but protection/listener reads
+     * continue to use concurrent-map lookups. Consumers should schedule
+     * this outside tick and region threads.</p>
+     */
+    public synchronized MapSnapshot snapshotForMap() {
+        return new MapSnapshot(generation.get(), java.util.List.copyOf(nations.values()));
+    }
+
+    /** Cached generation and immutable nation facts. */
+    public record MapSnapshot(long revision, java.util.List<NationFacts> nations) {
+        public MapSnapshot {
+            nations = java.util.List.copyOf(java.util.Objects.requireNonNull(nations, "nations"));
+        }
+    }
+
     // --- diagnostics ---------------------------------------------------------------------------
 
     public int size() {
