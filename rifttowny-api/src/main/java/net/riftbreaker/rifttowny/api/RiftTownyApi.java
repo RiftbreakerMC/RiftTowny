@@ -4,6 +4,9 @@ import net.riftbreaker.rifttowny.api.capability.CapabilityRegistry;
 import net.riftbreaker.rifttowny.api.scheduler.RiftScheduler;
 import net.riftbreaker.rifttowny.api.map.RiftTownyMapApi;
 
+import java.util.Optional;
+import java.util.UUID;
+
 /**
  * The entry point sibling plugins compile against.
  *
@@ -53,4 +56,19 @@ public interface RiftTownyApi {
      * expose the territory index itself or its mutable cache internals.</p>
      */
     RiftTownyMapApi mapData();
+
+    /** Whether the supplied chunk has no RiftTowny claim. Safe for event/listener reads. */
+    boolean isWilderness(ChunkKey chunk);
+
+    /** The town containing a resident, if the resident is currently in a town. */
+    Optional<TownInfo> townOf(UUID residentId);
+
+    /**
+     * Register a guard consulted immediately before a town claims a territory chunk. Guards should be
+     * fast, non-blocking, and return an explanatory denial only when the claim must be refused.
+     */
+    AutoCloseable registerClaimGuard(ClaimGuard guard);
+
+    /** Checks registered guards in registration order and returns the first denial, if any. */
+    Optional<String> checkClaimGuards(UUID residentId, ChunkKey chunk);
 }
