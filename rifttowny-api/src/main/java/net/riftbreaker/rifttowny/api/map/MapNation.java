@@ -10,10 +10,14 @@ import java.util.UUID;
  * client can resolve its location independently when town spawns become a
  * separately supported public map capability.</p>
  */
-public record MapNation(UUID id, String name, UUID capitalTownId) {
+public record MapNation(UUID id, String name, UUID capitalTownId, String colorHex) {
     public MapNation {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(capitalTownId, "capitalTownId");
+        Objects.requireNonNull(colorHex, "colorHex");
+        if (!colorHex.matches("#[0-9a-f]{6}")) {
+            throw new IllegalArgumentException("Expected canonical #rrggbb nation color");
+        }
     }
 }
