@@ -2,6 +2,7 @@ package net.riftbreaker.rifttowny.domain.service;
 
 import net.riftbreaker.rifttowny.api.map.CivicMapSnapshot;
 import net.riftbreaker.rifttowny.api.map.MapClaim;
+import net.riftbreaker.rifttowny.api.map.MapRevisions;
 import net.riftbreaker.rifttowny.api.map.MapNation;
 import net.riftbreaker.rifttowny.api.map.MapTown;
 import net.riftbreaker.rifttowny.api.map.RiftTownyMapApi;
@@ -42,6 +43,16 @@ public final class ReadOnlyMapService implements RiftTownyMapApi {
         this.claims = Objects.requireNonNull(claims, "claims");
         this.towns = Objects.requireNonNull(towns, "towns");
         this.nations = Objects.requireNonNull(nations, "nations");
+    }
+
+    /**
+     * A constant-time version check. It deliberately avoids any full-cache
+     * copy, so RiftMap can poll cheaply even on large Towny servers.
+     * Revisions are independent hints rather than a single transaction ID.
+     */
+    @Override
+    public MapRevisions revisions() {
+        return new MapRevisions(claims.generation(), towns.generation(), nations.generation());
     }
 
     /**
