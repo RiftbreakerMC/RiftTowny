@@ -210,7 +210,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
         // No SQL access or separate map renderer is introduced here. Consumers
         // must schedule expensive snapshots asynchronously.
         RiftTownyProvider.register(new RiftTownyApiImpl(
-                capabilities, scheduler,
+                capabilities, scheduler, civicCache, territoryIndex,
                 new net.riftbreaker.rifttowny.domain.service.ReadOnlyMapService(
                         territoryIndex, civicCache, nationCache)));
 
