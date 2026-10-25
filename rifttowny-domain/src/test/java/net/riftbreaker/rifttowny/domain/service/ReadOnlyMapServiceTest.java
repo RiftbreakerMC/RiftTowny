@@ -75,9 +75,11 @@ class ReadOnlyMapServiceTest {
         assertEquals(1, snapshot.nations().size());
         assertEquals(original.id().value(), snapshot.towns().getFirst().id());
         assertEquals("Riftholm", snapshot.towns().getFirst().name());
+        assertEquals("#9e9e9e", snapshot.towns().getFirst().colorHex());
         assertEquals(nation.id().value(), snapshot.towns().getFirst().nationId().orElseThrow());
         assertEquals(original.id().value(), snapshot.nations().getFirst().capitalTownId());
         assertEquals("RiftEmpire", snapshot.nations().getFirst().name());
+        assertEquals("#9e9e9e", snapshot.nations().getFirst().colorHex());
 
         towns.forget(joined.id());
         assertEquals(1, snapshot.towns().size()); // snapshot cannot mutate after capture
