@@ -4,6 +4,7 @@ import net.riftbreaker.rifttowny.api.ApiVersion;
 import net.riftbreaker.rifttowny.api.RiftTownyApi;
 import net.riftbreaker.rifttowny.api.capability.CapabilityRegistry;
 import net.riftbreaker.rifttowny.api.scheduler.RiftScheduler;
+import net.riftbreaker.rifttowny.api.map.RiftTownyMapApi;
 
 import java.util.Objects;
 
@@ -17,10 +18,13 @@ final class RiftTownyApiImpl implements RiftTownyApi {
 
     private final CapabilityRegistry capabilities;
     private final RiftScheduler scheduler;
+    private final RiftTownyMapApi mapApi;
 
-    RiftTownyApiImpl(final CapabilityRegistry capabilities, final RiftScheduler scheduler) {
+    RiftTownyApiImpl(final CapabilityRegistry capabilities, final RiftScheduler scheduler,
+                     final RiftTownyMapApi mapApi) {
         this.capabilities = Objects.requireNonNull(capabilities, "capabilities");
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.mapApi = Objects.requireNonNull(mapApi, "mapApi");
     }
 
     @Override
@@ -36,5 +40,10 @@ final class RiftTownyApiImpl implements RiftTownyApi {
     @Override
     public RiftScheduler scheduler() {
         return scheduler;
+    }
+
+    @Override
+    public RiftTownyMapApi mapData() {
+        return mapApi;
     }
 }
