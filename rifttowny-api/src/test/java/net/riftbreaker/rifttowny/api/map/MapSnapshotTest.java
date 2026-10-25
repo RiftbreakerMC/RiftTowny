@@ -39,7 +39,7 @@ class MapSnapshotTest {
     }
 
     @Test void civicSnapshotCopiesListsAndContainsOnlyPublicMetadata() {
-        final MapTown town = new MapTown(TOWN, "Riftholm", Optional.empty());
+        final MapTown town = new MapTown(TOWN, "Riftholm", Optional.empty(), "#9e9e9e");
         final ArrayList<MapTown> mutable = new ArrayList<>(List.of(town));
         final CivicMapSnapshot snapshot = new CivicMapSnapshot(2, 3, mutable, List.of());
         mutable.clear();
@@ -48,6 +48,8 @@ class MapSnapshotTest {
         assertEquals(2, snapshot.townRevision());
         assertEquals(3, snapshot.nationRevision());
         assertThrows(UnsupportedOperationException.class, () -> snapshot.towns().clear());
-        assertThrows(NullPointerException.class, () -> new MapTown(TOWN, "Riftholm", null));
+        assertThrows(NullPointerException.class, () -> new MapTown(TOWN, "Riftholm", null, "#9e9e9e"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new MapNation(UUID.randomUUID(), "Empire", TOWN, "<script>"));
     }
 }
