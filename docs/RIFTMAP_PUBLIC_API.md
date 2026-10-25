@@ -15,16 +15,16 @@ RiftTownyProvider.get().ifPresent(api -> {
 
     // Schedule and rate-limit from the consumer's background executor.
     // Do not do an O(total claims) snapshot on a Folia region/server tick.
-    TerritoryMapSnapshot earth = maps.claims(world.getUID());
+    TerritoryMapSnapshot earth = maps.claims(capturedWorldId);
     CivicMapSnapshot directory = maps.civics();
 
     // Serialize only relevant, privacy-safe fields from these immutable DTOs.
 });
 ```
 
-The example assumes the world UUID was captured safely through Bukkit on the
-correct thread before passing it to the background task; don't call Bukkit
-world methods from an arbitrary pool.
+The example assumes `capturedWorldId` is a previously obtained UUID captured
+through Bukkit on the correct thread, then passed to a background task. Don't
+call Bukkit world methods from an arbitrary pool.
 
 ## Public value types
 
