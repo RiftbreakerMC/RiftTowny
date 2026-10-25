@@ -34,12 +34,14 @@ class ReadOnlyMapServiceTest {
                 index, CivicCache.empty(), NationCache.empty());
 
         assertEquals(0, maps.claims(WORLD).claims().size());
+        final long initialRevision = maps.revisions().territory();
         index.put(Claim.of(new ChunkKey(WORLD, -1, 3), owner,
                 ClaimKind.ORDINARY, CivicFixture.NOW));
         index.put(Claim.of(new ChunkKey(NETHER, -1, 3), owner,
                 ClaimKind.ORDINARY, CivicFixture.NOW));
 
         final var oldSnapshot = maps.claims(WORLD);
+        assertTrue(maps.revisions().territory() > initialRevision);
         assertEquals(1, oldSnapshot.claims().size());
         assertEquals(owner.value(), oldSnapshot.claims().getFirst().townId());
         assertEquals(new ChunkKey(WORLD, -1, 3), oldSnapshot.claims().getFirst().chunk());
@@ -66,6 +68,8 @@ class ReadOnlyMapServiceTest {
 
         final ReadOnlyMapService mapApi = new ReadOnlyMapService(index, towns, nations);
         final var snapshot = mapApi.civics();
+        assertEquals(snapshot.townRevision(), mapApi.revisions().towns());
+        assertEquals(snapshot.nationRevision(), mapApi.revisions().nations());
 
         assertEquals(1, snapshot.towns().size());
         assertEquals(1, snapshot.nations().size());
