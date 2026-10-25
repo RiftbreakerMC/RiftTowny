@@ -33,9 +33,11 @@ call Bukkit world methods from an arbitrary pool.
 - `TerritoryMapSnapshot(UUID worldId, long revision, List<MapClaim> claims)`:
   complete, immutable world-filtered claim list at one territory-index revision.
 - `MapTown(UUID id, String name, Optional<UUID> nationId)`:
-  stable town identity, public display name, optional nation identity.
+  stable town identity, public display name, optional nation identity,
+  and canonical map color `#rrggbb` from the town profile (default gray).
 - `MapNation(UUID id, String name, UUID capitalTownId)`:
-  stable nation identity, display name, capital **town ID**.
+  stable nation identity, display name, capital **town ID**,
+  and canonical map color `#rrggbb` from the nation profile (default gray).
 - `CivicMapSnapshot(long townRevision, long nationRevision,
   List<MapTown> towns, List<MapNation> nations)`: immutable public directory.
 - `RiftTownyApi.mapData()`: public access point; negotiate API **0.4** first.
@@ -79,7 +81,7 @@ tax settings, plot holder, or internal database connection is exposed here.
 This initial API intentionally **does not yet** include:
 
 - claim event subscriptions or per-world delta streams
-- nation colors, town spawn coordinates, flags or client visibility controls
+- town spawn coordinates, flags or client visibility controls
 - ruin polygons and historic/archived claims
 - paginated very-large-world claim enumeration
 - an HTTP API, BlueMap polygons or a globe tile exporter
