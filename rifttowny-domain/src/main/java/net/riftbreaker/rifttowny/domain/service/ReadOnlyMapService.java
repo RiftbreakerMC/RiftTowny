@@ -97,12 +97,13 @@ public final class ReadOnlyMapService implements RiftTownyMapApi {
 
     private MapTown toTown(final TownFacts facts) {
         return new MapTown(facts.id().value(), facts.displayName(),
-                facts.nation().map(id -> id.value()));
+                facts.nation().map(id -> id.value()),
+                facts.town().profile().colourOrDefault().hashHex());
     }
 
     private MapNation toNation(final NationFacts facts) {
         final var nation = facts.nation();
         return new MapNation(nation.id().value(), nation.name().display(),
-                nation.capital().value());
+                nation.capital().value(), nation.profile().colourOrDefault().hashHex());
     }
 }
