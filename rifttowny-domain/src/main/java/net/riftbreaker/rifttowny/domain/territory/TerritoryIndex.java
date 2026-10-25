@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class TerritoryIndex {
 
-    private final Map<ChunkKey, Claim> claims = new ConcurrentHashMap<>();
+    private volatile Map<ChunkKey, Claim> claims = new ConcurrentHashMap<>();
     private final AtomicLong hits = new AtomicLong();
     private final AtomicLong misses = new AtomicLong();
     private final AtomicLong generation = new AtomicLong();
@@ -58,8 +58,7 @@ public final class TerritoryIndex {
         for (final Claim claim : loaded) {
             replacement.put(claim.chunk(), claim);
         }
-        claims.keySet().retainAll(replacement.keySet());
-        claims.putAll(replacement);
+        claims = replacement;
         generation.incrementAndGet();
     }
 
