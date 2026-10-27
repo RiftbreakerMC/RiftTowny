@@ -38,6 +38,36 @@ class MapSnapshotTest {
                 () -> new TerritoryMapSnapshot(WORLD, -1, List.of()));
     }
 
+    @Test void refusesTwoTownsClaimingTheSameChunk() {
+        final UUID anotherTown = UUID.fromString("00000000-0000-0000-0000-000000000012");
+        final ChunkKey chunk = new ChunkKey(WORLD, -17, 2);
+
+        final IllegalArgumentException conflict = assertThrows(
+                IllegalArgumentException.class,
+                () -> new TerritoryMapSnapshot(WORLD, 5, List.of(
+                        new MapClaim(chunk, TOWN),
+                        new MapClaim(chunk, anotherTown))));
+        assertTrue(conflict.getMessage().contains("duplicate claim"));
+    }
+
+    @Test void refusesRepeatedClaimEvenWithTheSameOwner() {
+        final ChunkKey chunk = new ChunkKey(WORLD, 1, 1);
+        assertThrows(IllegalArgumentException.class,
+                () -> new TerritoryMapSnapshot(WORLD, 5, List.of(
+                        new MapClaim(chunk, TOWN),
+                        new MapClaim(chunk, TOWN))));
+    }
+
+    @Test void signedCoordinateExtremesNeverAlias() {
+        final TerritoryMapSnapshot snapshot = new TerritoryMapSnapshot(
+                WORLD, 9, List.of(
+                        new MapClaim(new ChunkKey(WORLD, Integer.MIN_VALUE, Integer.MAX_VALUE), TOWN),
+                        new MapClaim(new ChunkKey(WORLD, Integer.MAX_VALUE, Integer.MIN_VALUE), TOWN),
+                        new MapClaim(new ChunkKey(WORLD, -1, 0), TOWN),
+                        new MapClaim(new ChunkKey(WORLD, 0, -1), TOWN)));
+        assertEquals(4, snapshot.claims().size());
+    }
+
     @Test void civicSnapshotCopiesListsAndContainsOnlyPublicMetadata() {
         final MapTown town = new MapTown(TOWN, "Riftholm", Optional.empty(), "#9e9e9e");
         final ArrayList<MapTown> mutable = new ArrayList<>(List.of(town));
