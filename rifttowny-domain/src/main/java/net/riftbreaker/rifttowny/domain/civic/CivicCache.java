@@ -182,6 +182,24 @@ public final class CivicCache {
         return java.util.Collections.unmodifiableMap(membership);
     }
 
+    /**
+     * Coherent copy of town facts for public, asynchronous map export.
+     *
+     * <p>All cache writers synchronize on this instance, so list membership
+     * and generation belong to the same snapshot. This is intentionally NOT
+     * used on the frequent block-protection lookup path.</p>
+     */
+    public synchronized MapSnapshot snapshotForMap() {
+        return new MapSnapshot(generation.get(), java.util.List.copyOf(towns.values()));
+    }
+
+    /** Cached generation and immutable town facts. */
+    public record MapSnapshot(long revision, java.util.List<TownFacts> towns) {
+        public MapSnapshot {
+            towns = java.util.List.copyOf(java.util.Objects.requireNonNull(towns, "towns"));
+        }
+    }
+
     // --- diagnostics ---------------------------------------------------------------------------
 
     public int cachedTowns() {

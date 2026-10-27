@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class TerritoryIndex {
 
-    private final Map<ChunkKey, Claim> claims = new ConcurrentHashMap<>();
+    private volatile Map<ChunkKey, Claim> claims = new ConcurrentHashMap<>();
     private final AtomicLong hits = new AtomicLong();
     private final AtomicLong misses = new AtomicLong();
     private final AtomicLong generation = new AtomicLong();
@@ -52,26 +52,25 @@ public final class TerritoryIndex {
      * leave a window in which every chunk reads as wilderness, and a player breaking a block during
      * it would be allowed to.</p>
      */
-    public void replaceAll(final Collection<Claim> loaded) {
+    public synchronized void replaceAll(final Collection<Claim> loaded) {
         Objects.requireNonNull(loaded, "loaded");
         final Map<ChunkKey, Claim> replacement = new ConcurrentHashMap<>(Math.max(16, loaded.size()));
         for (final Claim claim : loaded) {
             replacement.put(claim.chunk(), claim);
         }
-        claims.keySet().retainAll(replacement.keySet());
-        claims.putAll(replacement);
+        claims = replacement;
         generation.incrementAndGet();
     }
 
     /** Records a newly claimed chunk. */
-    public void put(final Claim claim) {
+    public synchronized void put(final Claim claim) {
         Objects.requireNonNull(claim, "claim");
         claims.put(claim.chunk(), claim);
         generation.incrementAndGet();
     }
 
     /** Records a released chunk. */
-    public void remove(final ChunkKey chunk) {
+    public synchronized void remove(final ChunkKey chunk) {
         Objects.requireNonNull(chunk, "chunk");
         claims.remove(chunk);
         generation.incrementAndGet();
@@ -103,7 +102,7 @@ public final class TerritoryIndex {
         return moved;
     }
     /** Records a whole town's territory going away, as on disband. */
-    public int removeAllOf(final TownId town) {
+    public synchronized int removeAllOf(final TownId town) {
         Objects.requireNonNull(town, "town");
         final int before = claims.size();
         claims.values().removeIf(claim -> claim.town().equals(town));
@@ -187,6 +186,35 @@ public final class TerritoryIndex {
      */
     public Collection<Claim> all() {
         return List.copyOf(claims.values());
+    }
+
+    /**
+     * Takes one consistent, world-filtered copy for external map consumers.
+     *
+     * <p>Every writer uses this same monitor, including bulk transfer and
+     * import. A consumer therefore never sees half a transfer as a completed
+     * world snapshot. The very frequent protection reads still use the
+     * ConcurrentHashMap without taking this monitor.</p>
+     *
+     * <p>This is a linear scan and MUST NOT run in a tick or protection
+     * listener. `RiftTownyMapApi` leaves scheduling to the map adapter.</p>
+     */
+    public synchronized MapSnapshot snapshotForMap(final java.util.UUID worldId) {
+        Objects.requireNonNull(worldId, "worldId");
+        final List<Claim> inWorld = claims.values().stream()
+                .filter(claim -> claim.chunk().worldId().equals(worldId))
+                .sorted(java.util.Comparator
+                        .comparingInt((Claim claim) -> claim.chunk().chunkX())
+                        .thenComparingInt(claim -> claim.chunk().chunkZ()))
+                .toList();
+        return new MapSnapshot(generation.get(), inWorld);
+    }
+
+    /** Immutable cache-revision and claim copy, never a live map view. */
+    public record MapSnapshot(long revision, List<Claim> claims) {
+        public MapSnapshot {
+            claims = List.copyOf(Objects.requireNonNull(claims, "claims"));
+        }
     }
 
     /**

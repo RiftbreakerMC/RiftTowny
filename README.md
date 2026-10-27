@@ -78,3 +78,16 @@ RiftTownyProvider.get().ifPresent(api -> {
 Obtain the API no earlier than your own `onEnable`, and declare RiftTowny as a `depend` or
 `softdepend`. Prefer calling `RiftTownyProvider.get()` at the point of use over caching the
 instance, which goes stale across a plugin reload.
+
+## RiftMap / public map snapshots (API 0.4 draft)
+
+A read-only, cache-backed `RiftTownyApi.mapData()` surface is being developed for
+RiftMap and other map consumers. It exposes immutable, world-scoped chunk ownership
+snapshots plus a public town/nation directory and cache revisions — **no SQL queries**,
+webserver, or terrain rerenders. See [map API contract](docs/RIFTMAP_PUBLIC_API.md).
+
+This is still a feature-branch API: live BlueMap borders and full delta
+subscriptions are not implemented. Consumers must negotiate `ApiVersion(0, 4)`,
+rate-limit expensive snapshots on background executors, and keep private
+territory data out of any public export. Reconcile it with pending API 0.3 PR #1
+before a release.

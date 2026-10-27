@@ -206,7 +206,13 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 "RiftLogger supports block history; RiftTowny's adapter is not written yet. "
                         + "See INTEGRATION_CONTRACTS.md 2.2.1");
 
-        RiftTownyProvider.register(new RiftTownyApiImpl(capabilities, scheduler));
+        // The public map facade reads only already-loaded territory/civic caches.
+        // No SQL access or separate map renderer is introduced here. Consumers
+        // must schedule expensive snapshots asynchronously.
+        RiftTownyProvider.register(new RiftTownyApiImpl(
+                capabilities, scheduler, civicCache, territoryIndex,
+                new net.riftbreaker.rifttowny.domain.service.ReadOnlyMapService(
+                        territoryIndex, civicCache, nationCache)));
 
         final PluginCommand command = getCommand("rifttowny");
         if (command == null) {

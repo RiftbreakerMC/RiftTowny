@@ -636,3 +636,18 @@ fast-forwarded:
 
 The API surfaces quoted above were read from those working trees where they are unchanged.
 Before any sibling PR is raised, that work needs committing or stashing.
+
+
+### RiftMap public map-data API (feature branch, not released)
+
+[RiftMap](https://github.com/RiftbreakerMC/RiftMap) will consume a strictly
+read-only political-data surface published by RiftTowny. The initial
+`RiftTownyApi.mapData()` contract is documented in
+[docs/RIFTMAP_PUBLIC_API.md](docs/RIFTMAP_PUBLIC_API.md): immutable, world-scoped
+claim snapshots and town/nation metadata, with revision numbers, backed by
+existing in-memory caches. No direct SQL queries or BlueMap render calls.
+
+**Status:** implemented on a feature branch; Jenkins / staging verification
+pending. Complete delta events, visibility rules and BlueMap polygon markers
+remain future work. Do not confuse the public API with a publicly accessible
+web endpoint; RiftMap's web publication needs a separate privacy review.
