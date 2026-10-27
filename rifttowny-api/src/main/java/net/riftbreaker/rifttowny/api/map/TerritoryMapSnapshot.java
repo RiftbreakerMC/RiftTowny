@@ -1,6 +1,10 @@
 package net.riftbreaker.rifttowny.api.map;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
+import net.riftbreaker.rifttowny.api.ChunkKey;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -22,8 +26,20 @@ public record TerritoryMapSnapshot(UUID worldId, long revision, List<MapClaim> c
         Objects.requireNonNull(claims, "claims");
         if (revision < 0) throw new IllegalArgumentException("revision must be nonnegative");
         claims = List.copyOf(claims);
-        if (claims.stream().anyMatch(claim -> !worldId.equals(claim.chunk().worldId()))) {
-            throw new IllegalArgumentException("claim belongs to a different world");
+        // Public territory is a map of chunk -> ONE owning town. A damaged
+        // upstream index must not give map consumers contradictory owners or
+        // duplicate the same claim and leave clients guessing which wins.
+        // ChunkKey's record equality handles negative/extreme int coordinates
+        // without lossy coordinate packing or integer subtraction overflow.
+        final Set<ChunkKey> occupied = new HashSet<>();
+        for (MapClaim claim : claims) {
+            if (!worldId.equals(claim.chunk().worldId())) {
+                throw new IllegalArgumentException("claim belongs to a different world");
+            }
+            if (!occupied.add(claim.chunk())) {
+                throw new IllegalArgumentException(
+                        "duplicate claim at chunk " + claim.chunk());
+            }
         }
     }
 }
