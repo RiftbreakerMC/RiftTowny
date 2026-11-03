@@ -1,6 +1,7 @@
 package net.riftbreaker.rifttowny.paper.command;
 
 import net.riftbreaker.rifttowny.api.ChunkKey;
+import net.riftbreaker.rifttowny.api.RiftTownyProvider;
 import net.riftbreaker.rifttowny.domain.directory.CivicDirectory;
 import net.riftbreaker.rifttowny.domain.directory.Page;
 import net.riftbreaker.rifttowny.domain.directory.TerritoryMap;
@@ -1366,6 +1367,15 @@ public final class TownCommands {
 
     private void claim(final CommandActor actor, final List<String> args) {
         whereTheyStand(actor, chunk -> withTown(actor, (who, town) -> {
+            final var api = RiftTownyProvider.get();
+            if (api.isPresent()) {
+                final var denial = api.get().checkClaimGuards(who.value(), chunk);
+                if (denial.isPresent()) {
+                    messages.sendRaw(actor::send, MessageKey.COMMAND_DENIED,
+                            MessageService.value("reason", denial.get()));
+                    return;
+                }
+            }
             final ClaimKind kind = kindFrom(args, town);
             reply(actor, territory.claim(who, town.id(), chunk, kind), created ->
                     then(actor, territory.territoryOf(town.id()), all ->

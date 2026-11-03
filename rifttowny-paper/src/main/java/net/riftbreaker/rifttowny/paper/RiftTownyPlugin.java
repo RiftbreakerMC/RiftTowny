@@ -206,7 +206,7 @@ public final class RiftTownyPlugin extends JavaPlugin {
                 "RiftLogger supports block history; RiftTowny's adapter is not written yet. "
                         + "See INTEGRATION_CONTRACTS.md 2.2.1");
 
-        RiftTownyProvider.register(new RiftTownyApiImpl(capabilities, scheduler));
+        RiftTownyProvider.register(new RiftTownyApiImpl(capabilities, scheduler, civicCache, territoryIndex));
 
         final PluginCommand command = getCommand("rifttowny");
         if (command == null) {
