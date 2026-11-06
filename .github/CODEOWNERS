@@ -1,0 +1,6 @@
+# Default code reviewer for PRs targeting a branch containing this file.
+# GitHub automatically requests this owner on non-draft PRs that change files.
+# For Draft PRs, GitHub triggers CODEOWNERS review when marked ready.
+# Assignee sidebar assignments are separate; our PR-creation workflow also
+# assigns MochaMilkie explicitly when it opens a new pull request.
+* @MochaMilkie
